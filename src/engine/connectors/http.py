@@ -10,6 +10,7 @@ from __future__ import annotations
 import gzip
 import hashlib
 import json
+import os
 import threading
 import time
 from dataclasses import dataclass
@@ -91,6 +92,8 @@ class Client:
         if host not in ALLOWED_HOSTS:
             raise HostNotAllowed(host)
         rpm = cfg.get("rpm") or (cfg.get("rps", 5) * 60)
+        # ENGINE_RPS_SCALE < 1 when several pull processes share one host quota (e.g. 4 shards → 0.25)
+        rpm = max(1.0, float(rpm) * float(os.environ.get("ENGINE_RPS_SCALE", "1") or 1))
         self.bucket = _Bucket(rpm)
         self.user_agent = cfg.get("user_agent", "paul-engine/0.1")
         self.http = httpx.Client(timeout=timeout, headers={"User-Agent": self.user_agent})

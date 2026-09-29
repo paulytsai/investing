@@ -109,7 +109,11 @@ def _done_symbols() -> set[str]:
     return out
 
 
-def pull_us(pilot: bool = False, symbols: list[str] | None = None, workers: int = 8, bulk: bool = True) -> None:
+def pull_us(pilot: bool = False, symbols: list[str] | None = None, workers: int = 8, bulk: bool = True, refresh_bulk: bool = True,
+            shard: tuple[int, int] | None = None) -> None:
+    """`shard=(i, n)` pulls every n-th symbol starting at i (run n processes in parallel: the per-symbol phase is CPU-bound in
+    one process); set ENGINE_RPS_SCALE=1/n so the shards share each host's quota. `refresh_bulk=False` skips the bulk
+    CSV loop when it is already cached (statements still come from bulk, not per symbol)."""
     fmp, edgar = FMP(), EDGAR()
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     if symbols:
@@ -138,7 +142,7 @@ def pull_us(pilot: bool = False, symbols: list[str] | None = None, workers: int 
         print(f"[pull us] sp500 history skipped: {e}")
 
     use_bulk = bulk and not pilot and not symbols
-    if use_bulk:
+    if use_bulk and refresh_bulk:
         this_year = date.today().year
         for year in range(FIRST_YEAR, this_year + 1):
             for period in ("FY", "Q1", "Q2", "Q3", "Q4"):
@@ -150,6 +154,10 @@ def pull_us(pilot: bool = False, symbols: list[str] | None = None, workers: int 
                         print(f"[bulk] {kind} {year} {period}: {e}")
 
     already = _done_symbols() if not symbols else set()
+    if shard:
+        i, n = shard
+        syms = syms[i::n]
+        print(f"[pull us] shard {i}/{n}: {len(syms)} symbols")
     todo = [s for s in syms if s not in already]
     print(f"[pull us] {len(already)} symbols complete from earlier runs; {len(todo)} to do")
     done = 0

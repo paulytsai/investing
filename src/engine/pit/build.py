@@ -147,7 +147,7 @@ def build_us() -> None:
                     max_cap[sym] = float(mc)
     # names that never reached half the universe cap floor can never enter a cohort: skip their statements/events
     floor = float(Hypotheses.load().get("universe.cap_floor_usd") or 2e9)
-    held = {str(h.get("symbol", "")).upper() for h in (holdings().get("holdings") or [])} if isinstance(holdings(), dict) else set()
+    held = {str(h.get("symbol", "")).upper() for h in (holdings().get("positions") or [])} if isinstance(holdings(), dict) else set()
     fund_syms = {s for s in sid_of if max_cap.get(s, 0.0) >= 0.5 * floor or s in held}
     print(f"[build us] {len(sid_of)} names in master; {len(fund_syms)} ever ≥ ${0.5 * floor / 1e9:.1f}B market cap → statements/events built for those")
     if price_frames:

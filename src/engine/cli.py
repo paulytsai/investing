@@ -76,12 +76,15 @@ def config_check(show: int = typer.Option(200, help="max rows to print")) -> Non
 @pull_app.command("us")
 def pull_us(pilot: bool = typer.Option(False, help="60-name pilot: top-50 by cap + holdings"),
             symbols: str = typer.Option("", help="comma-separated symbols instead of the universe"),
-            workers: int = typer.Option(8), bulk: bool = typer.Option(True, help="use bulk CSV endpoints")) -> None:
+            workers: int = typer.Option(8), bulk: bool = typer.Option(True, help="use bulk CSV endpoints"),
+            refresh_bulk: bool = typer.Option(True, help="re-run the bulk CSV loop (cached files are reused)"),
+            shard: str = typer.Option("", help="i/n: pull every n-th symbol from i (run n processes; set ENGINE_RPS_SCALE=1/n)")) -> None:
     """Pull US raw data (FMP + EDGAR + FRED) into data/raw."""
     from .pit.pull_us import pull_us as _pull
 
     syms = [s.strip().upper() for s in symbols.split(",") if s.strip()] or None
-    _pull(pilot=pilot, symbols=syms, workers=workers, bulk=bulk)
+    sh = tuple(int(x) for x in shard.split("/")) if shard else None
+    _pull(pilot=pilot, symbols=syms, workers=workers, bulk=bulk, refresh_bulk=refresh_bulk, shard=sh)
 
 
 @pull_app.command("jp")
