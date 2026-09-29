@@ -11,6 +11,9 @@ Verified 2026-09-29 from this environment (keys from environment secrets; see `.
 | **EDINET v2** | 有価証券報告書 index by date (docTypeCode 120), XBRL/CSV download | submission date | Earliest served date ≈ **2016-10-04**. |
 | **FRED** | DGS10/DTB3 (hurdle), CPI, USDJPY, VIX, HY OAS, oil… (§6.2 lines) | observation date | key verified |
 
+| **X API v2** (`api.x.com`; credential attached by the environment proxy, no key in code) | @TimmerFidelity posts and self-threads (`config/x_sources.yaml`: user_id resolved once, lookback 183 days, cap 1,500 posts/run, ≈$0.005/post logged per run); chart images downloaded to `data/raw/x/media/` | post `created_at` (+1 trading day) | first backfill: one page (98 posts, 2026-08-11→09-29, $0.49) then `--confirm`; later runs use `since_id` |
+| **Federal Register API** (public, no key) | Rules / proposed rules / presidential documents for `config/federal_register.yaml` searches (export controls, tariffs, antitrust, nuclear licensing, grid interconnection, oil & gas leasing, SEC rules, drug pricing) → `events` rows with `security_id = MACRO` | publication date | 370 documents over the last 365 days at first pull; context only (X-28) |
+
 ## M0 risk checks (results)
 1. **Bulk CSV coverage** — `income-statement-bulk?year=2016&period=Q1`: 37,417 rows (13,774 US-style symbols), `filingDate` present; `eod-bulk?date=2016-06-30`: 51,678 rows with `adjClose`. **Rule:** a bulk row with `filingDate == date` (period end) is treated as *no filing date* and lag-imputed (`available_from = period_end + 90d FY / 45d Q`, `lag_imputed = true`).
 2. **Delisted names** (30 sampled, delisted 2017–2020, US exchanges; 457 candidates): prices 30/30, quarterly statements 25/30. Names without statements are `insufficient_data`, never scored; names without prices inside a hold are counted in `missing_delisted_n`.
