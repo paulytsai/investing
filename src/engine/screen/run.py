@@ -204,14 +204,31 @@ def _render(all_cands, chosen, as_of, out, hyp, preset, regions, top, narrate) -
     itpl = render.env().get_template("idea.html.j2")
     from ..pit.snapshot import snapshot
 
-    for c in ranked:
+    from ..drivers.phases import build_phases, phases_to_dicts
+
+    bench = read_df("benchmark_daily", "benchmark_id = 'SPY_TR'")
+    bench["date"] = pd.to_datetime(bench["date"])
+    bench_s = bench.set_index("date")["level"].sort_index()
+    pages = ranked[: max(top * 5, 100)] if not narrate else ranked[:top]
+    for c in pages:
         px = prices[prices.security_id == c.security_id]
         ev = events[events.security_id == c.security_id] if not events.empty else pd.DataFrame()
         snap = snapshot(c.security_id, as_of)
+        eps = snap.eps_ttm_series()
+        try:
+            phases = phases_to_dicts(build_phases(px[px.date >= as_of - pd.Timedelta(days=10 * 365)], eps, bench_s, ev,
+                                                  float(hyp.get("drivers.zigzag_threshold_pct")), int(hyp.get("drivers.min_phase_weeks")), float(hyp.get("drivers.macro_bench_move_pct"))))
+        except Exception:  # noqa: BLE001
+            phases = []
         spec = build_price_chart(c.security_id, c.symbol, px, start=as_of - pd.Timedelta(days=10 * 365), end=as_of,
-                                 overlays={"price", "price_tr", "pe_band", "eps", "drawdown", "events"}, eps_series=snap.eps_ttm_series(), events=ev,
-                                 subtitle="10 years · price, TTM P/E band, TTM EPS, events")
+                                 overlays={"price", "price_tr", "pe_band", "eps", "drawdown", "events", "phases"}, eps_series=eps, events=ev, phases=phases,
+                                 subtitle="10 years · price, TTM P/E band, TTM EPS, events, phases")
         v = _view(c)
+        narrative = None
+        if narrate and c in chosen:
+            from ..research.stages import narrative_html
+
+            narrative = narrative_html(c, snap, phases)
         html = itpl.render(title=f"{c.symbol} — idea", c=v, m=c.metrics, chart_id=spec["id"], chart_json=to_json(spec), macro=macro,
-                           n_scored=len(all_cands), phases=None, narrative=None, dcf=c.metrics.get("dcf"), generated=render.now(), assets="../../../assets/")
+                           n_scored=len(all_cands), phases=phases, narrative=narrative, dcf=c.metrics.get("dcf"), generated=render.now(), assets="../../../assets/")
         render.write(out / "ideas" / f"{c.symbol}.html", html)
