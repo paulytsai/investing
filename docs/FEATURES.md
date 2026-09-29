@@ -16,6 +16,7 @@ Built in v1 are marked ✅; proposed next steps ☐. Every item maps to the spec
 - ☐ Estimate-revision direction (F-17) as a live-only component using FMP analyst estimates + price-target history.
 - ☐ Receipts ratio (F-40) from XBRL RPO for AI sellers; AI three dials (F-45) from transcripts.
 - ☐ 13F "informed holders added" (F-111), SOFT only.
+- ✅ Japan pilot (Core30 + Large70) screened and backtested from 2017-12-31 on J-Quants 決算短信 point-in-time data (DiscDate), split-restated per-share figures, 簡易FCF / ROIC proxies labelled.
 - ☐ Japan-specific yardsticks (総還元 vs JGB; R-38 FX-sensitivity check) and EDINET governance parsing for G1/G2.
 
 ## Evidence and auditability
@@ -30,13 +31,13 @@ Built in v1 are marked ✅; proposed next steps ☐. Every item maps to the spec
   backtest cohort pages show entry/exit windows against SPY.
 - ✅ Drivers of past moves: zigzag phases, EPS-vs-multiple shares, attached events (earnings, 8-K, insiders, Federal
   Register, macro episodes), `unexplained` flag (F-105).
-- ✅ Narrative layer (needs `ANTHROPIC_API_KEY`): three questions, 主役企業 check, toll-booth scorecard, four lenses,
+- ✅ Narrative layer (`ANTHROPIC_API_KEY`; `engine research SYM` narrates one name scored within its region): three questions, 主役企業 check, toll-booth scorecard, four lenses,
   点検材料 with TBD thresholds, "the tension"; uncited numbers are marked (unverified).
 - ☐ Phase narration on the drivers page (`engine drivers SYM --narrate`).
 
 ## Macro and context (ALERT-only)
 - ✅ Macro strip on every board/idea/cohort: 10Y UST (flag > 4.5%), 10Y real, breakeven, 3M T-bill hurdle, CPI, core CPI, USDJPY, WTI.
-- ✅ Macro dashboard with spec §6.2 lines; Federal Register policy documents; Timmer X threads; inbox notes.
+- ✅ Macro dashboard with spec §6.2 lines; Federal Register policy documents; Timmer X threads (6-month backfill, 372 threads, Claude-tagged: market relevant / themes / tickers / chart descriptions); inbox notes.
 - ☐ Premise register (§6.4) with confirming/refuting evidence links from X threads and notes.
 - ☐ MOVE index (not on FRED) and breadth (RSP/SPY) panels.
 

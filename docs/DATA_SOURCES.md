@@ -27,3 +27,5 @@ Verified 2026-09-29 from this environment (keys from environment secrets; see `.
 - First-filed wins: `snapshot()` keeps the smallest `available_from` per (security, statement, period_type, period_end, field).
 - TTM = sum of the four latest visible quarters; Q4 synthesized as FY − (Q1+Q2+Q3) only when all four are visible.
 - Valuation uses `close_adj` (split-adjusted); returns use `close_tr` (split+dividend). JP total return is approximated from DPS and labelled.
+- **JP per-share figures are restated to today's share basis** with the J-Quants bar `AdjFactor` for splits after the period end (Nintendo 10-for-1, 2022-09-29: pre-split EPS 4,032 → 403), so EPS/BPS/DPS stay comparable with `AdjC`; `share_basis_factor` is stored as a field for audit.
+- **JP 決算短信 YTD flows** are de-cumulated per quarter; where a line is disclosed only at 2Q/FY (cash flows, often), the YTD increment is spread evenly across the quarters it covers (`lag_imputed = true`) so TTM sums stay exact. No capex, debt or gross-profit lines exist in the summary: FCF = CFO + CFI (簡易FCF) and ROIC = NOPAT / (total assets − cash) are used and labelled as proxies.
