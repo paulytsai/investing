@@ -35,6 +35,7 @@ deployments can inject secrets without a file.
 | `JQUANTS_API_KEY` | https://jpx-jquants.com/ (dashboard, API key) |
 | `FRED_API_KEY` | https://fred.stlouisfed.org/docs/api/api_key.html |
 | `NEWS_API_KEY` | https://newsapi.org/account |
+| `X_BEARER_TOKEN` | https://developer.x.com/en/portal/dashboard (app > Keys and tokens) |
 | `ALPACA_API_KEY` / `ALPACA_SECRET_KEY` | https://app.alpaca.markets/paper/dashboard/overview |
 | `ANTHROPIC_API_KEY` | https://console.anthropic.com/settings/keys |
 | `IBKR_*` | Configured in TWS / IB Gateway; no key, uses a local socket |
@@ -71,4 +72,21 @@ master("7203")[0]["CoNameEn"]
 daily_bars("7203", "20260901", "20260930")
 fins_summary("7203")
 get("markets/calendar", **{"from": "20260901", "to": "20260930"})
+```
+
+## X (Twitter) client
+
+`investing/xapi.py` wraps the X API v2 and reads `X_BEARER_TOKEN` from `.env`.
+
+```sh
+python -m investing.xapi "from:XDevelopers"    # prints recent tweets as JSON
+```
+
+```python
+from investing.xapi import search_recent, user_by_username, user_tweets, get
+
+search_recent("$AAPL lang:en -is:retweet", max_results=50)
+u = user_by_username("XDevelopers")
+user_tweets(u["id"], max_results=10)
+get("tweets/counts/recent", query="$NVDA", granularity="day")
 ```
