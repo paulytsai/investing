@@ -37,3 +37,19 @@ deployments can inject secrets without a file.
 | `ALPACA_API_KEY` / `ALPACA_SECRET_KEY` | https://app.alpaca.markets/paper/dashboard/overview |
 | `ANTHROPIC_API_KEY` | https://console.anthropic.com/settings/keys |
 | `IBKR_*` | Configured in TWS / IB Gateway; no key, uses a local socket |
+
+## Financial Modeling Prep client
+
+`investing/fmp.py` wraps the FMP `stable` API and reads `FMP_API_KEY` from `.env`.
+
+```sh
+python -m investing.fmp AAPL        # prints the company profile as JSON
+```
+
+```python
+from investing.fmp import profile, quote, get
+
+profile("AAPL")["marketCap"]
+quote("MSFT")["price"]
+get("income-statement", symbol="AAPL", period="annual", limit=5)
+```
