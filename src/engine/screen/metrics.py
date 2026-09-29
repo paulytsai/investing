@@ -73,7 +73,7 @@ def compute_metrics(inp: Inputs, as_of: pd.Timestamp, hyp_thresholds: dict) -> d
             out["rev_accel"] = None if g1 is None or g0 is None else g1 - g0
         if "gross_profit" in fy.columns and len(fy) >= 4:
             gm = (fy["gross_profit"] / fy["revenue"]).dropna()
-            if len(gm) >= 4:
+            if len(gm) >= 4 and pd.notna(gm.iloc[-1]) and pd.notna(gm.iloc[-4]) and np.isfinite(gm.iloc[-1]) and np.isfinite(gm.iloc[-4]):
                 out["gm_trend_3y"] = float(gm.iloc[-1] - gm.iloc[-4])
         if "eps_diluted" in fy.columns:
             e = fy["eps_diluted"].dropna()
