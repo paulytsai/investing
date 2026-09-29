@@ -72,3 +72,15 @@ daily_bars("7203", "20260901", "20260930")
 fins_summary("7203")
 get("markets/calendar", **{"from": "20260901", "to": "20260930"})
 ```
+
+## Murakami-linked large holdings
+
+`scripts/murakami_holdings.py` lists the current 5%+ positions of Murakami-linked investors in Japanese
+stocks. It covers the Murakami family entities, Murakami Takateru's MI companies, and Effissimo and
+Strategic Capital, which were founded by ex-Murakami Fund staff. It reads EDINET large-shareholding
+filings as indexed by ufocatch.com and checks listing status with J-Quants.
+
+```sh
+python scripts/murakami_holdings.py            # writes reports/murakami_holdings_<date>.csv and .md
+python scripts/murakami_holdings.py --refresh  # re-download instead of using ~/.cache/ufocatch
+```
