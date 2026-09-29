@@ -1,13 +1,16 @@
 """Pull US raw data into data/raw (resumable; every call is cached and ledgered by connectors.http)."""
 from __future__ import annotations
 
+import json
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import date
+from pathlib import Path
 
 import pandas as pd
 
 from ..config import DATA_DIR, holdings, sources
+from ..store import RAW_DIR
 from ..connectors.edgar import EDGAR
 from ..connectors.fmp import FMP
 from ..connectors.fred import FRED, SERIES
@@ -54,34 +57,56 @@ def pilot_symbols(fmp: FMP) -> list[str]:
 
 
 def _pull_symbol(fmp: FMP, edgar: EDGAR, sym: str, with_statements: bool) -> dict:
+    """Pull every per-symbol endpoint; one failing endpoint never aborts the others (each is cached and resumable).
+    `ok` is True when the core endpoints (profile, prices) succeeded; every endpoint error is recorded by name."""
     t = time.time()
-    info: dict = {"symbol": sym}
-    try:
-        prof = fmp.profile(sym)
-        info["cik"] = (prof or {}).get("cik")
-        fmp.prices(sym)
-        fmp.prices_div_adjusted(sym)
-        fmp.splits(sym)
-        fmp.dividends(sym)
-        fmp.market_cap_history(sym)
-        fmp.earnings(sym)
-        fmp.insider_trades(sym)
-        fmp.filings(sym)
-        if with_statements:
-            for kind in ("income", "balance", "cashflow"):
-                fmp.statement(kind, sym, "annual", 40)
-                fmp.statement(kind, sym, "quarter", 160)
-        if info.get("cik"):
-            try:
-                edgar.submissions(info["cik"])
-            except Exception as e:  # noqa: BLE001
-                info["edgar_err"] = str(e)[:80]
-        info["ok"] = True
-    except Exception as e:  # noqa: BLE001
-        info["ok"] = False
-        info["err"] = str(e)[:160]
+    info: dict = {"symbol": sym, "errors": {}}
+
+    def step(name: str, fn):
+        try:
+            return fn()
+        except Exception as e:  # noqa: BLE001
+            info["errors"][name] = str(e)[:120]
+            return None
+
+    prof = step("profile", lambda: fmp.profile(sym))
+    info["cik"] = (prof or {}).get("cik")
+    step("prices", lambda: fmp.prices(sym))
+    step("prices_div_adjusted", lambda: fmp.prices_div_adjusted(sym))
+    step("splits", lambda: fmp.splits(sym))
+    step("dividends", lambda: fmp.dividends(sym))
+    step("market_cap_history", lambda: fmp.market_cap_history(sym))
+    step("earnings", lambda: fmp.earnings(sym))
+    step("insider_trades", lambda: fmp.insider_trades(sym))
+    step("filings", lambda: fmp.filings(sym))
+    if with_statements:
+        for kind in ("income", "balance", "cashflow"):
+            step(f"{kind}_annual", lambda k=kind: fmp.statement(k, sym, "annual", 40))
+            step(f"{kind}_quarter", lambda k=kind: fmp.statement(k, sym, "quarter", 160))
+    if info.get("cik"):
+        step("edgar_submissions", lambda: edgar.submissions(info["cik"]))
+    info["ok"] = not ({"profile", "prices"} & set(info["errors"]))
     info["secs"] = round(time.time() - t, 1)
     return info
+
+
+def _results_path() -> Path:
+    return RAW_DIR / "fmp" / "pull_us_results.jsonl"
+
+
+def _done_symbols() -> set[str]:
+    p = _results_path()
+    if not p.exists():
+        return set()
+    out = set()
+    for line in p.read_text(encoding="utf-8").splitlines():
+        try:
+            r = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if r.get("ok") and not r.get("errors"):
+            out.add(r["symbol"])
+    return out
 
 
 def pull_us(pilot: bool = False, symbols: list[str] | None = None, workers: int = 8, bulk: bool = True) -> None:
@@ -124,17 +149,26 @@ def pull_us(pilot: bool = False, symbols: list[str] | None = None, workers: int 
                     except Exception as e:  # noqa: BLE001
                         print(f"[bulk] {kind} {year} {period}: {e}")
 
+    already = _done_symbols() if not symbols else set()
+    todo = [s for s in syms if s not in already]
+    print(f"[pull us] {len(already)} symbols complete from earlier runs; {len(todo)} to do")
     done = 0
-    fails = []
-    with ThreadPoolExecutor(max_workers=workers) as ex:
-        futs = {ex.submit(_pull_symbol, fmp, edgar, s, not use_bulk): s for s in syms}
+    fails: list[dict] = []
+    partial = 0
+    _results_path().parent.mkdir(parents=True, exist_ok=True)
+    with ThreadPoolExecutor(max_workers=workers) as ex, open(_results_path(), "a", encoding="utf-8") as out:
+        futs = {ex.submit(_pull_symbol, fmp, edgar, s, not use_bulk): s for s in todo}
         for f in as_completed(futs):
             r = f.result()
             done += 1
+            out.write(json.dumps(r) + "\n")
+            out.flush()
             if not r.get("ok"):
                 fails.append(r)
-            if done % 25 == 0 or done == len(syms):
-                print(f"[pull us] {done}/{len(syms)} done, {len(fails)} failed")
+            elif r.get("errors"):
+                partial += 1
+            if done % 25 == 0 or done == len(todo):
+                print(f"[pull us] {done}/{len(todo)} done, {len(fails)} failed, {partial} partial", flush=True)
     if fails:
-        print("[pull us] failures:", [(x["symbol"], x.get("err")) for x in fails[:10]])
-    print("[pull us] complete")
+        print("[pull us] failures:", [(x["symbol"], x.get("errors")) for x in fails[:10]])
+    print("[pull us] complete", flush=True)
