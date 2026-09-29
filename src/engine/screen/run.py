@@ -160,7 +160,7 @@ def run_ideas(as_of=None, top: int = 20, regions: list[str] | None = None, prese
 def _view(c: IdeaCandidate) -> dict:
     d = c.model_dump()
     d["angle_map"] = {a.key: a.score for a in c.angles}
-    d["mcap_fmt"] = render.fmt_cap(c.market_cap)
+    d["mcap_fmt"] = render.fmt_cap(c.market_cap, c.currency)
     d["price_fmt"] = f"{c.price:,.2f} {c.currency}" if c.price else "–"
     for r in d["reasons"]:
         r["value_fmt"] = render.fmt_value(r["value"], r["unit"])
@@ -187,7 +187,7 @@ def _render(all_cands, chosen, as_of, out, hyp, preset, regions, top, narrate) -
     for c in ranked:
         px = prices[prices.security_id == c.security_id]
         v = _view(c)
-        spec = build_price_chart(c.security_id, c.symbol, px, start=as_of - pd.Timedelta(days=3 * 365), end=as_of, overlays={"price"}, compact=True)
+        spec = build_price_chart(c.security_id, c.symbol, px, start=as_of - pd.Timedelta(days=3 * 365), end=as_of, overlays={"price"}, compact=True, currency=c.currency)
         spec["id"] = v["chart_id"]
         v["chart_json"] = to_json(spec)
         if c.eligible:
@@ -222,7 +222,7 @@ def _render(all_cands, chosen, as_of, out, hyp, preset, regions, top, narrate) -
             phases = []
         spec = build_price_chart(c.security_id, c.symbol, px, start=as_of - pd.Timedelta(days=10 * 365), end=as_of,
                                  overlays={"price", "price_tr", "pe_band", "eps", "drawdown", "events", "phases"}, eps_series=eps, events=ev, phases=phases,
-                                 subtitle="10 years · price, TTM P/E band, TTM EPS, events, phases")
+                                 subtitle="10 years · price, TTM P/E band, TTM EPS, events, phases", currency=c.currency)
         v = _view(c)
         narrative = None
         if narrate and c in chosen:

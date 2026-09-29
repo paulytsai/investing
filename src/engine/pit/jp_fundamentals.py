@@ -12,7 +12,7 @@ import pandas as pd
 
 from ..store import RAW_DIR, read_df, table_path, write_table
 from .build import _cached, _load_cached_json, next_trading_day
-from .fields import JQ_FIELDS
+from .fields import JQ_FIELDS, PER_SHARE_FIELDS
 
 FLOW_JP = {"revenue", "operating_income", "ordinary_income", "net_income", "eps_diluted", "ocf", "cfi", "cff"}
 
@@ -22,6 +22,54 @@ def _num(v):
         return None if v in (None, "", "None") else float(v)
     except (TypeError, ValueError):
         return None
+
+
+def share_basis_factor(split_events: list[tuple[pd.Timestamp, float]], period_end) -> float:
+    """Product of J-Quants AdjFactor for split dates strictly after `period_end`: restates a per-share figure
+    reported on the old share count to today's basis (AdjC uses the same factors), so EPS/BPS/DPS stay comparable
+    with split-adjusted prices and YTD de-cumulation never spans a split."""
+    pe = pd.Timestamp(period_end)
+    f = 1.0
+    for d, k in split_events:
+        if pd.Timestamp(d) > pe and k and k > 0:
+            f *= float(k)
+    return f
+
+
+def restate_per_share(vals: dict, split_events: list[tuple[pd.Timestamp, float]], period_end) -> dict:
+    f = share_basis_factor(split_events, period_end)
+    if f == 1.0:
+        return vals
+    out = dict(vals)
+    for k in PER_SHARE_FIELDS:
+        if out.get(k) is not None:
+            out[k] = out[k] * f
+    if out.get("shares_out") is not None:
+        out["shares_out"] = out["shares_out"] / f
+    out["share_basis_factor"] = f
+    return out
+
+
+def _quarter_end(fy_end, k: int):
+    """Period end of fiscal quarter k (1–4) for a fiscal year ending `fy_end`."""
+    return ((pd.Timestamp(fy_end) - pd.DateOffset(months=3 * (4 - k))) + pd.offsets.MonthEnd(0)).date()
+
+
+def _split_events() -> dict[str, list[tuple[pd.Timestamp, float]]]:
+    """code → [(date, AdjFactor)] for every bar whose AdjFactor != 1 (splits / reverse splits)."""
+    out: dict[str, list[tuple[pd.Timestamp, float]]] = {}
+    for key, p in _cached("jquants", "v2/equities/bars/daily").items():
+        code = key.split("_")[0]
+        if code.startswith("date"):
+            continue
+        for b in _load_cached_json(p).get("data", []):
+            try:
+                k = float(b.get("AdjFactor") or 1.0)
+            except (TypeError, ValueError):
+                continue
+            if k != 1.0 and k > 0:
+                out.setdefault(code, []).append((pd.Timestamp(b["Date"]), k))
+    return out
 
 
 def build_jp() -> None:
@@ -77,6 +125,7 @@ def build_jp() -> None:
 
     # --- fundamentals from 決算短信 summaries ------------------------------------------------------------
     fund_rows, dps_by_code = [], {}
+    splits = _split_events()
     for key, p in _cached("jquants", "v2/fins/summary").items():
         code = key.split("_")[0]
         if code.startswith("date"):
@@ -97,23 +146,35 @@ def build_jp() -> None:
             vals = {JQ_FIELDS[k]: _num(r.get(k)) for k in JQ_FIELDS if r.get(k) not in (None, "")}
             if r.get("DEPS") not in (None, ""):
                 vals["eps_diluted"] = _num(r.get("DEPS"))
+            vals = restate_per_share(vals, splits.get(code, []), pe)
+            basis_factor = vals.pop("share_basis_factor", None)
             if vals.get("dps_actual") is not None:
                 dps_by_code.setdefault(code, []).append((pe, vals["dps_actual"]))
-            # de-cumulate YTD flows into the quarter
-            q_vals = dict(vals)
-            if ptype in ("2Q", "3Q", "FY"):
-                prev = ytd_prev.get(fy_end, {})
-                for f in FLOW_JP:
-                    if vals.get(f) is not None and prev.get(f) is not None:
-                        q_vals[f] = vals[f] - prev[f]
-            if ptype in ("1Q", "2Q", "3Q", "FY"):
-                ytd_prev[fy_end] = {f: vals[f] for f in FLOW_JP if vals.get(f) is not None}
-            for f, v in q_vals.items():
+            # de-cumulate YTD flows into quarters. 短信 report cash-flow lines (and sometimes others) only at 2Q and FY, so
+            # each YTD increment is spread evenly over the quarters it covers (allocated=True) — TTM sums stay exact.
+            pidx = {"1Q": 1, "2Q": 2, "3Q": 3, "FY": 4}.get(ptype)
+            if pidx is None:
+                continue
+            prev = ytd_prev.setdefault(fy_end, {})
+            row_base = {"security_id": sid, "statement": "jq_summary", "period_type": "Q", "fiscal_year": int(str(fy_end)[:4]) if fy_end else None,
+                        "fiscal_period": ptype, "period_start": r.get("CurPerSt"), "currency": "JPY", "filing_date": fd, "available_from": avail,
+                        "lag_imputed": False, "restatement_rank": 0, "source": "jquants", "source_ref": str(r.get("DiscNo"))}
+            for f, v in vals.items():
                 if v is None:
                     continue
-                fund_rows.append({"security_id": sid, "statement": "jq_summary", "period_type": "Q", "fiscal_year": int(str(fy_end)[:4]) if fy_end else None,
-                                  "fiscal_period": ptype, "period_start": r.get("CurPerSt"), "period_end": pe, "field": f, "value": v, "currency": "JPY",
-                                  "filing_date": fd, "available_from": avail, "lag_imputed": False, "restatement_rank": 0, "source": "jquants", "source_ref": str(r.get("DiscNo"))})
+                if f not in FLOW_JP:
+                    fund_rows.append({**row_base, "period_end": pe, "field": f, "value": v})
+                    continue
+                p_idx, p_val = prev.get(f, (0, 0.0))
+                if p_idx >= pidx:   # restated / duplicate disclosure of a period already stored: first-filed wins
+                    continue
+                n = pidx - p_idx
+                for k in range(p_idx + 1, pidx + 1):
+                    fund_rows.append({**row_base, "period_end": _quarter_end(fy_end, k), "field": f, "value": (v - p_val) / n,
+                                      "lag_imputed": n > 1})
+                prev[f] = (pidx, v)
+            if basis_factor is not None:
+                fund_rows.append({**row_base, "period_end": pe, "field": "share_basis_factor", "value": basis_factor})
             if period_type == "FY":
                 for f, v in vals.items():
                     if v is None:

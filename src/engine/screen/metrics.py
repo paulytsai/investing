@@ -51,6 +51,9 @@ def compute_metrics(inp: Inputs, as_of: pd.Timestamp, hyp_thresholds: dict) -> d
     fcf = _v(m, "fcf")
     if fcf is None and ocf is not None and capex is not None:
         fcf = ocf + capex if capex < 0 else ocf - capex
+    if fcf is None and ocf is not None and capex is None and _v(m, "cfi") is not None:
+        fcf = ocf + _v(m, "cfi")   # 簡易FCF: 決算短信 has no capex line; investing cash flow stands in (labelled)
+        out["fcf_basis"] = "ocf+cfi (簡易FCF; 短信 has no capex line)"
     eps, eps_p = _v(m, "eps_diluted"), _v(prior, "eps_diluted")
     debt, cash, equity = _v(m, "total_debt"), _v(m, "cash_st_inv"), _v(m, "total_equity")
     ebitda = _v(m, "ebitda")
@@ -93,6 +96,9 @@ def compute_metrics(inp: Inputs, as_of: pd.Timestamp, hyp_thresholds: dict) -> d
 
     # --- quality (F-07, F-82, F-40/41, R-18) -------------------------------------------------------
     invested = None if debt is None or equity is None else (debt + equity - (cash or 0))
+    if invested is None and debt is None and _v(m, "total_assets"):
+        invested = _v(m, "total_assets") - (cash or 0)   # proxy: 短信 has no debt line → total assets less cash (conservative)
+        out["roic_basis"] = "NOPAT / (total assets − cash); proxy, no debt line in 決算短信"
     out["roic_ttm"] = fw.safe_div(oi * (1 - TAX) if oi is not None else None, invested) if invested and invested > 0 else None
     out["ocf_ni_ratio"] = fw.safe_div(ocf, ni) if ni and ni > 0 else None
     out["fcf_margin"] = fw.safe_div(fcf, rev)

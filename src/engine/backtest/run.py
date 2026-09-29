@@ -131,7 +131,7 @@ def _render(out, rows, pooled, cstats, curve, ic, sens, results, cohorts, book, 
             bench = book.bench.reset_index().rename(columns={"level": "level", "date": "date"})
             spec = build_price_chart(c.security_id, c.symbol, px, start=d - pd.Timedelta(days=365), end=(r.exit_date if r and r.exit_date is not None else d) + pd.Timedelta(days=90),
                                      overlays={"price", "benchmark", "window"}, window=(r.entry_date, r.exit_date) if r and r.entry_date is not None else None,
-                                     benchmark=bench, compact=True)
+                                     benchmark=bench, compact=True, currency=c.currency)
             spec["id"] = f"pick-{d.date()}-{c.symbol.replace('.', '_')}"
             spec["height"] = 120
             scored = sorted([x for x in c.reasons if x.kind == "factor" and x.contribution is not None], key=lambda x: -abs(x.contribution))[:5]

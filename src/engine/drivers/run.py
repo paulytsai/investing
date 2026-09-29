@@ -37,7 +37,7 @@ def run_drivers(symbol: str, narrate: bool = False, out_dir=None) -> dict:
     m = read_df("security_master", f"security_id = '{sid}'").iloc[0]
     start = pd.Timestamp.today() - pd.Timedelta(days=10 * 365)
     spec = build_price_chart(sid, symbol, px, start=start, overlays={"price", "eps", "events", "phases"}, eps_series=eps, events=ev[ev.security_id == sid] if not ev.empty else None,
-                             phases=[p for p in phases if pd.Timestamp(p["end"]) >= start], subtitle="last 10 years · phases from a ±20% zigzag on weekly closes (table covers full history)")
+                             phases=[p for p in phases if pd.Timestamp(p["end"]) >= start], subtitle="last 10 years · phases from a ±20% zigzag on weekly closes (table covers full history)", currency=(m.get("currency") or "USD"))
     narratives = None
     if narrate:
         from .narrate import narrate_phases
