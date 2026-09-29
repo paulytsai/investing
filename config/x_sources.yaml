@@ -1,0 +1,22 @@
+accounts:
+- handle: TimmerFidelity
+  user_id: '2918307101'
+  name: Jurrien Timmer (Fidelity, Director of Global Macro)
+  spec_ref: INF-12
+lookback_days: 183
+max_posts_per_run: 1500
+cost_per_post_usd: 0.005
+page_size: 100
+tweet_fields:
+- created_at
+- conversation_id
+- in_reply_to_user_id
+- public_metrics
+- attachments
+expansions:
+- attachments.media_keys
+media_fields:
+- url
+- type
+- preview_image_url
+- media_key

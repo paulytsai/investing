@@ -31,6 +31,9 @@ ALLOWED_HOSTS = {
     "data.sec.gov",
     "www.sec.gov",
     "api.stlouisfed.org",
+    "api.x.com",
+    "pbs.twimg.com",
+    "www.federalregister.gov",
 }
 
 _REDACT = ("apikey", "api_key", "Subscription-Key", "x-api-key", "APCA-API-KEY-ID", "APCA-API-SECRET-KEY")

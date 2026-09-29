@@ -109,6 +109,23 @@ TABLES: dict[str, pa.Schema] = {
             ("source", pa.string()),
         ]
     ),
+    "x_posts": pa.schema(
+        [
+            ("post_id", pa.string()), ("user_id", pa.string()), ("created_at", pa.timestamp("us")), ("available_from", pa.date32()),
+            ("conversation_id", pa.string()), ("in_reply_to_user_id", pa.string()), ("is_self_thread_reply", pa.bool_()), ("text", pa.string()),
+            ("like_count", pa.int32()), ("reply_count", pa.int32()), ("retweet_count", pa.int32()), ("quote_count", pa.int32()),
+            ("media_keys", pa.string()), ("media_urls", pa.string()), ("source", pa.string()),
+        ]
+    ),
+    "x_threads": pa.schema(
+        [
+            ("conversation_id", pa.string()), ("user_id", pa.string()), ("first_post_id", pa.string()), ("first_at", pa.timestamp("us")),
+            ("last_at", pa.timestamp("us")), ("available_from", pa.date32()), ("n_posts", pa.int32()), ("post_ids", pa.string()), ("full_text", pa.string()),
+            ("media_urls", pa.string()), ("n_media", pa.int32()), ("like_count", pa.int32()), ("market_relevant", pa.bool_()), ("asset_classes", pa.string()),
+            ("sectors", pa.string()), ("themes", pa.string()), ("tickers", pa.string()), ("summary", pa.string()), ("chart_descriptions", pa.string()),
+            ("analysis_status", pa.string()), ("source", pa.string()),
+        ]
+    ),
     "thirteenf": pa.schema(
         [
             ("investor_cik", pa.string()),
@@ -147,6 +164,8 @@ def write_table(name: str, df: pd.DataFrame) -> Path:
             df[col] = pd.to_numeric(df[col], errors="coerce").astype("Int64")
         elif pa.types.is_boolean(f.type):
             df[col] = df[col].astype("boolean")
+        elif pa.types.is_timestamp(f.type):
+            df[col] = pd.to_datetime(df[col], errors="coerce")
         elif pa.types.is_string(f.type):
             df[col] = df[col].astype("string")
     table = pa.Table.from_pandas(df, schema=schema, preserve_index=False)

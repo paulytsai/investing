@@ -12,6 +12,9 @@ hosts:                    # the only hosts engine/connectors/http.py may contact
   edgar: {base: "https://data.sec.gov", rps: 8, user_agent: "paul-engine research contact via repo owner"}
   edgar_www: {base: "https://www.sec.gov", rps: 8}
   fred: {base: "https://api.stlouisfed.org", rpm: 100, env: FRED_API_KEY}
+  x: {base: "https://api.x.com", rpm: 30}            # credential attached by the environment proxy; no env key
+  x_media: {base: "https://pbs.twimg.com", rpm: 60}
+  federal_register: {base: "https://www.federalregister.gov", rpm: 60}
 pilot_symbols_extra: [NVDA, TSM, GOOGL, META, SAP, NFLX, XOM, CVX, CCJ, BABA, ADBE, OHI, BXP, AAPL, MPLX, ORCL, APP, MSFT, AMZN, CRM]
 lags:
   fy_days_if_no_filing_date: 90

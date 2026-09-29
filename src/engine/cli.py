@@ -8,10 +8,12 @@ config_app = typer.Typer(no_args_is_help=True, help="Configuration checks.")
 pull_app = typer.Typer(no_args_is_help=True, help="Pull raw data into data/raw.")
 build_app = typer.Typer(no_args_is_help=True, help="Normalize raw data into point-in-time tables.")
 inbox_app = typer.Typer(no_args_is_help=True, help="Macro insight inbox (Timmer WAAR etc.).")
+x_app = typer.Typer(no_args_is_help=True, help="X (Twitter) source: @TimmerFidelity posts and threads.")
 app.add_typer(config_app, name="config")
 app.add_typer(pull_app, name="pull")
 app.add_typer(build_app, name="build")
 app.add_typer(inbox_app, name="inbox")
+app.add_typer(x_app, name="x")
 
 
 @app.command("test-keys")
@@ -171,6 +173,40 @@ def inbox_parse() -> None:
     from .inbox.parse import parse_inbox
 
     parse_inbox()
+
+
+@x_app.command("resolve")
+def x_resolve(handle: str = typer.Argument("TimmerFidelity")) -> None:
+    """Look up the user id once and save it to config/x_sources.yaml."""
+    from .pit.pull_x import resolve
+
+    resolve(handle)
+
+
+@x_app.command("pull")
+def x_pull(handle: str = typer.Option("TimmerFidelity"), first_page_only: bool = typer.Option(False, help="fetch one page, report count and cost, stop"),
+           confirm: bool = typer.Option(False, help="proceed with the full backfill")) -> None:
+    """Backfill (lookback window) or incremental (since_id) pull; dedupes on post id; logs estimated cost."""
+    from .pit.pull_x import pull_x
+
+    pull_x(handle=handle, first_page_only=first_page_only, confirm=confirm)
+
+
+@x_app.command("classify")
+def x_classify(limit: int = typer.Option(200)) -> None:
+    """Tag threads (market relevant / personal, asset classes, sectors, themes, tickers, chart descriptions) with the Claude layer."""
+    from .inbox.x_classify import classify_threads
+
+    classify_threads(limit=limit)
+
+
+@x_app.command("summary")
+def x_summary() -> None:
+    import json as _json
+
+    from .pit.pull_x import summary
+
+    typer.echo(_json.dumps(summary(), indent=1, default=str))
 
 
 @app.command("serve")
