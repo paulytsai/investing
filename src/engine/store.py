@@ -177,6 +177,30 @@ def write_table(name: str, df: pd.DataFrame) -> Path:
     return path
 
 
+
+def write_region(name: str, df: pd.DataFrame, region: str) -> Path:
+    """Write one region's rows of a table, keeping every other region's rows already stored (US and JP builds
+    are independent). Region is recognised by a `region` column, a `security_id` prefix `<REGION>:` or, for
+    benchmark_daily, the benchmark ids of that region."""
+    bench_ids = {"US": {"SPY_TR", "SPY_PR", "RSP_TR", "RSP_PR", "QQQ_TR", "QQQ_PR", "XLE_TR", "XLE_PR", "VNQ_TR", "VNQ_PR", "URA_TR", "URA_PR",
+                        "XLRE_TR", "XLRE_PR"}, "JP": {"TOPIX_PR"}}
+    if has_table(name):
+        old = read_df(name)
+        if name == "benchmark_daily":
+            others = set().union(*(v for k, v in bench_ids.items() if k != region))
+            keep = old[old["benchmark_id"].isin(others)]
+        elif "region" in old.columns:
+            keep = old[old["region"] != region]
+        elif "security_id" in old.columns:
+            keep = old[~old["security_id"].astype(str).str.startswith(f"{region}:")]
+        else:
+            keep = old.iloc[0:0]
+        if not keep.empty:
+            df = pd.concat([keep, df], ignore_index=True)
+            if "event_id" in df.columns:  # MACRO events are region-less and may be carried by either build
+                df = df.drop_duplicates("event_id")
+    return write_table(name, df)
+
 def append_table(name: str, df: pd.DataFrame) -> Path:
     """Append rows (dedupe is the caller's job)."""
     if table_path(name).exists():

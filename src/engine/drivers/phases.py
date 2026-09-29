@@ -79,16 +79,20 @@ def zigzag(weekly: pd.Series, threshold_pct: float = 20.0, min_weeks: int = 4) -
         for i, (a, b) in enumerate(phases):
             if (b - a).days < 7 * min_weeks:
                 if i == 0:
-                    phases[0] = (a, phases[1][1]); del phases[1]
+                    phases[0] = (a, phases[1][1])
+                    del phases[1]
                 elif i == len(phases) - 1:
-                    phases[i - 1] = (phases[i - 1][0], b); del phases[i]
+                    phases[i - 1] = (phases[i - 1][0], b)
+                    del phases[i]
                 else:
                     ra = abs(math.log(float(s[phases[i - 1][1]]) / float(s[phases[i - 1][0]])))
                     rb = abs(math.log(float(s[phases[i + 1][1]]) / float(s[phases[i + 1][0]])))
                     if ra <= rb:
-                        phases[i - 1] = (phases[i - 1][0], b); del phases[i]
+                        phases[i - 1] = (phases[i - 1][0], b)
+                        del phases[i]
                     else:
-                        phases[i + 1] = (a, phases[i + 1][1]); del phases[i]
+                        phases[i + 1] = (a, phases[i + 1][1])
+                        del phases[i]
                 changed = True
                 break
     return phases

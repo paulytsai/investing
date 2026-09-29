@@ -13,7 +13,7 @@ import pandas as pd
 from ..config import sources
 from ..connectors.fmp import FMP
 from ..connectors.fred import SERIES
-from ..store import RAW_DIR, read_df, table_path, write_table
+from ..store import write_region, RAW_DIR, read_df, table_path, write_table
 from .fields import FMP_FIELDS, first_value
 from .prices import frame_from_fmp
 
@@ -70,8 +70,8 @@ def build_us() -> None:
         if b == "SPY":
             cal = np.array(sorted(pd.to_datetime(df["date"]).values.astype("datetime64[D]")))
     assert cal is not None, "SPY prices missing; run `engine pull us` first"
-    write_table("benchmark_daily", pd.DataFrame(bench_rows))
-    write_table("trading_calendar", pd.DataFrame({"region": "US", "date": pd.to_datetime(cal)}))
+    write_region("benchmark_daily", pd.DataFrame(bench_rows), "US")
+    write_region("trading_calendar", pd.DataFrame({"region": "US", "date": pd.to_datetime(cal)}), "US")
 
     # --- macro + fx --------------------------------------------------------------------------
     macro_rows = []
@@ -115,7 +115,7 @@ def build_us() -> None:
             "source": "fmp",
         })
     master = pd.DataFrame(master_rows).drop_duplicates("security_id")
-    write_table("security_master", master)
+    write_region("security_master", master, "US")
 
     # --- prices + market cap -----------------------------------------------------------------
     price_frames, cap_rows = [], []
@@ -137,14 +137,14 @@ def build_us() -> None:
                 cap_rows.append({"security_id": sid, "date": r["date"], "market_cap": r["marketCap"], "source": "fmp"})
     if price_frames:
         prices = pd.concat(price_frames, ignore_index=True).drop_duplicates(["security_id", "date"])
-        write_table("prices_daily", prices)
+        write_region("prices_daily", prices, "US")
         # infer delisting for names whose series stopped
         last = prices.groupby("security_id")["date"].max()
     else:
         last = pd.Series(dtype="object")
     if cap_rows:
         caps = pd.DataFrame(cap_rows).drop_duplicates(["security_id", "date"])
-        write_table("market_cap_daily", caps)
+        write_region("market_cap_daily", caps, "US")
 
     # --- universe membership (interval) ------------------------------------------------------
     today = pd.Timestamp(date.today())
@@ -158,7 +158,7 @@ def build_us() -> None:
                 end = ld + timedelta(days=1)
         mem_rows.append({"security_id": r["security_id"], "region": "US", "start_date": start, "end_date": end,
                          "market_code": r["exchange"], "source": "fmp", "snapshot_date": today})
-    write_table("universe_membership", pd.DataFrame(mem_rows))
+    write_region("universe_membership", pd.DataFrame(mem_rows), "US")
 
     # --- fundamentals long ----------------------------------------------------------------------
     fund_rows = []
@@ -221,7 +221,7 @@ def build_us() -> None:
         fl = fl.sort_values(["security_id", "statement", "period_type", "period_end", "field", "available_from"])
         fl["restatement_rank"] = fl.groupby(["security_id", "statement", "period_type", "period_end", "field"]).cumcount()
         fl = fl.drop_duplicates(["security_id", "statement", "period_type", "period_end", "field", "value", "available_from"])
-        write_table("fundamentals_long", fl)
+        write_region("fundamentals_long", fl, "US")
 
     # --- events ----------------------------------------------------------------------------------
     ev_rows = []
@@ -293,7 +293,7 @@ def build_us() -> None:
             keep = read_df("events", "security_id = 'MACRO'")
             if not keep.empty:
                 new_ev = pd.concat([new_ev, keep], ignore_index=True).drop_duplicates("event_id")
-        write_table("events", new_ev)
+        write_region("events", new_ev, "US")
     print(f"[build us] master={len(master)} prices={len(price_frames)} fundamentals_rows={len(fund_rows)} events={len(ev_rows)}")
 
 

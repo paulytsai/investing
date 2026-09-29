@@ -38,9 +38,12 @@ def research_bundle(c: IdeaCandidate, phases: list[dict] | None = None) -> Resea
     for cl in b.moat.pricing_evidence:
         verify_claim(cl, ids, fr)
         unv += 0 if cl.verified else 1
-    b.thesis.story_one_line, k = mark_free_text(b.thesis.story_one_line); unv += k
-    b.thesis.q_story, k = mark_free_text(b.thesis.q_story); unv += k
-    b.thesis.why_bought, k = mark_free_text(b.thesis.why_bought); unv += k
+    b.thesis.story_one_line, k = mark_free_text(b.thesis.story_one_line)
+    unv += k
+    b.thesis.q_story, k = mark_free_text(b.thesis.q_story)
+    unv += k
+    b.thesis.why_bought, k = mark_free_text(b.thesis.why_bought)
+    unv += k
     b.thesis.unverified_count = unv
     return b
 

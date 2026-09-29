@@ -31,6 +31,7 @@ def run_backtest(start="2016-03-31", end="2024-09-30", hold_months=24, top=20, r
                  universe_kind=None, out_dir=None) -> dict:
     hyp = Hypotheses.load()
     region = region.upper()
+    bench_label = "SPY total return" if region == "US" else "TOPIX price return (JP total return approximated, labelled)"
     dates = formation_dates(start, end, hyp.get("backtest.cadence"))
     max_sector = int(hyp.get("screen.max_per_sector") or 0) or None
     preset = preset or hyp.get("screen.preset")
@@ -62,7 +63,7 @@ def run_backtest(start="2016-03-31", end="2024-09-30", hold_months=24, top=20, r
     out = out_dir or (REPORTS_DIR / "backtest" / run_id)
     out.mkdir(parents=True, exist_ok=True)
     _render(out, rows, pooled, cstats, curve, ic, sens, results, cohorts, book, hyp, dict(start=start, end=end, hold_months=hold_months, top=top,
-                                                                                                region=region, preset=preset, universe_kind=universe_kind or hyp.get("universe.kind")))
+                                                                                                region=region, preset=preset, universe_kind=universe_kind or hyp.get("universe.kind"), bench_label=bench_label))
     (out / "run.json").write_text(json.dumps({"as_of": end, "title": f"Backtest {region} {start}→{end}, top {top}, {hold_months}m hold", "entry": "index.html"}))
     (out / "results.json").write_text(json.dumps({"cohorts": rows, "pooled": pooled, "curve": cstats, "rank_ic": ic, "sensitivity": sens}, default=str, indent=1))
     con = ledger()
@@ -71,7 +72,7 @@ def run_backtest(start="2016-03-31", end="2024-09-30", hold_months=24, top=20, r
     render.update_index()
     done = [r for r in rows if r.get("n") and not r.get("in_flight")]
     print(f"[backtest] {len(done)} complete cohorts; pooled mean cohort return {pooled.get('mean_cohort_ret', 0)*100:.1f}% vs excess {((pooled.get('mean_excess') or 0)*100):+.1f}%; "
-          f"batting (beat SPY) {pooled.get('mean_batting_beat', 0)*100:.0f}% → {out / 'index.html'}")
+          f"batting (beat benchmark) {pooled.get('mean_batting_beat', 0)*100:.0f}% → {out / 'index.html'}")
     return {"path": out, "rows": rows, "pooled": pooled, "curve": cstats, "rank_ic": ic}
 
 
@@ -93,19 +94,20 @@ def run_sensitivity(dates, region, hyp, top, universe_kind, max_sector, book, ho
 
 
 def _render(out, rows, pooled, cstats, curve, ic, sens, results, cohorts, book, hyp, params) -> None:
+    bench_label = params["bench_label"]
     # equity curve chart
     series = {}
     if not curve.empty:
         c = curve.copy()
         base = c.index[0]
         series["Engine (8 overlapping cohorts, equal weight)"] = c["portfolio"] / c["portfolio"].iloc[0] * 100
-        series["SPY total return"] = c["benchmark"] / c["benchmark"].iloc[0] * 100
+        series[bench_label] = c["benchmark"] / c["benchmark"].iloc[0] * 100
         _ = base
-    curve_spec = build_series_chart("curve", "Overlapping-cohort portfolio vs SPY (rebased to 100)", series, ytitle="index") if series else None
+    curve_spec = build_series_chart("curve", f"Overlapping-cohort portfolio vs {bench_label} (rebased to 100)", series, ytitle="index") if series else None
     # cohort return bars as a series chart (cohort mean vs bench)
     done = [r for r in rows if r.get("n")]
     cser = {"Cohort mean return": pd.Series([r["ret_mean"] * 100 for r in done], index=pd.to_datetime([r["formation"] for r in done])),
-            "SPY same window": pd.Series([(r["bench_ret"] or 0) * 100 for r in done], index=pd.to_datetime([r["formation"] for r in done]))}
+            f"{bench_label.split(' (')[0]} same window": pd.Series([(r["bench_ret"] or 0) * 100 for r in done], index=pd.to_datetime([r["formation"] for r in done]))}
     cohort_spec = build_series_chart("cohorts", "Return per cohort over the hold (%)", cser, lines=[0.0], ytitle="%") if done else None
     angle_labels = {k: v["label"] for k, v in rules()["angles"].items()}
     html = render.env().get_template("backtest.html.j2").render(
