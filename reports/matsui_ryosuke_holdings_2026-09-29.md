@@ -45,3 +45,17 @@ Sold at least 48,000 shares Oct 2025–Mar 2026, when the stock traded ¥389–7
 | 2026-09-29 if still held | 68,400 (after two 2-for-1 splits in 2018) | 1.24 | 585 | 40.0M |
 
 Off the top-10 list since 2018, so probably sold.
+
+## Asset estimate: peak positions, exits treated as full sales
+
+Dropping off a top-10 list is treated as selling the whole peak position, at the average
+close over the window between the last list he appeared on and the first he was missing from.
+
+| Stake | Peak shares | Est. cost ¥ | Exit window | Est. proceeds ¥ (range) | Est. gain ¥ | Now |
+|---|---:|---:|---|---:|---:|---|
+| GNI Group 2160 | 79,800 | n/a (officer) | still held | 260.1M market value | n/a | held |
+| PhoenixBio 6190 | 100,000 | ~38.4M (Apr–Sep 2025 avg ¥384) | Oct 2025–Mar 2026, avg ¥484 | 48.4M (39.5M–67.8M) | ~+10M | cash |
+| Parma 3461 | 17,100 | ~32.2M (14,600 at ¥1,719 + 2,500 at ¥2,833) | Apr–Sep 2018, avg ¥4,918 per pre-split share | 84.1M (59.9M–145.4M) | ~+52M | cash |
+
+Estimated total: about ¥393M (≈ $2.5M) = GNI stock ¥260M + sale proceeds ¥132M.
+If the 2018 Parma proceeds funded his 2023 GNI purchase of 41,200 shares, the total is closer to ¥310–330M.
