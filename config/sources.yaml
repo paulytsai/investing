@@ -1,0 +1,19 @@
+# Data-source configuration. Keys come from environment variables named in `env`.
+us_fundamentals:
+  primary: fmp            # fmp | edgar_fsds (switch if the M1b validation fails)
+  validation: edgar_fsds
+jp_fundamentals:
+  primary: jquants        # FMP JP statements carry filingDate = period end → not point-in-time
+hosts:                    # the only hosts engine/connectors/http.py may contact
+  fmp: {base: "https://financialmodelingprep.com", rpm: 2500, env: FMP_API_KEY}
+  alpaca: {base: "https://data.alpaca.markets", rpm: 190, env: [ALPACA_API_KEY, ALPACA_SECRET_KEY]}
+  jquants: {base: "https://api.jquants.com", rpm: 100, env: JQUANTS_API_KEY}
+  edinet: {base: "https://api.edinet-fsa.go.jp", rpm: 60, env: EDINET_API_KEY}
+  edgar: {base: "https://data.sec.gov", rps: 8, user_agent: "paul-engine research contact via repo owner"}
+  edgar_www: {base: "https://www.sec.gov", rps: 8}
+  fred: {base: "https://api.stlouisfed.org", rpm: 100, env: FRED_API_KEY}
+pilot_symbols_extra: [NVDA, TSM, GOOGL, META, SAP, NFLX, XOM, CVX, CCJ, BABA, ADBE, OHI, BXP, AAPL, MPLX, ORCL, APP, MSFT, AMZN, CRM]
+lags:
+  fy_days_if_no_filing_date: 90
+  q_days_if_no_filing_date: 45
+  stale_days: 200

@@ -1,0 +1,102 @@
+# rules/screen.yaml — the spec's exclusions (X-), gates (G1–G6) and scan/score components rendered as data.
+# Encodings: HARD (removes / blocks), SOFT (score input), ALERT (annotation), GATE (needs Paul).
+# Thresholds reference either philosophy.yaml keys (stated) or hypotheses.yaml keys (hypothesis).
+# The screen module reads this file; nothing here is hard-coded in Python.
+
+exclusions:                              # applied before scoring; each yields status 'excluded' with the rule id
+  - {id: X-07/X-10/X-14, test: is_fund_or_etf, encoding: HARD, label: "Funds, ETFs, leveraged/futures vehicles are not single-stock ideas"}
+  - {id: X-04, test: crypto_or_btc_treasury, encoding: HARD, label: "Crypto miners / BTC-treasury companies (no fundamental value)"}
+  - {id: X-25, test: bank_black_box, encoding: HARD, label: "Banks as long-term holds are black boxes (allowed only as a tagged trade)"}
+  - {id: X-05, test: recent_ipo, encoding: HARD, threshold: hypotheses:universe.min_listing_days, label: "Listed < 12 months: hyped-IPO default exclusion; needs ≥4 visible quarters"}
+  - {id: X-01/X-02, test: pre_revenue_or_loss_dreamer, encoding: HARD, threshold: hypotheses:thresholds.revenue_floor_usd, label: "Pre-revenue / loss-making dream stock → role speculative, not core"}
+  - {id: X-22/R-15, test: cyclical_peak_margins, encoding: HARD, threshold: hypotheses:thresholds.cyclical_peak_margin_pctile, label: "Cyclical at peak margins: low P/E is a trap"}
+
+gates:                                   # spec §4.1 Stage 5; outcome ∈ {pass, veto, avoid, size_cap, checkpoint}
+  G1: {id: F-09/R-11/X-17, name: management_alignment, encoding: HARD, proxy: true,
+       test: insider_alignment_proxy, threshold: hypotheses:thresholds.insider_buy_signal_usd,
+       label: "Management alignment (proxy: officer open-market buys vs sales, buybacks/dividends). True G1 needs DEF 14A reading."}
+  G2: {id: F-22/X-18, name: value_trap, encoding: HARD, test: pbr_value_trap,
+       threshold: philosophy:research.gates.value_trap_check_pbr_below,
+       label: "PBR < 1 without a catalyst (buyback, dividend raise, insider buying) = 価値の罠"}
+  G3: {id: F-82/R-18/X-19, name: balance_sheet, encoding: HARD, test: balance_sheet_quality,
+       thresholds: [hypotheses:thresholds.net_debt_ebitda_max, hypotheses:thresholds.ocf_ni_min_ratio],
+       label: "Weak balance sheet or low-quality earnings → size cap / not core-eligible (D-56)"}
+  G4: {id: F-91/F-85/R-24, name: speculation, encoding: HARD, test: required_cagr_vs_ceiling,
+       threshold: hypotheses:thresholds.speculation_cagr_ceiling_pct,
+       label: "Growth the price requires exceeds the sustainable ceiling → non-core"}
+  G5: {id: F-92/R-16/X-23, name: trust_complexity, encoding: HARD, test: yield_trap,
+       thresholds: [hypotheses:thresholds.high_yield_pct, hypotheses:thresholds.dividend_coverage_min],
+       label: "High yield without FCF coverage / yield far above benchmark = hidden risk"}
+  G6: {id: F-103/R-02, name: implementability, encoding: ALERT, test: reader_access, label: "JP-reader access (informational for Paul)"}
+
+angles:                                  # Idea Strength sub-scores; each factor → ReasonComponent
+  story_growth:
+    label: "Story & growth"
+    factors:
+      - {key: rev_growth_ttm, id: P-24/R-43, dir: higher_better, weight: 0.4, label: "Revenue growth TTM YoY"}
+      - {key: rev_cagr_3y, id: P-24, dir: higher_better, weight: 0.3, label: "Revenue CAGR 3y"}
+      - {key: rev_accel, id: R-43, dir: higher_better, weight: 0.15, label: "Revenue growth acceleration (TTM vs prior TTM)"}
+      - {key: ip_pattern, id: F-106, dir: higher_better, weight: 0.15, label: "IP-asset pattern (R&D>20% + rising GM + low capex)", threshold: hypotheses:thresholds.ip_pattern_rd_pct}
+  moat:
+    label: "Moat / toll booth (関所)"
+    factors:
+      - {key: gross_margin, id: F-01/F-04, dir: higher_better, weight: 0.35, label: "Gross margin TTM"}
+      - {key: gm_trend_3y, id: F-08, dir: higher_better, weight: 0.25, label: "Gross-margin change 3y (pricing power evidence)"}
+      - {key: incremental_margin, id: F-81, dir: higher_better, weight: 0.25, label: "Incremental operating margin ΔOI/ΔRev"}
+      - {key: ai_layer_score, id: F-39/F-43, dir: higher_better, weight: 0.15, label: "Intelligence-supply-chain layer (toll/upstream/scarce > commodity midstream)"}
+  quality:
+    label: "Quality & cash (Tillinghast / Bolton)"
+    factors:
+      - {key: roic_ttm, id: F-07/F-18, dir: higher_better, weight: 0.35, label: "ROIC TTM vs hurdle", threshold: hypotheses:thresholds.roic_min_pct}
+      - {key: ocf_ni_ratio, id: F-82, dir: higher_better, weight: 0.2, label: "OCF ÷ net income (cash reality)"}
+      - {key: fcf_margin, id: F-40/F-41, dir: higher_better, weight: 0.25, label: "FCF margin (positive during capex = 投資しながら稼ぐ)"}
+      - {key: net_debt_ebitda, id: R-18, dir: lower_better, weight: 0.2, label: "Net debt / EBITDA", threshold: hypotheses:thresholds.net_debt_ebitda_max}
+  on_sale:
+    label: "On sale vs fair value"
+    factors:
+      - {key: pe_own_pctile, id: F-13, dir: lower_better, weight: 0.3, label: "TTM P/E percentile in own 10-yr band", threshold: philosophy:research.valuation.band_lookback_years}
+      - {key: peg, id: F-14, dir: lower_better, weight: 0.2, label: "PEG (TTM P/E ÷ 3y EPS growth)", threshold: hypotheses:thresholds.peg_ceiling}
+      - {key: multiple_led_drawdown, id: F-12/F-83/R-29, dir: higher_better, weight: 0.3, label: "Drawdown from 3-yr high explained by the multiple, not earnings (good company falling on good results)", threshold: hypotheses:thresholds.drawdown_research_trigger_pct}
+      - {key: implied_growth_gap, id: F-16/R-24, dir: higher_better, weight: 0.2, label: "Trailing growth minus growth implied by price (reverse DCF)"}
+  asymmetry:
+    label: "Asymmetry"
+    factors:
+      - {key: upside_to_peak, id: F-76, dir: higher_better, weight: 0.4, label: "Upside to 3-yr peak"}
+      - {key: net_cash_to_cap, id: F-76/F-20, dir: higher_better, weight: 0.3, label: "Net cash ÷ market cap (floor)"}
+      - {key: fcf_yield, id: F-19, dir: higher_better, weight: 0.3, label: "FCF yield (floor)", threshold: hypotheses:thresholds.fcf_yield_min_pct}
+  alignment:
+    label: "Management alignment"
+    factors:
+      - {key: insider_net_buy_12m, id: F-09/R-22/F-111, dir: higher_better, weight: 0.5, label: "Officer open-market net buying, 12m (USD)"}
+      - {key: shareholder_yield, id: F-09, dir: higher_better, weight: 0.5, label: "Buybacks + dividends ÷ market cap"}
+  fundamental_momentum:
+    label: "Fundamental momentum (Danoff)"
+    factors:
+      - {key: beat_streak, id: F-17, dir: higher_better, weight: 0.5, label: "Consecutive EPS beats (last 8 quarters)"}
+      - {key: eps_growth_ttm, id: F-17/P-23, dir: higher_better, weight: 0.5, label: "EPS growth TTM YoY"}
+  portfolio_fit:
+    label: "Portfolio fit"
+    factors:
+      - {key: fit_score, id: R-40/R-77/R-05/R-06, dir: higher_better, weight: 1.0, label: "Barbell sleeve fit, redundancy vs holdings, region penalties"}
+
+penalties:                               # subtract from Idea Strength (SOFT)
+  - {key: run_up_penalty, id: R-31/X-34, label: "Sharp run-up: non-holders don't buy big", threshold: hypotheses:thresholds.run_up_alert_pct, points: 10}
+  - {key: cyclical_high_margin_penalty, id: F-26, label: "Cyclical margins above 75th percentile of own history", points: 8}
+
+asset_type_map:                          # R-04 (HARD tag) by FMP industry keywords; overridable per name
+  commodity_cyclical: [Oil & Gas E&P, Oil & Gas Equipment, Oil & Gas Refining, Steel, Chemicals, Aluminum, Copper, Paper, Semiconductor Memory, Shipping, Airlines, Auto Manufacturers, Agricultural Inputs, Coal, Marine Shipping, Oil & Gas Drilling, Specialty Chemicals]
+  miner_resource: [Gold, Silver, Other Precious Metals, Uranium, Industrial Metals, Other Industrial Metals & Mining, Coking Coal, Thermal Coal]
+  real_estate: [REIT, Real Estate]
+  bank: [Banks, Banks - Regional, Banks - Diversified, Capital Markets, Mortgage Finance, Insurance]
+  fund_etf: [Exchange Traded Fund, Asset Management - Closed-End]
+oil_majors: [XOM, CVX, COP, SHEL, BP, TTE, OXY]     # R-04 exception: barbell_insurance, not commodity_cyclical for exit logic
+
+ai_layer_map:                            # R-23 / F-39 tagging (D-58 TBD → hypothesis mapping by industry + overrides)
+  upstream: [Uranium, Oil & Gas Integrated, Oil & Gas Midstream, Utilities - Independent Power Producers, Utilities - Regulated Electric]
+  midstream_receipts: [Semiconductors, Semiconductor Equipment & Materials, Electronic Components, Computer Hardware]
+  midstream_reseller: []                 # neoclouds by override
+  downstream_tollbooth: [Software - Application, Software - Infrastructure, Internet Content & Information, Entertainment, Advertising Agencies]
+  overrides: {NVDA: midstream_receipts, TSM: midstream_receipts, ASML: midstream_receipts, MU: commodity_midstream, CRWV: midstream_reseller, NBIS: midstream_reseller,
+              ORCL: downstream_tollbooth, GOOGL: downstream_tollbooth, META: downstream_tollbooth, SAP: downstream_tollbooth, NFLX: downstream_tollbooth, APP: downstream_tollbooth,
+              CCJ: upstream, XOM: upstream, CVX: upstream}
+  layer_score: {upstream: 0.8, midstream_receipts: 0.9, downstream_tollbooth: 1.0, midstream_reseller: 0.1, commodity_midstream: 0.2, none: 0.5}

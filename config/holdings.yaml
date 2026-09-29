@@ -1,0 +1,27 @@
+# Current holdings map from spec §5.1 (as of Sep 2026). Used for redundancy checks (R-40), barbell fit
+# (R-77) and ETF look-through (R-73). Status tiers per spec §5.1; "never infer a sale from silence".
+book: RP
+as_of: 2026-09-26
+sleeves: [ai_core, toll_booths, energy_insurance, uranium_nuclear, real_assets, gold_hedge]
+positions:
+  - {symbol: NVDA, sleeve: ai_core, role: core_growth, ai_layer: midstream_receipts, tier: confirmed, note: "largest holding; never trimmed"}
+  - {symbol: TSM, sleeve: ai_core, role: core_growth, ai_layer: midstream_receipts, tier: confirmed}
+  - {symbol: GOOGL, sleeve: toll_booths, role: core_growth, ai_layer: downstream_tollbooth, tier: confirmed}
+  - {symbol: META, sleeve: toll_booths, role: core_growth, ai_layer: downstream_tollbooth, tier: confirmed}
+  - {symbol: SAP, sleeve: toll_booths, role: core_growth, ai_layer: downstream_tollbooth, tier: confirmed}
+  - {symbol: NFLX, sleeve: toll_booths, role: core_growth, ai_layer: downstream_tollbooth, tier: confirmed}
+  - {symbol: XOM, sleeve: energy_insurance, role: barbell_insurance, ai_layer: upstream, tier: confirmed}
+  - {symbol: CVX, sleeve: energy_insurance, role: barbell_insurance, ai_layer: upstream, tier: confirmed}
+  - {symbol: CCJ, sleeve: uranium_nuclear, role: ai_upstream, ai_layer: upstream, tier: confirmed}
+  - {symbol: XLRE, sleeve: real_assets, role: weed, tier: confirmed, note: "RE ETF (XLRE and/or VNQ inferred); trim candidate"}
+  - {symbol: BABA, sleeve: ai_core, role: core_growth, tier: unconfirmed_2026}
+  - {symbol: ADBE, sleeve: toll_booths, role: core_growth, tier: unconfirmed_2026}
+  - {symbol: OHI, sleeve: real_assets, role: stable_income, tier: unconfirmed_2026}
+  - {symbol: BXP, sleeve: real_assets, role: stable_income, tier: unconfirmed_2026}
+  - {symbol: AAPL, sleeve: toll_booths, role: core_growth, tier: status_unknown}
+  - {symbol: MPLX, sleeve: energy_insurance, role: stable_income, tier: status_unknown}
+ideas_outside_rp:
+  - {symbol: ORCL, tier: idea_1, date: 2026-09-11}
+  - {symbol: APP, tier: idea_2, date: 2026-09-25, note: "hold it small"}
+deliberately_not_held: [MSFT, AMZN, TSLA, CRM, NXE]
+avoid_groups: [memory_semis, neoclouds, crypto_treasury, korea_etf]

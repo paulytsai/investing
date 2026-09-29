@@ -1,0 +1,736 @@
+# =============================================================================
+# config/philosophy.yaml — machine-readable parameters for Paul Tsai's investment engine
+# Companion to PAUL_TSAI_INVESTMENT_ENGINE_SPEC.md v1.0 (§9 Configuration)
+# -----------------------------------------------------------------------------
+# PURPOSE
+#   The single source of every parameter the spec's sections reference as a
+#   backticked config key (`namespace.key`). Base = the P2 parameter inventory
+#   (§3/§7: rules R-, exclusions X-, compliance C-), extended with the keys named
+#   in §2 principles, §4 research/frameworks, §5 portfolio, §6 macro overlay and
+#   §10/§11 decisions and data quality. Spec aliases merged into an existing key
+#   during harmonization are recorded as "aka" in that key's comment and in
+#   master/config_harmonization_log.md. Additions sit at the end of each
+#   namespace under "v1.0 additions"; `monitor` and `macro` are new namespaces.
+#   One structural change: research.gates is now a mapping (§4.1 gate outcomes);
+#   its former list of HARD pre-buy rule IDs is research.gates.hard_pre_buy_rules.
+#
+# VALUE CONVENTIONS
+#   TBD(Paul)   Never stated by Paul. The engine must ALERT → GATE(Paul) and never
+#               guess, interpolate or fall back to a default (INV-5).
+#               TBD(Paul/Diamond) = the same, and the answer also needs Diamond's
+#               written rules (compliance).
+#   null        None by design (e.g. no price stop-loss, no %-drop trigger); this
+#               is a decision, not a missing value.
+#   values      Exact numbers/strings as written in the sources; [a, b] = a stated
+#               range. Tag vocabularies (state.*, macro.regime) are engineering
+#               labels, not Paul's words.
+#   "suggested default: …" appears in comments only: a synthesizer proposal
+#               from §10, never Paul's rule, never loaded as a value.
+#   Flagged evidence (⚠ AI-draft/series/arith, ⚑ relay) may illustrate a rule but
+#               cannot set a parameter (§11.1 rule 1): no v1.0 addition takes its
+#               value from it; flagged base values stay as P2 wrote them
+#               (reference or ALERT-only inputs).
+#
+# PROVENANCE
+#   Comments carry provenance: rule/decision IDs (R-, X-, C-, INV-, RG-, P-, F-,
+#   M-R, PR-, T-, D-), the spec section (§N), source dates, open-question refs
+#   (OQn / Qn) and phrasing labels ([V] verbatim · [P] profile-mandated · [D]
+#   draft needing Paul's sign-off). "⚠ §N writes …" marks spec text that states
+#   a different value; this file is canonical.
+# =============================================================================
+meta:
+  spec_version: "1.0"
+  as_of: "2026-09-29"
+  source_corpus: "Paul Tsai newsletters, columns, TV/webinar notes, Jul 2022 – Sep 2026"
+
+# ---------------------------------------------------------------------------
+# state: tag vocabularies (P2 implied state model; engineering suggestion, not Paul's words)
+# ---------------------------------------------------------------------------
+state:
+  thesis_status: [intact, monitor, inspection_list, re_evaluate, broken]   # R-41, R-45–R-47, R-53, R-54; P2 §2.0
+  role: [core_growth, barbell_insurance, ai_upstream, stable_income, weed, speculative, trade, idea_outside_RP]  # R-68, R-85; P2 §2.0
+  asset_type: [non_commodity, commodity_cyclical, miner_resource, real_estate, fund_etf, bond_cash]  # R-04, R-14; P2 §2.0
+  conviction: [low, mid, high]                     # R-12, R-66; P2 §2.0
+  bucket: [spendable_yen, emergency, growth_usd, speculative]  # R-85, R-119; P2 §2.0
+  shock_type:
+    persistence: [temporary, structural]           # R-28, R-105 · aka crisis.shock_classes (§6 M-R03 writes temporary_shock / structural_change)
+    mechanism: [demand_death, position_clearing]   # R-28 「需要が死ぬ下落は撤退、ポジションが掃除される下落は好機」 · aka crisis.ai_selloff_classes (§6 M-R20)
+  required_fields: [edge_statement, horizon_years] # R-12, R-51; P2 §2.0
+
+# ---------------------------------------------------------------------------
+# universe
+# ---------------------------------------------------------------------------
+universe:
+  regions:
+    base: US                                       # R-05, R-83 「米国市場をベースに、日本をオプションとして考える」
+    japan: option                                  # R-05 small but nonzero; weight in construction.jp_weight_pct
+    other: [Europe, Asia, other_developed, EM]     # R-83 partial diversification only
+  rp_mandate_text: TBD(Paul)                       # R-01 formal mandate text never written
+  rp_mandate_summary: "AI/tech growth core + barbell legs (oil majors, uranium) + legacy real-estate/stable sleeve"  # R-01 as observed
+  rp_mandate_fit_flag_required: true               # R-01 Paul-set flag; RP inclusion = GATE(Paul) · aka universe.strategy_fit_gate (§5 RP-C7)
+  reader_access_check: per_ticker                  # R-02 access checked per ticker, not per asset class · aka universe.reader_access_gate (§5 RP-C6, §10 D-53) · ⚠ §5 RP-C6 writes TBD(Paul): whether the gate still binds (P4 Q29)
+  access_substitutes:                              # R-02, RG-12 routes he named
+    us_reits_world_markets: "Interactive Brokers"
+    stable_part_reits_mlps: [SPY, XLP]
+    us_reits: [XLRE, VNQ]
+    OHI: VTR                                       # MPW later withdrawn
+    PAA: PAGP
+    CCJ: URA                                       # ETF route
+    short_bond_hy_etfs: "check each broker's listings"  # SGOV/SCHO/HYG/JNK
+  prefer_theme_leader: true                        # R-03 「主役企業」, not #2/#3, not diluted ETF
+  block_label_driven_buying: true                  # R-03, X-21 "AI boom → buy all AI stocks"
+  asset_type_tag_required: true                    # R-04 drives R-14 yardstick and R-57 exit
+  jp_requires_story: true                          # R-05 「個別ストーリーがなければ買わない形になっています」 · aka universe.japan_requires_story (§10 D-55)
+  jp_avoid: [domestic_oriented_industries, jp_software_internet]  # R-05, X-26
+  geopolitical_risk_penalty: soft                  # R-06, X-27 no number given
+  vehicle_preferences:                             # R-07
+    oil: operating_companies_not_futures           # not USO (roll cost, contango)
+    bitcoin_if_held: etf_or_spot_not_treasury_companies
+    speculative_sector: diversified_etf_or_large_caps  # e.g. IAT/KRE
+    theme: cheapest_already_owned_vehicle          # Waymo inside GOOGL ~24x vs TSLA ~160x
+    japan_without_yen_risk: DXJ
+    offer_stock_and_etf_routes: true               # CCJ vs URA
+  long_term_futures_or_leveraged_allowed: false    # R-07, X-14
+  leveraged_bond_etfs_allowed: false               # R-82, X-14 TMF at most a short-term trade
+  options_allowed_in_rp: false                     # R-75 unless Paul enables
+  exclusions: [X-01, X-02, X-03, X-04, X-05, X-06, X-07, X-08, X-09, X-10, X-11, X-12, X-13, X-14, X-15, X-17, X-18, X-19, X-21, X-22, X-23, X-30, X-33, X-35, X-36, X-37, X-38]  # HARD-encoded (P2 §2.2); X-35 = suppression list, not a name ban
+  soft_or_gated_exclusions: [X-16, X-20, X-24, X-25, X-26, X-27, X-28, X-29, X-31, X-32, X-34, X-39, X-40]  # reader/soft/alert/GATE per P2 §2.2 (X-20 has a HARD size cap; X-34 HARD/SOFT)
+  eligible_asset_classes: TBD(Paul)                # RP observed all-equity (R-80); gold/BTC via GATE (R-81, X-04)
+  # --- v1.0 additions: keys referenced in spec sections (see header) ---
+  home_bias_flag_pct: TBD(Paul)                    # §2 P-12 (ext): flag JP residents' home bias (JP equities + JPY cash + JP income) above this level; P1 OQ-08 → §10 D-44, D-52; cf. fx.jp_reader_overseas_target_pct
+  non_us_via_country_etf: TBD(Paul)                # §10 D-52 (T-06, R-05, R-83, F-69, F-99, P-12, P-15): non-US via country/regional ETFs, or company-level only?; suggested default: non-US only through company-level theses (no country bets) plus the hard-asset sleeve (P6)
+  primary_universe: TBD(Paul)                      # §10 D-53 (T-31, R-02, RG-12, DQ-44; P4 Q29, P6 Q-31): Paul's IBKR universe (full US/global) vs a JP-reader-accessible one; suggested default: two universes, every name carries an accessibility flag (P6)
+  china_max_pct: TBD(Paul)                         # §10 D-54 (T-21, T-22, R-06, X-27, F-70; P4 Q31, P5 Q14, P6 Q-21): suggested default: cap TBD(Paul); eligibility = large cap + governance screen; tranche buys only; no adds on cheapness alone (P6)
+  japan_max_pct: TBD(Paul)                         # §10 D-55 (T-20, R-05, R-38, X-18, X-26, F-22, F-71, F-99; P4 Q24, P6 Q-20): Japan cap for JPY users; suggested default: no Japan index core, single names only with a written company story (P6); cf. construction.jp_weight_pct
+  core_eligibility: TBD(Paul)                      # §10 D-56 (T-10, R-18, R-19, X-19, F-41, F-82; P6 Q-10): suggested default: weak balance sheet (negative FCF funded by debt or external capital) → not core-eligible; idea or satellite only, cap TBD(Paul) (P6)
+  etf_allowed_for_sleeves: TBD(Paul)               # §5 RP-C8 (ext.; P4 Q28 → §10 D-09): "no ETFs" (2023-03-16) superseded by the XLRE/VNQ addition (2023-12-14); ETFs allowed for sector sleeves (I)
+
+# ---------------------------------------------------------------------------
+# research (gates)
+# ---------------------------------------------------------------------------
+research:
+  required_sources: [10-K, earnings_call_transcripts, filings]  # R-26 AI agent source whitelist
+  gates:                                           # HARD pre-buy gates. v1.0: a mapping (the P2 list moved to hard_pre_buy_rules) plus the §4.1 Stage-5 gate outcomes G2–G6; G1 management alignment = research.management_alignment_required (R-11, hard veto)
+    hard_pre_buy_rules: [R-09, R-10, R-11, R-12, R-15, R-16, R-20, R-23] # P2 inventory value of research.gates
+    value_trap: avoid                              # §4.1 G2 (F-22): low PBR + misaligned owners → avoid (価値の罠); JP names need a specific story
+    value_trap_check_pbr_below: 1.0                # §4.3(a): PBR<1 = the unopenable box → run F-22
+    balance_sheet: TBD(Paul)                       # §4.1 G3 (F-82): no credible reinvestment story → avoid; weak BS → size cap or checkpoint; §10 D-56: exclusion vs size cap vs idea-only flag (see universe.core_eligibility)
+    speculation: [exclude_from_core, size_as_non_core] # §4.1 G4 (F-91 + F-85★): exclude from core or size as non-core; non-core scope of the 5-yr rule TBD(Paul) (P3 OQ-3 → §10 D-24)
+    speculation_cagr_ceiling_pct: [20, 30]         # §4.3(f) F-91: 20–30% = sustainable CAGR ceiling (greats ~20%/yr); steady 20–30% claims (Madoff) = red flag
+    trust_complexity: reject                       # §4.1 G5 (F-92): complexity, heavy promotion, a yield far above the benchmark
+    implementability: [substitute_proxy, exclude]  # §4.1 G6 (F-103): buyable by the (Japanese) reader? tax form (K-1 vs 1099)? ETF proxy?
+    governance_veto_scope: TBD(Paul)               # §10 D-57 (F-09, F-22, R-11, X-17, X-18; P3 Q17): does the alignment veto also bind index/ETF exposure and JP trading houses held as hedges?
+    promotion: TBD(Paul)                           # §10 D-14, D-77 (T-24, C-07, C-08, F-96, F-114, INV-1): idea (投資アイデア) → RP gate; suggested default: explicit internal gate — thesis written, layer KPI, balance-sheet check, valuation gate, sizing slot; criteria TBD(Paul) (P6)
+  three_questions:                                 # R-09 [V]
+    - 「この会社の投資ストーリーは何か」
+    - 「そのストーリーを信じる根拠は何か」
+    - 「そのストーリーはいつ崩れるか」
+  thesis_record_required: true                     # R-09 「買ってはいけません」 if unanswerable; INV-2
+  thesis_record_fields: [story, grounds, break_conditions, valuation_view, horizon]  # R-09
+  thesis_test_frequency: quarterly                 # R-09, R-42 「四半期ごとにその仮説をテストします」
+  min_conviction_years: 5                          # R-10 「5年以上持てる確信がなければ買わない」 · aka entry.min_conviction_horizon_years (§4.1, §4.3(g))
+  min_conviction_exempt_roles: [trade, speculative]  # R-10 via R-61, R-68
+  management_alignment_required: true              # R-11 「経営陣の利益は、私の利益と一致しているか」 · aka research.gates.management_alignment: hard_veto (§4.1 G1, §4.3(b))
+  edge_statement_required_above: low               # R-12 conviction above low needs an edge statement
+  edge_reweight_examples: ["55/45", "60/40"]       # R-12 vs a 50/50 coin
+  edge_min_bets_to_show: 100                       # R-12 "100+ bets"
+  valuation_inputs: [peg, own_history_percentile, vs_peers, vs_sp500, fcf_yield]  # R-13 soft score only
+  valuation_mechanical_cutoffs: null               # R-13 none by design; never "high PER → sell"
+  normal_sp500_pe_range: [14, 16]                  # R-13 reference (2022-08-16)
+  valuation_yardstick_by_asset_type:               # R-14 · aka research.valuation_module_by_type (§10 D-25)
+    miner_resource: "reserves, grade, mining cost, contract book (not P/E)"
+    oil_majors: "reserves and capital returns"
+    uranium: "long-term contract price, not spot"
+    commodity_cyclical: "direction of profits / position in profit cycle"
+    order_driven: "P/E not very informative"
+    real_estate: "rent + residual value over holding period"
+    japanese_equity: "総還元 (dividends + buybacks), not dividend yield"
+    e_and_p: "EV vs PV-10; EV/EBITDA vs 2–8x band and peers; ROIC; debt; insiders"  # ⚠AI-draft/third-party
+    ipo: "PSR vs peers and market; retail allocation; political timing; lockups"
+    pre_profit: PSR
+  block_cyclical_peak_earnings: true               # R-15, X-22
+  earnings_growth_extreme_alert_pct: TBD(Paul)     # R-15 ref: semis +143% vs past peaks +30–80%
+  income_gate_required: true                       # R-16 five questions + FCF/AFFO coverage + balance sheet · aka research.gates.income (§10 D-71)
+  income_five_questions: [profits_grow, dividend_kept_or_raised, per_share_value_rises, passes_on_inflation, upside_worth_equity_risk]  # R-16
+  high_yield_threshold_pct: 5                      # R-16 "≥5% = high"
+  fund_yield_check_pct: 10                         # R-16, X-12 ~10% fund yield → check real dividends
+  red_flag_checks: [weak_balance_sheet, rising_receivables, non_operating_eps, debt_or_equity_funded_capex, customer_concentration]  # R-18, X-19
+  capex_receipts_alert_ratio: TBD(Paul)            # R-19 backlog/capex ratio falling · aka monitor.receipts_ratio_min (§4.3(c); P3 OQ-10)
+  drawdown_research_trigger_pct: TBD(Paul)         # R-21 collapse → research task, never auto-buy
+  unresearched_flag_text: 「まだ深く調べていない」   # R-21, C-10 [V]
+  corroborating_signals_soft_only: true            # R-22 insiders, informed buyers, buybacks, coverage, revisions
+  ai_required_tags: [supply_chain_layer, gdp_scenario]  # R-23
+  ai_supply_chain_layers: [upstream_energy_uranium, midstream_chips_dc_compute, downstream_toll_booths]  # R-23 知能のサプライチェーン
+  ai_gdp_scenarios: ["Acemoglu ~1%", "Goldman ~7%", "beyond"]  # R-23
+  ai_dials: [lit_rate, backlog_growth, power_prices]  # R-23 点灯率 · aka macro.ai_dials (§6 M-R20; §6.6 writes utilization_lit_rate)
+  return_plausibility:                             # R-24, X-03
+    top_class_outperformance_pct_per_yr: 3
+    stable_return_hard_above_pct: 10
+    check_risk_if_promised_pct: 15
+    best_pm_record_pct: [18, 19]                   # Fidelity best PMs ~10 years
+    very_hard_pct: 20                              # 「相当難しい」
+    avoid_targets_above_pct: 20
+    exceptional_skill_plus_luck_pct: 30
+    lottery_thinking_pct: [70, 100]                # 「宝くじ的発想」
+    yield_vs_benchmark_red_flag_multiple: [5, 10]  # aka research.income.yield_red_flag_multiple (§4.3(a))
+    one_year_real_gain_reexamine_pct: 20
+    planning_compound_pct: [5, 10]
+    equity_planning_pct: [7, 8]
+    bond_planning_pct: 3
+  behavioral_checklist:                            # R-25, RG-15 [V]
+    - "If this stock goes up 5 times, will I regret not buying now?"
+    - "If it halves, can I accept my decision?"
+    - "Am I swayed by news or other people, or is this my own choice?"
+    - 「5年後に振り返って、この決断をしなかったことを後悔するだろうか」
+    - 「…この決断をしたことを後悔するだろうか」
+    - "Does this bring me closer to what I really want?"
+    - "IPO: investing in the company's future or speculating on market psychology?"
+    - "Pre-mortem: list each worry and answer it"
+  fund_screen:                                     # R-08, R-63, X-10, X-11 (reader-suggested funds)
+    order: [etf_low_cost, active_only_for_risk_etfs_cannot_give, exceptional_understood_manager, niches_with_liquidity_care]
+    avoid_fee_at_or_above_pct: 1.0                 # unless special (illiquid indexes, niche EM)
+    alpha_eating_fee_bp: 300
+    loads_allowed: false                           # no front-load/redemption-fee funds without a special reason
+    turnover_warning_above_pct: 100                # aka research.fund_eval.turnover_flag_pct (§4.3(f))
+    turnover_desirable_below_pct: 50
+    turnover_good_fund_example_pct: 25
+    closet_indexer_active_money: "well below 50%"  # aka research.fund_eval.active_money_min_pct: 50 (§4.3(f): <50% = closet index)
+    good_fund_names: [30, 40]
+    fund_trades_share_of_adv_pct: 20               # liquidity note: exiting illiquid small caps can take months/years · aka research.fund_eval.max_position_pct_adv (§4.3(f) reads the same 2022-12-01 rule as position ≤20% of ADV)
+    team_managed_warning: true
+    compare_against: cheapest_fund_of_closest_strategy
+    sell_on_manager_change: true                   # R-63 「ファンドマネジャーが変更したら、とりあえずファンドを売るべき」
+    rebuy_review_after: "a few months"             # R-63
+    diy_copy_top_holdings: [30, 35]                # plus a little S&P ETF
+    diy_hold_years: [2, 3]
+  # --- v1.0 additions: keys referenced in spec sections (see header) ---
+  valuation:                                       # §4.3(a) sub-keys
+    band_lookback_years: 10                        # §4.3(a) F-13: percentile within the company's own ~10-yr forward-P/E range
+  quality:                                         # §4.3(a)–(b) sub-keys; thresholds never given (P3 Q22 → §10 D-26)
+    fcf_yield_min: TBD(Paul)                       # §4.3(a) FCF-yield floor, the "don't overpay" test (CVX ~8%, CRM ~7% cited)
+    roce_min: TBD(Paul)                            # §4.3(b) F-07: "sustainably high" ROCE/ROIC bar for a Long-Term Winner (APA ROIC ~30% over 5 yrs cited)
+    net_debt_ebitda_max: TBD(Paul)                 # §4.3(b) leverage ceiling (SAP 2x cited)
+    base_rates: TBD(Paul)                          # §4.3(b) F-07: sector CFROI persistence & growth base rates (reference table there; ⚠ unnamed HOLT-like source, cannot set parameters per §11.1)
+  income:                                          # §4.3(a) sub-keys
+    dividend_coverage_min: TBD(Paul)               # §4.3(a): FCF (OCF − capex) ÷ dividends; AFFO/FAD payout for REITs (OHI AFFO payout 92%); P3 Q22 → §10 D-26; cf. research.income_gate_required (R-16)
+  blind_read:                                      # §4.1 Stage 3 (F-106)
+    ip_pattern_rd_pct: 20                          # §4.3(b): R&D >20% of sales + flat sales + rising GM + capex ~0 + cash piling → IP-asset pattern (2026-03)
+  four_lens_every_idea: TBD(Paul)                  # §4.1 Stage 7 (F-114, used once: APP 2026-09-25; P3 OQ-18): score all four lenses on every idea? → §10 D-14; cf. research.four_lens_scoring
+  four_lens_scoring: TBD(Paul)                     # §10 D-14 (F-114; P3 Q18): scope and how split verdicts map to size; suggested default: lenses agree → higher conviction and size; split → small size + check items (P3 F-114)
+  hurdle_margin_pct: TBD(Paul)                     # §4.3(e), §10 D-47 (R-17, F-18, M-R06, M-R26; P3 OQ-9): required margin of expected return over the hurdle (cash.hurdle_rate_source); cf. exit.opportunity_cost_margin_pct (R-59, exit side)
+  ai_layer_map: TBD(Paul)                          # §10 D-58 (T-16, F-43, F-01, F-04, F-39, F-40, F-44; P3 Q1, P6 Q-16): canonical layer map, one KPI per layer, commoditizing vs margin-keeping boundary; suggested default: tag every AI holding upstream energy / midstream receipt-holder / midstream reseller / downstream toll booth (関所) (P6); cf. research.ai_supply_chain_layers (R-23)
+  commoditization_triggers: TBD(Paul)              # §10 D-58: commoditization watch on chip sellers (pricing, gross margin, customer in-sourcing); suggested default: triggers TBD(Paul) (P6)
+  ai_base_rate_weight: TBD(Paul)                   # §10 D-61 (F-46, F-47, F-116, P-33, T-14; P1 OQ-21): weight of railway/fiber precedents in AI theses; no default in the parts
+  premise_inspection_cadence: TBD(Paul)            # §2 P-28 (ext; P1 OQ-21, OQ-22): scheduled premise inspections (前提の点検); cf. timing.premise_register, macro.premise_inspection_list
+  source_weights: TBD(Paul)                        # §10 D-86, D-87; §11.1 rules 1–4 (DQ-03, DQ-10…DQ-15): evidence weights; suggested default: [series] for philosophy only, never to date a current view; corroborate AI-drafted/third-party claims in first-person newsletter text (P6)
+  canonical_versions: TBD(Paul)                    # §10 D-88 (DQ-08, DQ-09; P6 Q-17, Q-35): suggested default: latest version canonical unless Paul says otherwise; the canonical 2026-03-24 Zoom (279 vs 280) is unknown (P6)
+  dq_blocklist: TBD(Paul)                          # §11.1 rule 1 config hook: passages flagged DQ-ID / ⚠arith / ⚠AI-draft / ⚠series / ⚑ may illustrate but never set a parameter
+  date_corrections: TBD(Paul)                      # §11.1 rule 2 config hook: misdated, reused and multi-version files (§11.2)
+
+# ---------------------------------------------------------------------------
+# entry
+# ---------------------------------------------------------------------------
+entry:
+  dip_buy_requires_thesis_intact: true             # R-27 standing dip rule; INV-2
+  dip_threshold_pct: null                          # R-27, R-33 none by design — no %-drop trigger (INV-3) · ⚠ §5 R-NVDA-2 writes TBD(Paul)
+  rp_add_requires_paul: true                       # R-27, INV-1 any RP add = GATE(Paul); whether RP adds on dips = OQ7
+  drop_classification_required: true               # R-28 "judge first, act second"
+  drop_classification_axes: [fundamental_vs_macro, industry_cycle_vs_company, demand_death_vs_position_clearing, temporary_vs_structural, market_reaction_rational]  # R-28
+  demand_death_gauge: lit_rate                     # R-28 「株価ではなく点灯率」
+  price_only_signal_allowed: false                 # R-29 「株価がさがったから、買いだと言えません」
+  price_pct_triggers_allowed: false                # R-33 no "buy after X% up/down" rule
+  staged_tranches: TBD(Paul)                       # R-30 number of tranches
+  tranche_interval: TBD(Paul)                      # R-30
+  single_tranche_full_entry_allowed: false         # R-30 never all in one day
+  china_stagger_period: "~1 year"                  # R-06, R-30 「時間を分散して、中国株の購入を、１年ぐらいの投資期間で」 (2024-09-27)
+  sideways_build_example: "~6 months"              # R-30 TSM (2022-09-06)
+  run_up_alert_pct: TBD(Paul)                      # R-31 examples: NVDA +20%/10 days; +60%/~6 months; +50%/1 yr
+  sentiment_input: soft                            # R-32 buy pessimism, not euphoria
+  bubble_markers: [inexperienced_newcomers, leverage_financed_buying, broad_bullishness]  # R-32 Dalio
+  per_name_levels: TBD(Paul)                       # R-34 Paul-maintained 「買いたい価格水準」; hit → ALERT + research task
+  precommit_drop_example_pct: 30                   # R-34 「この会社が30%下落したとき、自分はどうするか」 (his example) · aka hold.drawdown_plan_trigger_pct (§4.3(f) F-86 calls it a drawdown-plan trigger; ⚠series → example only)
+  block_sell_fallen_buy_risen: true                # R-36, X-34
+  post_event_spike_penalty: soft                   # R-36
+  jp_fx_sensitivity_check: true                    # R-38 buy only if fall > earnings FX sensitivity
+  ia_first_rebuttal_signal: soft                   # R-39 first numerical rebuttal after long skepticism
+  # --- v1.0 additions: keys referenced in spec sections (see header) ---
+  peg_ceiling: TBD(Paul)                           # §10 D-25 (T-11, R-13, R-14, F-14; P3 Q11) and §4.3(a) PEG upper bound (aka research.valuation.peg_max); suggested default: growers = forward P/E ÷ growth, ceiling TBD(Paul); valuation gates new buys and adds, not holds (P6); refs: PEG ≈1 + durable moat buyable, NVDA ~1.1 OK, TSLA ~160x P/E not (2026-07); note research.valuation_mechanical_cutoffs: null (R-13)
+  asymmetry_min_ratio: TBD(Paul)                   # §4.3(a) F-76 (P3 Q22 → §10 D-26): upside to prior peak vs downside to the floor, ≫1 with a hard floor (GOOGL 60% vs 15%, 2023-03); cf. sizing.upside_downside_ratio_input: soft (R-65)
+
+# ---------------------------------------------------------------------------
+# hold
+# ---------------------------------------------------------------------------
+hold:
+  sell_allowed_statuses: [re_evaluate, broken]     # R-41 else only via Paul override
+  post_earnings_audit: true                        # R-42 every holding, quarterly; outputs thesis_status
+  audit_confirms: [business_model, investment_thesis]  # R-42 「ビジネスモデル、投資テーゼ、両方確認できました」
+  growth_hold_metric: revenue_growth               # R-43 「成長株にとっては売上の成長が最も重要であり」
+  revenue_decel_alert_pct: TBD(Paul)               # R-43
+  noise_suppression_list:                          # R-44, X-35 cannot alone move thesis_status
+    - consensus_miss_with_full_year_guidance_unchanged
+    - small_beat_or_miss
+    - flat_or_negative_reaction_without_fundamental_change
+    - single_datapoint_read_as_end_of_ai_cycle
+    - one_week_vs_index
+    - one_quarter
+    - one_month_macro_data
+    - market_or_mix_driven_weak_quarter
+    - short_term_guidance_slowdown
+    - not_fatal_failed_acquisition
+    - tariff_threat_not_actual_tariff
+    - grower_fcf_compression_or_capex_spike        # 2024 rule; see R-19 for 2026 capex-heavy names
+  monitor_freezes_adds: true                       # R-45 neither add nor sell
+  departure_checklist: [competitiveness_slipping, launches_delayed, ai_monetization_breaking_in_numbers, departures_cascading]  # R-46 sell only on 実害
+  inspection_list_disclosure_required: true        # R-47, C-10
+  turnover_endorsed_max_pct: 20                    # R-48 endorsed star-PM practice (<20%/yr, 3+-yr holds)
+  rp_turnover_cap_pct: TBD(Paul)                   # R-48
+  auto_trim_structural_winners: false              # R-49 「花を摘んで雑草に水をやるな」 · aka hold.ride_winners (§5 RP-C1; inverse polarity)
+  cost_basis_blind: true                           # R-50 re-buy test
+  block_fomo_swaps: true                           # R-50
+  horizon_min_years: 5                             # R-51 new core buys (P2: confirm with Paul; OQ26) · aka hold.min_horizon_years (§2 P-03), hold.min_conviction_years (§10 D-24)
+  min_view_years: [3, 5]                           # R-51 「株式投資には最低3〜5年の長期的な視点が必要です」
+  sell_off_buy_min_years: [4, 5]                   # R-51
+  look_ahead_years: [5, 10]                        # R-51
+  fire_horizon_years: [20, 30]                     # R-51
+  crisis_test_years: 10                            # R-51 "10-year test"
+  passing_grade_check: [hold_on_thesis_sell_only_on_break, stay_on_flowers_not_weeds, keep_cash_and_nerve_in_despair]  # R-52
+  cyclical_long_term_core_allowed: false           # R-04 「必ずいつかは売却しなければいけないです」
+  oil_majors_as_barbell_insurance: true            # R-04, R-77 exception to the cyclical rule
+  diversifiable_tail_risk_is_exit_trigger: false   # R-78
+  # --- v1.0 additions: keys referenced in spec sections (see header) ---
+  turnover_budget_pct: TBD(Paul)                   # §10 D-21, §2 P-04 (aka rebalance.turnover_budget_pct; P1 OQ-17): turnover budget for the RP and reader portfolios; suggested default: SOFT budget, ALERT when proposals exceed it (P2); refs: star PM <20%/yr, >100% a Fidelity red flag; RP cap = hold.rp_turnover_cap_pct (R-48)
+  ignore_weekly_results: TBD(Paul)                 # §5 RP-C2 (ext.; Core, 4 dates 2025): weekly beats or misses never change strategy 「これによって戦略を変えるつもりはありません」; → P6 T-23; cf. reporting.evaluation_window_years
+  buy_test_years: TBD(Paul)                        # §10 D-24 (P6 §6.1.6 reading, I; P2 Q26, P3 Q3): the "10-year test" (would you hold it 10 years?) used as a buy test; suggested default: 10 (P6); cf. hold.crisis_test_years: 10 (R-51 reads the same 2026-03-24 line as a crisis test)
+  portfolio_horizon_years: TBD(Paul)               # §10 D-24 (P6 §6.1.6 reading, I): general portfolio horizon; suggested default: [20, 30] (P6); cf. hold.fire_horizon_years: [20, 30] (R-51, stated for FIRE portfolios)
+
+# ---------------------------------------------------------------------------
+# exit
+# ---------------------------------------------------------------------------
+exit:
+  sell_on_thesis_break: true                       # R-41, R-53
+  broken_thesis_exit_window_days: TBD(Paul)        # R-53 immediate vs staged (OQ5) · aka exit.thesis_break_exit_days (§10 D-17)
+  bad_news_triage:                                 # R-54 three questions
+    - "Does it touch the basic reason I chose the company?"
+    - "Is it temporary or structural?"
+    - "If it is resolved, does the growth story come back?"
+  first_principles_checks: [earnings_structure_broken, capital_impaired, time_works_for_me_design_intact]  # R-54
+  price_stop_loss: null                            # R-55 none; INV-3 · aka exit.price_stop_loss_enabled (§10 D-19; suggested false = none)
+  speculative_stop_exception: TBD(Paul)            # R-55 confirm none (OQ4)
+  valuation_trim_enabled: alert_to_gate_only       # R-56 discretionary; never automatic · ⚠ §4.3(g) writes TBD(Paul) (P3 OQ-4 → §10 D-15)
+  valuation_trim_trigger: TBD(Paul)                # R-56 「上がりすぎた」 undefined (OQ2) · aka exit.bubble_trigger (§6 M-R21: sell or cut "by feel")
+  bubble_clock_years: [2, 4]                       # R-56 typically ~3; AI started 2023
+  bubble_dashboard_inputs: [forward_pe_vs_analogs, lit_rate, backlog_growth, power_prices, dalio_markers, bubble_clock]  # R-56
+  bubble_pe_reference: "NVDA 26x not a bubble vs CSCO 214x peak (40–80x for 2+ yrs); Mag 7 32.6x; S&P just under 24x (2025-11-25)"  # R-56
+  ai_over_condition: 「利益が減ったときではなく、技術の進歩が止まったとき」  # R-56 [V]
+  cyclical_exit_required: true                     # R-57 commodity bets, not oil majors as insurance
+  cycle_peak_indicators:                           # R-57
+    semis_inventory_cycle_months: 40
+    past_downturn_price_cut_pct: 50
+  weed_trim_size_pct: TBD(Paul)                    # R-58 real-estate ETFs (OQ15)
+  weed_trim_timing: TBD(Paul)                      # R-58
+  opportunity_cost_margin_pct: TBD(Paul)           # R-59 alert when expected return − hurdle ≤ margin
+  staged_exit: true                                # R-60 unless catastrophic
+  exit_staging: TBD(Paul)                          # R-60 · aka exit.staging (§10 D-17)
+  trade_requires_catalyst: true                    # R-61
+  trade_time_stop: "about a month, or a few weeks" # R-61 「１ヶ月ちょっと、または数週間でうまくいかなければ、もう諦めた方がいい」 · aka exit.trade_time_stop_days (§10 D-19)
+  trade_vehicle: diversified_etf                   # R-61 IAT/KRE, not single banks
+  defense_to_offense_switch: soft_suggestion_gate  # R-64 「一つ手」
+  # --- v1.0 additions: keys referenced in spec sections (see header) ---
+  thesis_break_exit_mode: TBD(Paul)                # §2 P-02 (ext; P1 OQ-02 ↔ P6 T-15 → §10 D-17): immediate vs re-evaluate vs tranches (「崩れたらすぐ売る」 vs 「再評価が必要」); cf. exit.broken_thesis_exit_window_days, exit.exit_staging
+  kill_criteria_required: TBD(Paul)                # §10 D-17 (T-15, R-41, R-53, R-54, R-60, F-108, P-02): suggested default: every position carries written thesis KPIs and kill criteria (P6); cf. research.thesis_record_fields (break_conditions)
+  underperformance_review_months: TBD(Paul)        # §10 D-18, D-76 (T-15, R-58, F-101, m-25): suggested default: underperformance vs benchmark for TBD(Paul) months → a mandatory documented review, not an automatic sale (P6); weeds = ALERT → GATE(Paul) (P2)
+  bubble_clock_enabled: TBD(Paul)                  # §10 D-18 (R-56, M-R21; clock stated 2024-02-09): is the ~3-yr bubble clock retired?; suggested default: retire it unless Paul reaffirms (P6); clock length = exit.bubble_clock_years
+  bubble_trim_pct: TBD(Paul)                       # §4.3(g) F-34 (2024-08): trim size on confirmed bubble conditions (NVDA "breaker"); trims route through GATE(Paul) (INV-3)
+  cyclical_exit_signals: TBD(Paul)                 # §10 D-20, §2 P-31 (aka exit.cyclical_exit_triggers; T-05, R-04, R-15, R-57, F-26, F-27, M-R23): cycle signals that trigger profit-taking on cyclical/commodity trades; suggested default: shipping/memory-type cyclicals only as tagged cycle trades with pre-set exit rules (P6); P2 R-57: cycle-peak ALERT → GATE, not for oil majors held as insurance; cf. exit.cycle_peak_indicators
+  ai_demand_death_triggers: TBD(Paul)              # §10 D-60, §2 P-13 (aka exit.ai_derisk_triggers; P1 OQ-11; T-10(d), R-23, R-56, F-40–F-42, F-45, M-R20, M-R21): which observable means "technical progress stops" or "demand death" (lit rate, backlog growth, power prices); suggested default: exit trigger TBD(Paul), AI-funding KPIs as dashboard items (P6); bubble-dashboard ALERT → GATE, never automatic (P2); cf. exit.ai_over_condition
+  ai_funding_stress_trigger: TBD(Paul)             # §10 D-60 (F-41, PR-7, m-22; P5 Q6), §6.6 I-26 (aka macro.ai_funding_stress_threshold): third-party financing share, AI capex % of OCF, hyperscaler FCF, credit spreads, vendor financing, ORCL FCF
+  merger_arb_exit_at_hurdle: true                  # §4.3(a) F-23: buy while the annualized spread > risk-free with limited break-downside; exit at ≈ risk-free (~5%/yr; ATVI 2023); R-59
+
+# ---------------------------------------------------------------------------
+# sizing
+# ---------------------------------------------------------------------------
+sizing:
+  survival_check_first: true                       # R-67, INV-4 退場しない before any optimizer
+  initial_position_pct: TBD(Paul)                  # R-65 (OQ1)
+  max_position_pct: TBD(Paul)                      # R-66 (OQ1)
+  speculative_max_pct: TBD(Paul)                   # R-68 「投機は宝くじサイズまで」 (OQ1)
+  non_core_max_pct: TBD(Paul)                      # R-20, R-68 e.g. NXE, APP (OQ1) · aka sizing.noncore_max_pct (§4.3(f))
+  kelly_mode: concept_only                         # R-66 inputs can't really be measured
+  kelly_fraction: TBD(Paul)                        # R-66 illustrative: 60% win → ~20% of assets (≈ f = 2p − 1)
+  add_on_conviction: true                          # R-66 「確信度に応じてポジションを調整する」
+  max_portfolio_drawdown_pct: TBD(Paul)            # R-67 · aka sizing.max_drawdown_budget_pct (§10 D-04)
+  position_loss_cap_pct: TBD(Paul)                 # R-67 · aka sizing.max_single_name_loss_pct (§10 D-04)
+  dreamer_basket_names: 10                         # R-68 "~10-name venture-style basket"
+  role_tag_required: true                          # R-68
+  martingale_allowed: false                        # R-69
+  fixed_pct_per_name: null                         # R-71 none by design
+  largest_weight_logic: "highest conviction whose valuation-vs-growth justifies it"  # R-72 (Observed)
+  upside_downside_ratio_input: soft                # R-65 e.g. GOOGL ~60% up vs ~15% down
+  # --- v1.0 additions: keys referenced in spec sections (see header) ---
+  leverage_allowed: TBD(Paul)                      # §10 D-07, §2 P-09 (aka sizing.leverage_policy; P1 OQ-13, P6 Q-30, T-30, X-09, R-69): hard ban or limits?; suggested default: false — no margin/leverage in the equity engine; leverage is a real-estate-only decision outside it (P6)
+
+# ---------------------------------------------------------------------------
+# construction
+# ---------------------------------------------------------------------------
+construction:
+  pipeline_order: [asset_class, sector, stock]     # R-76 「「資産配分」が90％の結果を決める」
+  objective: loss_avoidance_over_index_beating     # R-76 「推奨ポートフォリオはインデックスに勝つことより、損失を避けることに比重を置く」
+  objective_drawdown_penalty: TBD(Paul)            # R-76 functional form
+  sleeves: [tech_ai_growth_offense, oil_majors_insurance_defense, uranium_energy_for_ai, legacy_real_estate_stable]  # R-77, R-01 as currently observed · ⚠ sleeve lists differ: §4.3(g) [offense_tech_ai, defense_energy]; §5.1 [ai_core, toll_booths, energy_insurance, uranium_nuclear, real_assets, gold_hedge]; §6.6 [ai_tech_core, energy_insurance_oil_majors, uranium_ai_power, hard_money_gold] → §10 D-10
+  barbell_both_legs_required: true                 # R-77 「私のバーベルは、テック株と石油株を一本の棒の両端に載せる考え方です」
+  sleeve_weights: TBD(Paul)                        # R-77 target tech:oil ratio (OQ14); history 2023-03-15 tech 69%, integrated oil 12.48%
+  barbell_tilt_band: TBD(Paul)                     # R-77, R-95 avoid 「中途半端な真ん中」 and excessive tilt · aka rebalance.barbell_band (§4.3(g))
+  gold_in_defensive_leg: TBD(Paul)                 # R-77, R-81 2026-07-24 gold+energy vs 2026-08-14 tech × oil (OQ14)
+  uranium_leg_assignment: TBD(Paul)                # R-77 AI leg or hedge leg (OQ14)
+  target_names_min: 10                             # R-70 「信念が強ければ、１０−２０銘柄もあり得ます」; P2 RP band, confirm with Paul · ⚠ §2 P-05 and §4.3(f) write 20 (max 30) for the general band = general_diversified_names, 10–20 only with high conviction; §5 RP-C11 TBD(Paul); parts differ (§10 D-08)
+  target_names_max: 20                             # R-70 same · ⚠ §4.3(f) writes 30; §2 P-38 "RP slot limit" TBD(Paul); see target_names_min
+  rp_target_names: TBD(Paul)                       # R-70 history 10 → 13 → 12 → 14 → 17 (OQ18)
+  general_diversified_names: [20, 30]              # R-70 "fairly diversified"
+  capable_investor_names: [30, 60]                 # R-70 (2023-08-16)
+  jp_weight_pct: TBD(Paul)                         # R-05 small but nonzero
+  us_min_weight: TBD(Paul)                         # R-83 US is the axis
+  regional_bands: TBD(Paul)                        # R-83
+  contrarian_cyclical_max_pct: TBD(Paul)           # R-37 "only part of the portfolio" · aka construction.cyclical_value_max_pct (§10 D-20; F-26 cyclical value only "in part", P3 Q16)
+  overlap_penalty: soft                            # R-40 no redundant exposure held 「厚く」
+  correlation_input: soft                          # R-78 legs that move for different reasons
+  etf_look_through: true                           # R-73 e.g. Korea ETF two names = 44%
+  semi_cycle_gauges: [semis_inventory_cycle_months_40, eps_growth_peak_vs_past_30_80_pct]  # R-79 current +143%
+  breadth_insurance_tool: RSP                      # R-79 「AIを持ち続けるための保険が安く手に入る環境」
+  bond_max_maturity_years: 1                       # R-82 bonds only short (≤1 year) (2025-08-08); note R-120 also lists SCHO (1–3 yrs) as current parking
+  bucket_tag_required: true                        # R-85
+  buckets_reference: ["basic living (very conservative)", "lifestyle & philanthropy (can take risk)", "legacy"]  # R-85 three-bucket structure
+  # --- v1.0 additions: keys referenced in spec sections (see header) ---
+  speculation_sleeve_max_pct: TBD(Paul)            # §10 D-03 (T-22, R-68, X-02, F-79, F-91, P-07): suggested default: optional speculation sleeve, total and per-name caps TBD(Paul), excluded from core performance attribution (P6); per-name cap = sizing.speculative_max_pct
+  ai_theme_max_pct: TBD(Paul)                      # §10 D-05, D-59 (T-13, T-05(b), R-73, R-79, F-94, P-05): aggregate AI exposure (NVDA, TSM, software, uranium, AI-exposed energy); suggested default: AI-theme metric with cap TBD(Paul), add breadth before trimming structural winners on a breach; uranium counts inside the AI bucket (P6)
+  tech_max_pct: TBD(Paul)                          # §10 D-05: cap on tech weight (~70% tech in 2023)
+  taiwan_dependence_max_pct: TBD(Paul)             # §10 D-06 (T-32, M-R18, PR-4d; P6 Q-32): suggested default: aggregate Taiwan-dependence exposure (TSM + fab-dependent designers such as NVDA) with cap TBD(Paul) and a scenario note in each affected thesis (P6)
+  etf_count_as_names: TBD(Paul)                    # §10 D-09 (T-07, R-07, R-08, R-73, R-79, F-103; P4 Q28, P6 Q-07): suggested default: count ETFs separately, as a breadth/insurance sleeve (P6)
+  user_profiles: TBD(Paul)                         # §10 D-11 (T-25, T-13, R-84, RG-04, F-96, P-38): Paul's concentrated RP / general reader / FIRE drawdown user; suggested default: index core + active satellite; concentration for his own book, index-first for general readers (P6; T-13 reading, I)
+  index_core_weight_pct: TBD(Paul)                 # §10 D-11: suggested default: include an index core sleeve (SPY/VT-type), weight TBD(Paul) (P6); cf. reader.index_base_first (R-84)
+  core_noncore_ratio: TBD(Paul)                    # §10 D-12 (F-95, F-79, R-85; P3 Q8): ant/grasshopper (アリとキリギリス) split; 70/30 is a reader's ideal; no numeric default in the parts
+  income_floor: TBD(Paul)                          # §10 D-13 (T-19, R-16, X-23, F-19, P-39, PR-4b): suggested default: none — total return; yield is not a selection criterion; FIRE withdrawals via the 4% rule (P6)
+  bond_duration_rule: TBD(Paul)                    # §10 D-48 (T-33, R-82, R-120, X-30, M-R06, M-R13): suggested default: short-duration reserve/ladder only unless Paul sets a yield-linked duration rule (P6); cf. construction.bond_max_maturity_years, cash.long_bonds_allowed
+  non_us_min_weight: TBD(Paul)                     # §2 P-15 (ext; P1 OQ-08 → §10 D-52): non-US floor; cf. construction.us_min_weight, construction.regional_bands (R-83)
+  halving_test_required: true                      # §4.3(f) F-75: can the portfolio survive −50%? (pensions counted; yes → 100% equities OK, 2024-02); cf. reader.allocation_templates.halving_test (R-80), sizing.survival_check_first (INV-4)
+  review_mix_stocks_bonds_hardmoney: TBD(Paul)     # §6 M-R07, C8 (F-97, R-80): review toward 60/20/20 after MOVE > VIX; §6 writes [60, 20, 20] but the source is a Timmer relay (⚑) and the bonds/hard-money split is inferred (P2 R-80), so no value is set (§11.1); scope TBD(Paul) (P5 Q3 → §10 D-40); cf. hedge.sixty_twenty_twenty_status
+
+# ---------------------------------------------------------------------------
+# rebalance
+# ---------------------------------------------------------------------------
+rebalance:
+  calendar: null                                   # R-92 none ever described (Observed)
+  threshold: null                                  # R-92 weights drift with winners
+  weight_band_pct: TBD(Paul)                       # R-91 alert above band → GATE(Paul) (OQ3)
+  concentration_alert_pct: TBD(Paul)               # R-49 e.g. NVDA weight (OQ3)
+  conviction_override: true                        # R-91 keep/raise a grown winner if conviction rose; log it
+  index_drawdown_alert_pct: 20                     # R-93 「２０％以上の下落」 (tentative, 2023-01-19)
+  post_shock_audit: true                           # R-94 region, currency, sector
+  oil_trim_size_pct: TBD(Paul)                     # R-95 never stated
+  oil_min_weight: "> 0"                            # R-95 「リスクヘッジとしてゼロまでしなくていい」
+  stress_test_schedule: quarterly                  # R-86 P2 engine hint (scheduled ALERT)
+  stress_scenarios: [prolonged_inflation, sudden_crash]  # R-86 named; further scenarios TBD(Paul)
+  # --- v1.0 additions: keys referenced in spec sections (see header) ---
+  max_weight_by_appreciation_pct: TBD(Paul)        # §10 D-01 (T-09, R-49, R-65, R-66, F-78, F-79, P-08): how far appreciation may carry a name above the add cap before a forced sleeve rebalance; suggested default: no adds above 20% of the portfolio (pending confirmation), appreciation may carry a name above it up to TBD(Paul) (P6)
+  level: TBD(Paul)                                 # §10 D-16 (T-08, R-91–R-95, F-94; P2 Q3, P6 Q-08): sleeve level or single names?; suggested default: rebalance sleeves — AI/growth, energy insurance, real assets, speculation (P6)
+  method: TBD(Paul)                                # §10 D-16: calendar or bands?; suggested default: back to bands TBD(Paul) (P6); a band breach → ALERT → GATE(Paul), logging whether conviction changed; observed default = no-op (P2; cf. rebalance.calendar / threshold: null, R-92)
+  band_pct: TBD(Paul)                              # §10 D-10, D-16, D-37: sleeve rebalancing band(s); cf. construction.barbell_tilt_band (R-77, R-95), rebalance.weight_band_pct (R-91, single names), hedge.insurance_sleeve_band_pct
+  topdown_review_cadence: TBD(Paul)                # §10 D-32 (T-28, F-98, R-87, P-11; P5 Q11, P6 Q-28): suggested default: sleeve and sector budgets set top-down at a TBD(Paul) cadence; names chosen bottom-up inside them (P6)
+  default_trim_grown_winners: true                 # §5 RP-C10 (Stated 2025) = R-91 default: rebalance a winner whose weight has grown; override = rebalance.conviction_override; observed practice = drift/no-op (R-92); tension P6 T-08
+  oil_trim_on_rally: TBD(Paul)                     # §5 R-OIL-4 (ext.; Observed 2023: trims on crude rallies; P4 Q22 → §10 D-37); cf. rebalance.oil_trim_size_pct, construction.barbell_tilt_band (R-95)
+
+# ---------------------------------------------------------------------------
+# timing
+# ---------------------------------------------------------------------------
+timing:
+  technical_overlay_allowed: internal_only         # R-35 SOFT hint; never in his voice (C-05); OQ24 · ⚠ §4.3(e) writes TBD(Paul) (P3 OQ-13 → §10 D-28)
+  macro_overlay_allowed: allocation_and_fx_only    # R-87, R-96 no single-stock macro trades; ALERT/SOFT · ⚠ §6.1(b), §6.6 write true (scope: timing.macro_overlay_scope)
+  market_exit_allowed: false                       # R-96 「市場タイミングを試しますが、ポジション調整程度です」
+  all_cash_allowed: false                          # R-96, R-108 don't flee to cash
+  rate_cut_bets_allowed: false                     # R-96 「利下げを狙う投資などはしない方がいいと思います」
+  political_headline_changes_allowed: false        # R-101
+  mean_reversion_input: TBD(Paul)                  # R-100 "not absolute" (OQ27) · aka timing.mean_reversion_scope (§10 D-36)
+  market_dashboard_inputs:                         # R-98 ALERT only
+    bottom_near_yoy_eps_growth_pct: 0              # 「大体利益増減ゼロのところで市場は底を打ちます」
+    stocks_lead_earnings_months: [3, 6]
+    sp500_leads_profit_trough_months: 6
+    bear_rally_recovery: "about half"              # aka macro.bottom_retracement_pct: 50 (§4.3(e) F-35: >50% recovered = not a bear rally)
+    real_correction: pe_compression
+    priced_in_eps_growth_pct_3_5y: 12              # 2025-12-22
+    correction_if_growth_slows_pct: 20             # if growth slows to the 6–7% average
+    bubble_clock_years: [2, 4]
+  macro_thresholds:                                # R-99 ALERT regime flags → R-87, R-105
+    key_indicator: us_10y                          # 「一つの金融指標だけ注目するであれば、これになるでしょう」
+    ust10y_risk_asset_headwind_pct: 4.5            # 「4.5%を超える10年金利はリスク資産全般に悪影響」 (Timmer) · aka macro.us10y_danger_pct (§6 M-R05, Timmer ⚑)
+    us_economy_nominal_rate_tolerance_pct: [3, 4]  # long-held premise
+    ust10y_exceeds_tolerance_pct: 5                # 2026-09-11: only earnings growers withstand · aka macro.us10y_premise_break_pct (§6 M-R06)
+    oil_spike_usd: 100                             # calms within weeks = temporary · aka macro.oil_shock_usd (§6 M-R04)
+    oil_persistence_months: 3                      # 「3ヶ月以上」 → inflation → rates → equities · aka macro.oil_shock_persistence_months (§6 M-R04)
+    oil_backwardation_resolution_usd: 20           # ~$20 = resolution expected within months · aka macro.oil_backwardation_resolution_usd (§6.6)
+    bonds_epicentre_signal: "MOVE > VIX"
+    core_cpi_mom_hike_pct: 0.4                     # above → hike almost certain · aka macro.core_cpi_mom_hike_pct (§6 M-R08)
+    watch_list: [ust_10y, ust_1y, ust_30y, mortgage_30y_fixed, cpi, oil]  # 2024-08-28
+  # --- v1.0 additions: keys referenced in spec sections (see header) ---
+  macro_overlay_scope: [asset_class, sector, currency, cash_parking, hedge_size] # §6.1(b) (M-P6; D2, D14; R-87): macro sets these weights; the stock is chosen bottom-up; Paul still to confirm the scope (P5 Q11 → §10 D-30, D-32)
+  rate_cycle_sector_tilts: TBD(Paul)               # §6 C3, M-R11 (D3, R-87; P5 Q7 → §10 D-33): P5 weighting (I) = zero weight as a standalone signal; cf. timing.sector_tilts_enabled, timing.rate_cut_bets_allowed: false (R-96)
+  numeric_lines_mode: TBD(Paul)                    # §10 D-27 (T-29, P-36, INV-3, INV-5; P6 Q-29): hard constraint vs review alert for his numeric lines; suggested default: alert — explicit numbers become review alerts, not auto-trades; every hard constraint needs Paul's sign-off (P6)
+  technical_indicators: TBD(Paul)                  # §10 D-28 (T-01, R-35, F-28, F-105, C-05; P3 Q13): candidates support zones, 50-day MA, relative strength vs S&P, trendline breaks, drawdown vs past bears, >50% retracement, mean-reversion bands; suggested default: may only stage the entry of an approved buy near support, never trigger a trade; parameters TBD(Paul) (P6); internal only (C-05)
+  position_adjustment_band_pct: TBD(Paul)          # §10 D-29 (T-02, R-96, R-108, X-38, P-14): how far equity exposure may move as ポジション調整; suggested default: moves only inside a band TBD(Paul), no binary in/out calls (P6)
+  top_calls_allowed: TBD(Paul)                     # §10 D-29 (LTCM analogue 2025-11-25): suggested default: false (P6); cf. timing.market_exit_allowed: false (R-96)
+  macro_inputs: TBD(Paul)                          # §10 D-30 (T-03, R-87, R-96, R-99, F-65, F-90; P3 Q14, P5 Q1, Q11): which regime variables are formal inputs, at which thresholds, with which action; suggested default: macro tilts asset-class and sector sleeves within bands TBD(Paul) and raises watchlist flags (P6); macro sizes the hurdle and sets regime context (P3); cf. timing.macro_thresholds.watch_list
+  rate_threshold_10y_pct: TBD(Paul)                # §10 D-30, §6.6 open decision 1 (P5 Q1): the action line — 4.5% (Timmer ⚑) or 5% (end of the 3–4% premise); refs timing.macro_thresholds.ust10y_risk_asset_headwind_pct / ust10y_exceeds_tolerance_pct
+  macro_single_name_sell_allowed: TBD(Paul)        # §10 D-30: suggested default: false (P6, P2); inverse of crisis.block_panic_macro_sells (R-106 HARD: true), which governs until Paul answers
+  premise_register: TBD(Paul)                      # §10 D-31 (T-03, R-47, M-R25, F-108, P-28; P1 OQ-22, P6 Q-03): status (holding / wobbling / broken, review date) and portfolio consequence of PR-1…PR-9; suggested default: a register modelled on the 2026-09-04 and 09-11 lists (P6); ALERT + mandatory disclosure task (P2); members = macro.premise_inspection_list
+  sector_tilts_enabled: TBD(Paul)                  # §10 D-33 (M-R09–M-R12, PR-3, PR-5, R-87, F-38, F-64; P4 Q25, P5 Q7, Q8): apply rate-cycle sector tilts at all?; no numeric default in the parts; P2 R-87: ALERT/SOFT regime module, no auto-trades
+  sector_tilt_band_pct: TBD(Paul)                  # §10 D-33: sizing (and time stops) of sector tilts; no default in the parts
+  recession_signals: TBD(Paul)                     # §10 D-34 (F-35, R-106, M-R02, m-16; P3 Q21, P5 Q9), §6.6 (aka macro.recession_trigger): no inversion/Sahm rule in the corpus; no numeric trigger in the parts; no macro-only sells (R-106 HARD); cf. macro.vix_level_threshold
+  political_forecasts_used: TBD(Paul)              # §10 D-35 (DQ-51, m-19, R-101, M-R17, F-68; P5 Q15): suggested default: false — his election/party/war-duration forecasts have low reliability and are not encoded (P6)
+  crowding_action: TBD(Paul)                       # §10 D-36 (T-14, R-32, R-100, F-28, P-31, P-33): suggested default: crowding → review plus breadth additions, never an automatic trim of a structural winner (P6)
+
+# ---------------------------------------------------------------------------
+# crisis
+# ---------------------------------------------------------------------------
+crisis:
+  trigger_drawdown_pct: TBD(Paul)                  # R-102 crisis flag
+  deployment_tranches: TBD(Paul)                   # R-102 buy big, but over time
+  deployment_size_pct: TBD(Paul)                   # R-102 size and tempo
+  cooling_off_days: TBD(Paul)                      # R-107 "a few days" after a shock · aka hold.cooling_off_days (§2 P-17), entry.post_shock_wait_days (§4.3(g) F-83)
+  shock_classification_required: true              # R-105
+  sell_requires_story_change: true                 # R-104 crash binary 「この二択だけを考えればいい」
+  block_panic_macro_sells: true                    # R-106 · aka exit.macro_sell_blocked (§6 M-R01, M-R18)
+  switching_candidates: soft_to_gate               # R-62, R-108 乗り換え; rotate high → lower risk
+  reader_min_horizon_years: [4, 5]                 # R-103 buy cautiously only with ≥4–5 yrs + spare cash
+  index_markers_publishable: TBD(Paul)             # R-110 e.g. S&P ~6,500; ALERT only until decided (OQ12) · aka compliance.index_buy_markers_public (§10 D-82)
+  event_counts_if: "moves oil and rates for a long time"  # R-99, R-105
+  steps: [calm_time_prep, no_trade_shock_day, classify_shock, crash_binary, staged_adds_where_intact, dont_move_much, post_shock_design_audit, graded_reader_guidance]  # §3.5
+  # --- v1.0 additions: keys referenced in spec sections (see header) ---
+  quality_name_drop_pct: TBD(Paul)                 # §10 D-22 (T-02(b), R-93, R-102, R-108, F-45, F-83; SVB precedent: banks −10–20%): parts differ — suggested default: buy from a pre-approved watchlist when a quality name falls ≥10–20% on non-thesis news, staged (P6) vs no %-drop auto-buys (P2 INV-3, R-33); reconciled only as alerts (§10 D-27); cf. entry.dip_threshold_pct: null
+  watchlist_required: TBD(Paul)                    # §10 D-22: suggested default: crisis buying only from a pre-approved (peacetime) watchlist (P6); cf. entry.per_name_levels (R-34)
+  oil_shock_duration_weeks: TBD(Paul)              # §4.3(e) F-63 (P3 Q22 → §10 D-26): how long (weeks) an oil spike may last and still count as absorbable ("calms within weeks"); cf. timing.macro_thresholds.oil_persistence_months: 3 (「3ヶ月以上」, R-99, M-R04)
+
+# ---------------------------------------------------------------------------
+# fx
+# ---------------------------------------------------------------------------
+fx:
+  hedge_policy: unhedged                           # R-111, X-13 「為替ヘッジは勧めしないです」; change = GATE(Paul); "hedge if needed" (2025-07-28) → OQ23 · ⚠ §6.6 writes foreign_unhedged; jp_equity_may_use_yen_hedged_vehicle (§6 D7); §2 P-12 TBD(Paul)
+  usd_accumulation: steady                         # R-112 「ドルを買ういいタイミングは必ず米株を買うタイミングと合うわけでもない」
+  fx_forecast_trades_allowed: false                # R-112 FX is 「分散する」, not 「取る」
+  wait_for_fx_advice_allowed: false                # R-113
+  exposure_includes_human_capital: true            # R-114 salary, pensions, real estate, yen products
+  jp_reader_overseas_target_pct: TBD(Paul)         # R-115 just over 20% called "low" (2026-09-25) · aka fx.jpy_user_usd_asset_band_pct (§10 D-44), fx.jp_resident_usd_share (§6 C1, M-R16)
+  yen_weakness_premise_status: inspection_list     # R-117 円安リスク＞円高リスク since 2026-09-11, not retracted · aka fx.yen_premise_status (§6 PR-1 writes under_inspection; §10 D-43)
+  natural_hedge_input: soft                        # R-118 CCJ USD revenue/CAD costs; DXJ
+  # --- v1.0 additions: keys referenced in spec sections (see header) ---
+  hedged_japan_allowed: TBD(Paul)                  # §10 D-42 (T-12, T-20, R-111, R-112, X-13, F-58; DXJ +41.39% in 2023 = a tactical call; P2 Q23, P6 Q-12, Q-20): suggested default: FX-hedged Japan only as a tagged tactical position (P6); §6 D7: Japan equity may use a yen-hedged vehicle; cf. universe.vehicle_preferences.japan_without_yen_risk: DXJ
+  yen_premise_retire_triggers: TBD(Paul)           # §10 D-43 (T-12, PR-1, R-117, F-58, M-R15; P2 Q23, P3 Q15, P5 Q2, Q13), §6.6 (aka fx.yen_premise_retraction_trigger): candidates BOJ rate ≥ ?%, US–JP 10-yr spread < 2%, real wages positive for N months, USD/JPY below ¥?; suggested default: premise carried as monitored, review triggers TBD(Paul) (P6)
+  yen_strength_action: stagger_usd_accumulation    # §6 M-R15 (R-112, R-113; Core 2023→26): a stronger yen is a window to accumulate USD assets, staggered; never stop diversifying
+
+# ---------------------------------------------------------------------------
+# cash
+# ---------------------------------------------------------------------------
+cash:
+  hurdle_rate_source: "live USD risk-free rate (T-bill / USD MMF)"  # R-17 「MMFリターンを頭にベンチマークとして置くべきです」 · ⚠ §4.3(e) writes TBD(Paul) (P3 OQ-9); §6 writes us_tbill_mmf_yield; instrument open in §10 D-47
+  hurdle_history_examples: ["1-yr UST 4.75% (2022-11)", "MMF ~4–5% (2023-05)", "1-yr T-bill 5.46% (2023-09)", "SGOV 3.5–4% (2026-08)", "10-yr UST ~5% (2026-09)"]  # R-17 reference only
+  reserve_months_reader: TBD(Paul)                 # R-122 options: 6 (→ up to 12), 6–12 (「精神安定の薬」), ≥12 (his own), several years (FIRE) (OQ20)
+  reserve_example: "月40万円 → at least 240万円"   # R-122 6-month example
+  emergency_in_risk_assets_allowed: false          # R-122, X-32
+  dry_powder_pct: TBD(Paul)                        # R-109 RP cash line? (OQ17) · aka cash.dry_powder_band_pct (§10 D-45)
+  long_horizon_cash_alert: TBD(Paul)               # R-123 cash beyond buffer + dry powder
+  spendable_bucket_equity_allowed: false           # R-119 「使うかもしれないお金は円の金利で、長期の成長はドルの企業で」
+  parking_instruments:
+    usd: [T-bills, USD_MMF, SGOV, SCHO, VGSH, SPTS, treasury_ladder, FDIC_CD_ladder, iShares_iBonds, Invesco_BulletShares]  # R-120 SGOV ≤3-month; SCHO 1–3 yrs, duration ~1.9
+    jpy: [個人向け国債, time_deposits]              # R-121 「元本の減らない金利」; fixed 5-yr 2.24%, floating 10-yr 1.95%, 1-yr deposits up to 1.4% (2026-09-04)
+  usd_parking_duration_cap: TBD(Paul)              # R-120 ≈ SCHO-like (duration ~1.9)
+  ladder_example: "$400k for 10 years of income = 20 rungs × $20k"  # R-120
+  parking_exclusions: [hy_etfs_as_treasury_substitute, high_dividend_stocks]  # R-124, X-23
+  jp_deposit_insurance_limit_jpy: 10000000         # R-124 split deposits above ¥10M or use megabanks
+  # --- v1.0 additions: keys referenced in spec sections (see header) ---
+  reserve_inside_engine: TBD(Paul)                 # §10 D-45 (T-04, R-108, R-109, R-123, F-95, P-16; P1 OQ-05, P2 Q17, P6 Q-04): is the living reserve inside the engine?; suggested default: outside the engine (P6)
+  portfolio_target_pct: TBD(Paul)                  # §10 D-45: suggested default: portfolio cash 0–5% as dry powder (from the 2023 reconciliation, P6); cf. cash.dry_powder_pct (R-109)
+  portfolio_max_pct: TBD(Paul)                     # §10 D-45: suggested default: cash above TBD(Paul)% needs a logged deployment plan (P6); cf. cash.long_horizon_cash_alert (R-123)
+  long_bonds_allowed: false                        # §6 M-R06 (R-82, PR-2; Stated 2026): avoid long bonds and park in short Treasuries (current regime, ~5% 10-yr); cf. construction.bond_max_maturity_years, construction.bond_duration_rule
+
+# ---------------------------------------------------------------------------
+# hedge (hard money)
+# ---------------------------------------------------------------------------
+hedge:
+  gold_allowed: TBD(Paul)                          # R-81, X-31 GATE(Paul); owned none (2025-08-08) vs set-ratio hedge (2026-03-29)
+  bitcoin_allowed: false                           # X-04 excluded from RP; hard-money reader guidance = GATE(Paul) (OQ19) · ⚠ §2 P-06, §5 R-BTC-2, §6.6 write TBD(Paul); §10 D-39 suggested default false
+  sixty_twenty_twenty_status: TBD(Paul)            # R-80 stocks/bonds/hard money when stock-bond correlation positive; split inferred (OQ19)
+  # --- v1.0 additions: keys referenced in spec sections (see header) ---
+  insurance_sleeve_band_pct: TBD(Paul)             # §10 D-37 (T-05, R-57, R-77, R-95, F-36, M-R04, M-R24; P2 Q6, P4 Q22, P5 Q10, P6 Q-05): suggested default: a permanent oil/gas insurance sleeve with band TBD(Paul), rebalanced rather than traded on oil forecasts (P6)
+  gold_max_pct: TBD(Paul)                          # §10 D-38 (T-18, R-81, X-31, F-74, M-R14): suggested default: gold only inside the insurance sleeve, cap TBD(Paul) (P6); any gold inclusion = GATE(Paul) (P2)
+  gold_instrument: TBD(Paul)                       # §10 D-38: vehicle (ETF vs miners); no gold ticker named (§6 D9)
+  dollar_confidence_triggers: TBD(Paul)            # §10 D-41 (T-06(c), PR-8, F-63, F-74, m-09, m-10; P5 Q16, P6 Q-06): beyond Line 3 (loss of Hormuz control) — a failed auction, the scale of Treasury buybacks, foreign selling; suggested default: the energy + gold insurance sleeve covers a dollar-confidence shock; other triggers TBD(Paul) (P6)
+  energy_gold_ratio: TBD(Paul)                     # §5 R-GOLD-1 (ext.), §6 C2, C8, M-R07: energy + gold at 「一定比率」 (a set ratio); P5 Q3 → §10 D-38, D-40
+
+# ---------------------------------------------------------------------------
+# reporting
+# ---------------------------------------------------------------------------
+reporting:
+  return_basis: TBD(Paul)                          # C-16 must be labelled: USD vs JPY incl. FX · ⚠ §4.3(f) writes simple_cumulative (from 2022-08); §5.4 suggested default: USD total return; currency also → reporting.base_currency (§10 D-62)
+  benchmark: SPY                                   # C-14, C-16 weekly line; label S&P vs SPY
+  weekly_line_template: "推奨ポートフォリオは今週±X％、SPYは±Y％"  # C-14 [P]
+  annualization_method: TBD(Paul)                  # C-16 label simple vs compound; 69%/75% "annualized" were simple, not CAGRs · ⚠ §2 P-37 writes compound (confirm); §4.3(f) simple (not compound) = current Sharesight practice; §5.4 suggested default: CAGR computed by the engine
+  current_tool_and_method: "Sharesight, simple method"  # C-16 (2023 used Friday opening prices)
+  labels_required: [currency, benchmark, period, method]  # C-16
+  past_returns_repeat_caveat: true                 # C-16, R-24 past high returns not expected to repeat
+  number_checks: [annualization_cagr, fx_consistency, unit_slips, weight_totals, known_slip_figures]  # C-18 · aka research.number_checks (§10 D-89, §11.1)
+  # --- v1.0 additions: keys referenced in spec sections (see header) ---
+  base_currency: TBD(Paul)                         # §10 D-62 (C-16, F-119; P1 OQ-15, P4 Q11, Q13, P6 Q-23): USD or JPY base; suggested default: USD, with JPY shown separately (P6); cf. reporting.return_basis
+  evaluation_window_years: TBD(Paul)               # §10 D-63, §5.4 (aka reporting.evaluation_window; T-23; P1 OQ-01, P6 Q-23): suggested default: rolling 3–5 years for decisions; annual review; sub-quarter moves count only with thesis-relevant news (P6)
+  restated_track_record: TBD(Paul)                 # §10 D-64 (DQ-22, DQ-25, T-27; P4 Q12, Q14, Q15): which CY2024 figure and benchmark are canonical; suggested default: never copy, recompute on one basis (P6)
+  track_records: TBD(Paul)                         # §10 D-65 (DQ-26, DQ-50f; P4 Q32): suggested default: keep the "FIRE portfolio" (Jan 2022–May 2024) separate from the RP, which starts 2022-08-15 (P4)
+  planning_return_pct: TBD(Paul)                   # §10 D-66 (T-27, P-37, R-24; P6 Q-27): planning return for FIRE math; suggested default: index-like, TBD(Paul); never extrapolate RP history (P6); refs research.return_plausibility.planning_compound_pct / equity_planning_pct
+  batting_average_benchmark: [50, 55]              # §4.3(f) F-119: % of recommendations with a positive return for top PMs (RP 70%, 2022-11)
+
+# ---------------------------------------------------------------------------
+# reader (reader-guidance modules; extension of the namespace)
+# ---------------------------------------------------------------------------
+reader:
+  concentration_default: diversify                 # R-74 「集中ではなく分散を心がける」
+  index_base_first: true                           # R-84, RG-04 dilute the RP with S&P ETF or VT
+  allocation_templates:                            # R-80
+    halving_test: 「資産は半分なっても耐えられるかどうかです」
+    five_year_money: equity_centric_us_europe_em
+    sixty_forty_only_for: [needs_money_soon, cannot_sleep_through_declines, just_before_retirement]
+    stocks_cash_70_30_equals_60_40_risk: true      # 2023-01-19
+    sixty_twenty_twenty: "stocks/bonds/hard money when stock-bond correlation is positive (split inferred)"  # 2026-03-24
+  small_account_template: "~¥1.5M in 4–5 names: 1 oil + 1 nuclear (RP), 1 long-term growth (SaaS or RELX), 1–2 AI platforms (NVDA/META/GOOGL/AAPL); 「一案だと思います」"  # R-88
+  real_estate_rules:                               # R-89
+    location_triad: [population_outlook, rent_trend, vacancy_trend]
+    jp_income_re_example: "borrow ~1% floating or ~2% fixed vs 6% surface yield = 4–5% spread"
+    unlevered_route: [WPC, NNN]
+  age_tilt:                                        # R-90
+    start_reducing_risk_age: 70                    # "around 70": SPYG over QQQ
+    nisa_household_example: "35 → 100% equities if psychologically OK; 70/30 from age 58"
+    fire_decades: {"30s": "index + growth", "40s": "real estate + cash flow", "50s+": "stabilize income"}
+  fixed_rate_borrowing: "refinance variable to fixed; extra cost = insurance premium; 10-yr fixed 2–3%, Flat 35 ~1.9% (2026-03)"  # R-116
+  nisa:                                            # R-125–R-127
+    annual_limit_jpy: 3600000
+    tsumitate_jpy: 1200000
+    growth_quota_jpy: 2400000
+    lifetime_limit_jpy: 18000000
+    expiry: none
+    fill_within_years: 5
+    hold_years: 20                                 # "~20 years"
+    turnover_intent: zero
+    emergency_money_allowed: false
+    min_names: [10, 15]                            # 「最低１０−１５銘柄以上は目安」
+    placement_version: TBD(Paul)                   # R-126 2024 growth-in-NISA vs 2026 ⚠series index-in-NISA (OQ21) · aka reader.nisa_placement (§10 D-49)
+    eight_step_plan: [know_situation, know_risk_tolerance, diversify_currency_and_names, companies_not_countries, understand_index_composition, active_fund_checks, zero_tax_favours_long_holds, jp_indices_unfit_long_term]  # R-127
+  ideco: TBD(Paul)                                 # R-128 never addressed (OQ22) · aka reader.ideco_guidance (§10 D-50)
+  us_tax_accounts: TBD(Paul)                       # R-129 evidence only (OQ22)
+  tlh:                                             # R-130
+    wash_sale_window_days: 30                      # check ±30 days: he wrote "can't repurchase within 30 days"; actual US window is 30 days before or after (L)
+    tax_only_trades_allowed: false
+  fire_targets: {multiple_of_annual_spending: 25, withdrawal_rule_pct: 4, savings_rate_pct: [50, 70]}  # RG-16 · aka profile.fire_multiple, profile.withdrawal_rate_pct (§4.3(f) F-122)
+  # --- v1.0 additions: keys referenced in spec sections (see header) ---
+  adviser_recommendation: TBD(Paul)                # §10 D-51 (T-25, RG-13, F-84; P1 OQ-25): should the engine ever recommend a human adviser?; no default in the parts
+
+# ---------------------------------------------------------------------------
+# compliance ([V] Paul verbatim · [P] profile-mandated · [D] draft needing Paul's sign-off)
+# ---------------------------------------------------------------------------
+compliance:
+  recommendation_requires_paul: true               # INV-1, C-06 Paul-signed change record
+  rp_change_types_gated: [inclusion, exclusion, weight_change, affirmative_add_call]  # INV-1, C-06
+  compliance_impact_note_required: true            # C-06 lists whose ban clocks start/restart
+  personal_trading_ban_months: "~3"                # C-06 as Paul described; not verified vs Diamond rules
+  personal_trading_ban_exact: TBD(Paul/Diamond)    # C-06 duration, rule text, whether status/TV/連載/Zoom count (OQ8)
+  engine_may_send_or_publish: false                # C-19 drafts only
+  newsletter_output_must_pass: [C-03, C-04, C-05, C-06, C-07, C-08, C-19]  # P2 §2.3
+  dated_trade_instructions_allowed: false          # R-97, C-03
+  delegation_line_required: true                   # C-02, C-04 ④
+  standing_dip_line: 「私が押し目買いを推奨するのは『テーゼが変わらないまま価格だけが下がる』局面です」  # C-03 [P]
+  rp_dip_pattern:                                  # C-04 order fixed; requires R-42 audit + named 監視ポイント
+    - 「私はこの会社がずっと好きです。この値段になって魅力はむしろ増した」            # ① [P]
+    - 「好きなものがセールになっているときにどうするか」                             # ② [P]; published NFLX form 好きなものがセールになっているのを見つけたとき… 株も、同じことだと思います [V]
+    - 「テーゼは壊れておらず、推奨ポートフォリオでの位置づけも変わりません」          # ③ [P]
+    - 「買うかどうか、いくら買うかはあなたのポートフォリオの構成次第。どの銘柄に当てはめるかはPMであるあなたの判断」  # ④ [P]
+    - "<standing_dip_line>"                                                              # ⑤ [P]
+    - "監視ポイント + 「悪化すれば黙らずお知らせします」"                                 # ⑥ [V]
+  allowed_hold_statements: [「そのまま保有します」, 「保有し続けます」, 「保有を継続する方針」, 「引き続き保有する予定」, 「推奨ポートフォリオは動かないつもりです」, 「動かないつもりです」]  # C-03, C-09 [V]
+  soft_mention_phrases: [「注目」, 「注目に値する」, 「注目したい」, 「参考になれば」, 「参考にしてもよい」, 「一案だと思います」, 「とりあえず読者の皆さんに共有したい」, 「紹介したい」, 「投資妙味がある」]  # C-09 [V] non-RP only
+  allowed_labels: [「投資ではなく、トレードと考えてください」, 「一つ手」, 「持つことは勧めしないです」]  # C-09 [V]; last one for non-RP names only
+  idea_corner_wording_ceiling: [「私はこの会社が好きです」, 「タイミングも悪くない」, 「ここで買うという判断は十分に成り立つ」, 「組み入れ判断はPMであるあなたの仕事」]  # C-07 [P]
+  idea_corner_never: [「推奨します」, 「買ってください」]  # C-07 as instructions
+  idea_corner_template: [analyst_to_pm_framing, thesis_with_numbers, why_now_optional_capped, weaknesses, suitability_reader_pm_form, fair_disclosure_sentence, dated_点検材料]  # C-07
+  idea_corner_weakness_line: 「アナリストの仕事は弱点も渡すこと」  # C-07 [V]; also 「弱点も含めて渡すのがアナリストの仕事」
+  fair_disclosure_required: true                   # C-07 ALWAYS in IA
+  fair_disclosure_content_profile: 「このコーナーの銘柄は推奨Pfの外、私自身が今後売買する可能性がある」  # C-07 [P] content spec
+  fair_disclosure_sentence_draft: 『このコーナーで取り上げる銘柄は推奨ポートフォリオの外にあり、私自身が今後売買する可能性があります。』  # C-07 [D] NOT verified — Paul must confirm (OQ9) · aka compliance.fair_disclosure_text (§10 D-79)
+  ia_release_gate: paul                            # C-07 GATE(Paul) before release
+  banned_phrases:                                  # C-05, C-08, C-09 profile bans — lint blocks on any hit
+    - 「推奨を継続します」                           # as an act
+    - 「買いの推奨を継続します」
+    - 「買い増しを検討する価値がある」
+    - 「推奨します」                                 # as an instruction
+    - 「買ってください」
+    - 「推奨銘柄は下落したら買いのチャンスと考えます」
+    - 「絶好の買いのチャンス」
+    - 「大きく下落する局面があれば、買いの好機と見てよいでしょう」
+    - 候補銘柄
+    - 編入候補
+    - 「推奨ポートフォリオに入れる予定」             # stem; historical form ends 〜です (2023-12-14)
+    - 「推奨ポートフォリオにまだ入れない」
+    - 「まだ推奨ポートフォリオに入れません」
+    - 「皆さん、金曜日お疲れ様です」                 # not his phrase; no greeting at all
+    - 恐縮
+  banned_phrases_rp_only: [「買いです」, 「勧めたい」]  # C-09 not for RP names
+  banned_phrases_pending_confirmation: [「加えることを検討」, 「積極的に拡充」]  # C-05, C-09 [D] P2's inferred extension for RP names — confirm with Paul
+  banned_constructs: [instance_specific_dip_buy_call, candidate_tier_or_watch_to_rp_pipeline, promotion_demotion, rp_pre_announcement, return_promise_or_dream_number]  # C-03, C-05, C-08, R-24
+  chart_vocab_banned: [200日線, ブレッドス％, 上放れ]  # C-05 "and the like"; use RSP breadth or earnings beats
+  greeting_line: null                              # C-05, C-14 no greeting, no formal sign-off
+  serial_disclaimer: omit_unless_asked             # C-05, C-15 removed 2026-08
+  price_targets: TBD(Paul)                         # C-05, C-09 default omit; unused since 2025 (OQ11) · aka compliance.price_targets_allowed (§10 D-81)
+  disclosure_task_on_status: [inspection_list, re_evaluate, broken]  # C-10, R-47
+  disclosure_phrases: [「悪化すれば黙らずお知らせします」, 「黙らずにお知らせします」, 「撤回はまだしません。ただ、点検リストには正式に載せます」, 「まだ深く調べていない」, 「専門アナリストではありませんが…結論を共有します」, 「リスクとしては…」]  # C-10 [V]
+  map_not_recommendation_line_required: true      # C-11 "examples for drawing the map, not individual recommendations"; JP wording [D]
+  serial_structure_line: 「銘柄ではなく構造です」   # C-11, C-15 [V]
+  qa_answer_shape: [結論から言うと, framework, own_status, delegation_to_reader_pm, 点検材料_or_risks]  # C-12
+  qa_invitation: 「質問はいつでも歓迎です」         # C-12, RG-18 [V]
+  suitability_tags_required: true                  # C-13 role + suitability on every IA/reader suggestion
+  format:                                          # C-14 [P]
+    title_line: 「ニュースレター　２０２６年Ｘ月Ｘ日」
+    summary: optional_4_bullets_・
+    section_header: ■
+    opener: 結論から言うと
+    enumeration: [第一に, 第二に, 第三に]
+    number_style: "億ドル, half-width digits (1,198億ドル)"
+    term_gloss_example: SPY(S&P500指数に連動するETF)
+    register: です・ます
+    hedging_hierarchy: [〜と思います, かもしれません, かなと思いました, と思っています]
+  serial_format: {title: 「タイトル――サブタイトル」, conclusion_line: 「結論はシンプルです。」, series_ending: 【投資家への含意】}  # C-15 [P]
+  affiliate_disclosure_required: true              # C-17
+  release_workflow: [paul_draft, diamond_editor_添削, diamond_test_mail, paul_release_authorization]  # C-19
+  paul_only_phrases: [「とてもいい添削、ありがとうございます」, 「開示の方、よろしくお願いします」]  # C-19 [V] Paul's own acts; engine never emits
+  word_deliverable_filenames: ascii                # C-19
+  pii_scrub: true                                  # C-20 anonymize readers; no third-party details; no wealth figures
+  # --- v1.0 additions: keys referenced in spec sections (see header) ---
+  restriction_window_days: TBD(Paul/Diamond)       # §10 D-78 (C-06, C-04, INV-1; P2 Q8): exact length of the personal-trading restriction; suggested default: ALERT calendar of ~3 months, exact length TBD(Paul/Diamond) (P2); cf. compliance.personal_trading_ban_months, personal_trading_ban_exact
+  restriction_triggers: TBD(Paul/Diamond)          # §10 D-78: does a hold/status statement restart the clock, or only a new inclusion or explicit add-call? do TV (StockVoice), 連載 or Zoom mentions count?
+  watchlist_public_label: TBD(Paul)                # §10 D-80 (C-07, C-08, C-09; P2 Q10): public label, if any, for the internal watchlist; suggested default: report only completed, Paul-approved changes; HARD lint on candidate language; label TBD(Paul) (P2); cf. compliance.banned_phrases
+  speculative_trades_channel: TBD(Paul)            # §10 D-83 (R-61, C-09, C-13; P2 Q13): are time-stopped trades still offered to readers, and in which channel?; no default; labels allowed per C-09/C-13
+
+# ---------------------------------------------------------------------------
+# monitor (checkpoints / AI gauges; namespace extension from §4.1 and §4.3)
+# ---------------------------------------------------------------------------
+monitor:
+  checkpoints_required: true                       # §4.1 (F-104, F-108; P2 INV-2, R-09): every idea and holding carries dated 点検材料 (a Checkpoint list with bull and bear readings)
+  capex_funding_checkpoint: true                   # §4.3(b) F-40, F-41: FCF during heavy capex; negative (ORCL −$5B) = risk → funding checkpoint
+  lit_rate_warning_pct: TBD(Paul)                  # §4.3(c) F-42 (P3 OQ-10 → §10 D-60): AI capacity-utilization (点灯率) warning level; reference points fiber 2002 2.7% vs ORCL GPU 97.9% (2026-09)
+
+# ---------------------------------------------------------------------------
+# macro (regime readings; namespace extension from §4.3 and §6)
+# ---------------------------------------------------------------------------
+macro:
+  regime: [R1, R2, R3, R4, R5, R6]                 # §6.1(e) classifier; labels are P5 inferences (I): R1 tightening/inflation shock · R2 rate peak/pivot · R3 easing cycle · R4 inflation/currency dilution · R5 geopolitical oil shock · R6 金利のある世界
+  breadth_trigger: TBD(Paul)                       # §4.3(e) F-65: require broadening beyond the Mag 7 (RSP vs SPY; IWC); numeric trigger TBD(Paul)
+  regime_defense_trigger: TBD(Paul)                # §4.3(g) F-65: raise defense when gains are multiple-only + breadth narrow + peak conditions
+  move_gt_vix_review: true                         # §6 M-R07 (Timmer ⚑; R-80, F-97): MOVE > VIX with stocks and bonds correlated the bad way → review toward 60/20/20 (construction.review_mix_stocks_bonds_hardmoney); signal = timing.macro_thresholds.bonds_epicentre_signal
+  hike_cycle_type: [one_and_done, cycle]           # §6 M-R09 (R-87, F-64): classify the first Fed hike (Ned Davis)
+  financials_order_flat_high_curve: [insurers, large_banks_ib, regionals] # §6 M-R10 (PR-3, F-38): 「フラットでも、5％は5％です」
+  semis_eps_growth_past_peak_pct: [30, 80]         # §6 M-R23 (PR-9, R-04, R-15, F-29): past cycle peaks; +143% now (2026-09) → expect deceleration; cf. research.earnings_growth_extreme_alert_pct, construction.semi_cycle_gauges
+  premise_inspection_list: [PR-1, PR-2, PR-3, PR-4a, PR-4b, PR-4c, PR-4d, PR-5, PR-6, PR-7, PR-8, PR-9] # §6 M-R25, §6.4, §6.6 (R-47, F-108, P-28); statuses → timing.premise_register
+  forecast_weight: {structural_regime: high, point_level: low, timing: low, political: low, rate_cycle_rotation: 0} # §6.5(e) engine design rule (P5 §5.3.17, I)
+  call_scoring_source: corpus_record               # §6.5(e) (D6; §11.1 rule 6): score his calls from the contemporaneous record, never from his self-reports
+  vix_level_threshold: TBD(Paul)                   # §6.6 config block only (I-07) → §10 D-34; cf. timing.recession_signals

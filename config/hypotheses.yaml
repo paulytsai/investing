@@ -1,0 +1,79 @@
+# config/hypotheses.yaml — numeric stand-ins for TBD(Paul) parameters (spec INV-5).
+# NONE of these values is Paul's rule. Each entry is {value, decision_id, note}; the engine records which
+# entries touched every output and lists the D-IDs on the page ("Unresolved decisions").
+# The backtest sensitivity grid varies these to help Paul decide the §10.15 Top-15.
+meta:
+  status: hypothesis
+  version: 1
+
+universe:
+  kind: {value: cap_floor, decision_id: D-53, note: "cap_floor = all US common stocks above the PIT floor; sp500_pit = historical S&P 500 members"}
+  cap_floor_usd: {value: 2.0e9, decision_id: D-53, note: "point-in-time market cap floor, US"}
+  cap_floor_jpy: {value: 1.0e11, decision_id: D-55, note: "point-in-time market cap floor, Japan (¥100B)"}
+  min_listing_days: {value: 365, decision_id: D-53, note: "need ≥4 visible quarters; also X-05 hyped-IPO default exclusion"}
+  jp_markets: {value: [プライム, スタンダード], decision_id: D-55}
+
+screen:
+  coverage_min: {value: 0.7, decision_id: D-27, note: "share of factor weight that must be observable to score a name"}
+  max_per_sector: {value: 6, decision_id: D-27, note: "selection-time sector cap for a top-20"}
+  top_n: {value: 20, decision_id: D-08}
+  winsor_pct: {value: 2.5, decision_id: D-27}
+  presets:                       # angle weights → Idea Strength; sum to 1
+    paul_default: {story_growth: 0.20, moat: 0.15, quality: 0.15, on_sale: 0.15, asymmetry: 0.10, alignment: 0.10, fundamental_momentum: 0.10, portfolio_fit: 0.05}
+    growth_tilt:  {story_growth: 0.30, moat: 0.15, quality: 0.10, on_sale: 0.10, asymmetry: 0.05, alignment: 0.10, fundamental_momentum: 0.15, portfolio_fit: 0.05}
+    value_tilt:   {story_growth: 0.10, moat: 0.10, quality: 0.15, on_sale: 0.30, asymmetry: 0.20, alignment: 0.05, fundamental_momentum: 0.05, portfolio_fit: 0.05}
+    quality_tilt: {story_growth: 0.15, moat: 0.25, quality: 0.25, on_sale: 0.10, asymmetry: 0.05, alignment: 0.10, fundamental_momentum: 0.05, portfolio_fit: 0.05}
+    crisis_mode:  {story_growth: 0.15, moat: 0.20, quality: 0.20, on_sale: 0.25, asymmetry: 0.15, alignment: 0.05, fundamental_momentum: 0.00, portfolio_fit: 0.00}
+  preset: {value: paul_default, decision_id: D-27}
+  action:
+    buy_strength_min: {value: 70, decision_id: D-27, note: "Idea Strength ≥ this and on_sale angle ≥ on_sale_min → buy-in-stages"}
+    on_sale_min: {value: 50, decision_id: D-25}
+    watch_strength_min: {value: 55, decision_id: D-27}
+
+thresholds:
+  peg_ceiling: {value: 2.0, decision_id: D-25, note: "spec: ≈1 buyable with durable moat; TSLA ~160x not; ceiling never stated"}
+  roic_min_pct: {value: 12, decision_id: D-26, note: "F-07 'sustainably high'; APA ~30% cited"}
+  net_debt_ebitda_max: {value: 3.0, decision_id: D-26, note: "SAP 2x cited as acceptable"}
+  fcf_yield_min_pct: {value: 2.0, decision_id: D-26, note: "CVX ~8%, CRM ~7% cited"}
+  ocf_ni_min_ratio: {value: 0.7, decision_id: D-26, note: "G3 cash reality (F-82)"}
+  dividend_coverage_min: {value: 1.2, decision_id: D-71, note: "FCF ÷ dividends; OHI AFFO payout 92% cited"}
+  drawdown_research_trigger_pct: {value: 25, decision_id: D-22, note: "R-21 research trigger; scores only with F-12 multiple-led"}
+  run_up_alert_pct: {value: 50, decision_id: D-28, note: "R-31: NVDA +50%/1yr example"}
+  revenue_floor_usd: {value: 1.0e8, decision_id: D-24, note: "X-01/X-02 pre-revenue → speculative"}
+  cyclical_peak_margin_pctile: {value: 90, decision_id: D-25, note: "R-15 block when margins at ≥ this own-history percentile"}
+  hurdle_margin_pct: {value: 3.0, decision_id: D-47, note: "expected return must exceed 10Y UST by this"}
+  speculation_cagr_ceiling_pct: {value: 25, decision_id: D-24, note: "stated range 20–30 (F-91); midpoint used"}
+  high_yield_pct: {value: 5, decision_id: D-71, note: "stated (R-16) — not a hypothesis, kept here for the yield gate"}
+  insider_buy_signal_usd: {value: 1.0e6, decision_id: D-57, note: "G1 proxy: officer open-market buys in 12m"}
+  ip_pattern_rd_pct: {value: 20, decision_id: none, note: "stated (F-106)"}
+
+dcf:
+  erp_pct: {value: 5.0, decision_id: D-25, note: "equity risk premium over 10Y UST"}
+  beta_floor: {value: 0.8, decision_id: D-25}
+  beta_cap: {value: 1.6, decision_id: D-25}
+  terminal_growth_pct: {value: 2.5, decision_id: D-25}
+  horizon_years: {value: 10, decision_id: D-25}
+  growth_cap_pct: {value: 25, decision_id: D-24, note: "R-24 plausibility ceiling for projected growth"}
+  scenarios:
+    bear: {growth_mult: 0.5, margin_delta_pct: -3.0, prob: 0.25}
+    base: {growth_mult: 1.0, margin_delta_pct: 0.0, prob: 0.50}
+    bull: {growth_mult: 1.3, margin_delta_pct: 2.0, prob: 0.25}
+
+drivers:
+  zigzag_threshold_pct: {value: 20, decision_id: none, note: "engineering parameter, not a rule"}
+  min_phase_weeks: {value: 4, decision_id: none}
+  macro_bench_move_pct: {value: 15, decision_id: none}
+
+backtest:
+  hold_months: {value: 24, decision_id: D-24}
+  top_n: {value: 20, decision_id: D-08}
+  cadence: {value: quarterly, decision_id: none}
+  us_start: {value: 2016-03-31, decision_id: none}
+  jp_start: {value: 2017-12-31, decision_id: none}
+  end: {value: 2024-09-30, decision_id: none}
+
+sizing:   # shown as hypothesis bands only; D-01/D-02/D-04 are TBD(Paul)
+  core_band_pct: {value: [3, 8], decision_id: D-01}
+  non_core_band_pct: {value: [1, 3], decision_id: D-02}
+  speculative_max_pct: {value: 1, decision_id: D-05}
+  tranches: {value: 3, decision_id: D-02, note: "R-30 staged entry; count never stated"}

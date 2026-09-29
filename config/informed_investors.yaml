@@ -1,0 +1,7 @@
+# 13F filers whose position changes count as corroborating evidence (F-111, R-22: SOFT only, never a trigger).
+# CIKs verified in M1b (engine pull us --thirteenf resolves names via FMP institutional-ownership/search).
+investors:
+  - {name: "Berkshire Hathaway", cik: "0001067983", lens: buffett}
+  - {name: "FMR LLC (Fidelity, incl. Contrafund / Low-Priced Stock)", cik: "0000315066", lens: danoff_tillinghast}
+  - {name: "Baillie Gifford", cik: "0001088875", lens: growth}
+  - {name: "Fundsmith", cik: "0001569205", lens: quality}
