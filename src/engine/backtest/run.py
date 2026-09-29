@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import os
 from datetime import datetime
 
 import numpy as np
@@ -12,9 +13,32 @@ from ..reports import render
 from ..reports.charts import build_price_chart, build_series_chart, to_json
 from ..screen.rules import rules
 from ..store import has_table, ledger, read_df
-from .cohorts import Cohort, form_cohort, formation_dates
+from .cohorts import Cohort, candidate_cache_path, candidates_at, form_cohort, formation_dates
 from .metrics import cohort_stats, curve_stats, pooled_stats, rank_ic, result_by_formation
 from .portfolio import PriceBook, evaluate_cohort, overlapping_curve
+
+
+def _warm_one(args) -> str:
+    d, region, universe_kind = args
+    from ..config import Hypotheses
+
+    candidates_at(pd.Timestamp(d), region, Hypotheses.load(), universe_kind)
+    return str(d)
+
+
+def warm_candidate_cache(dates, region, universe_kind, workers: int | None = None) -> None:
+    """Build the point-in-time candidate cache for every formation date in parallel processes (the slow part of a
+    full-universe backtest: ~0.1 s per name per date). Cached dates are skipped."""
+    from concurrent.futures import ProcessPoolExecutor
+
+    todo = [d for d in dates if not candidate_cache_path(pd.Timestamp(d), region, universe_kind).exists()]
+    if not todo:
+        return
+    workers = workers or max(1, min(4, (os.cpu_count() or 2)))
+    print(f"[backtest] building candidate cache for {len(todo)} formation dates with {workers} workers", flush=True)
+    with ProcessPoolExecutor(max_workers=workers) as ex:
+        for i, d in enumerate(ex.map(_warm_one, [(d, region, universe_kind) for d in todo]), 1):
+            print(f"[backtest] candidates cached {d} ({i}/{len(todo)})", flush=True)
 
 
 def _score_all(dates, region, hyp, top, preset, universe_kind, max_sector, quiet=False) -> dict[pd.Timestamp, Cohort]:
@@ -35,6 +59,7 @@ def run_backtest(start="2016-03-31", end="2024-09-30", hold_months=24, top=20, r
     dates = formation_dates(start, end, hyp.get("backtest.cadence"))
     max_sector = int(hyp.get("screen.max_per_sector") or 0) or None
     preset = preset or hyp.get("screen.preset")
+    warm_candidate_cache(dates, region, universe_kind)
     cohorts = _score_all(dates, region, hyp, top, preset, universe_kind, max_sector)
     all_ids = sorted({c.security_id for co in cohorts.values() for c in co.scored})
     if not all_ids:

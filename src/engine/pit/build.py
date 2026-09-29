@@ -10,7 +10,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from ..config import sources
+from ..config import Hypotheses, holdings, sources
 from ..connectors.fmp import FMP
 from ..connectors.fred import SERIES
 from ..store import write_region, RAW_DIR, read_df, table_path, write_table
@@ -119,22 +119,37 @@ def build_us() -> None:
 
     # --- prices + market cap -----------------------------------------------------------------
     price_frames, cap_rows = [], []
+    full_c = _cached("fmp", "stable/historical-price-eod/full")
+    div_c = _cached("fmp", "stable/historical-price-eod/dividend-adjusted")
+    sp_c = _cached("fmp", "stable/splits")
+    cap_c: dict[str, list[Path]] = {}
+    for key, p in _cached("fmp", "stable/historical-market-capitalization").items():
+        cap_c.setdefault(key.split("_")[0], []).append(p)
+    max_cap: dict[str, float] = {}
     for sym, sid in sid_of.items():
-        full_p = _cached("fmp", "stable/historical-price-eod/full").get(sym)
+        full_p = full_c.get(sym)
         if not full_p:
             continue
         full = _load_cached_json(full_p)
-        div_p = _cached("fmp", "stable/historical-price-eod/dividend-adjusted").get(sym)
+        div_p = div_c.get(sym)
         div = _load_cached_json(div_p) if div_p else []
-        sp_p = _cached("fmp", "stable/splits").get(sym)
+        sp_p = sp_c.get(sym)
         splits = _load_cached_json(sp_p) if sp_p else []
         if isinstance(full, list) and full:
             price_frames.append(frame_from_fmp(sym, full, div if isinstance(div, list) else [], splits if isinstance(splits, list) else [], sid))
-        for key, p in _cached("fmp", "stable/historical-market-capitalization").items():
-            if key.split("_")[0] != sym:
-                continue
+        for p in cap_c.get(sym, []):
             for r in _load_cached_json(p) or []:
-                cap_rows.append({"security_id": sid, "date": r["date"], "market_cap": r["marketCap"], "source": "fmp"})
+                mc = r.get("marketCap")
+                if mc is None:
+                    continue
+                cap_rows.append({"security_id": sid, "date": r["date"], "market_cap": mc, "source": "fmp"})
+                if float(mc) > max_cap.get(sym, 0.0):
+                    max_cap[sym] = float(mc)
+    # names that never reached half the universe cap floor can never enter a cohort: skip their statements/events
+    floor = float(Hypotheses.load().get("universe.cap_floor_usd") or 2e9)
+    held = {str(h.get("symbol", "")).upper() for h in (holdings().get("holdings") or [])} if isinstance(holdings(), dict) else set()
+    fund_syms = {s for s in sid_of if max_cap.get(s, 0.0) >= 0.5 * floor or s in held}
+    print(f"[build us] {len(sid_of)} names in master; {len(fund_syms)} ever ≥ ${0.5 * floor / 1e9:.1f}B market cap → statements/events built for those")
     if price_frames:
         prices = pd.concat(price_frames, ignore_index=True).drop_duplicates(["security_id", "date"])
         write_region("prices_daily", prices, "US")
@@ -183,18 +198,14 @@ def build_us() -> None:
                 v = first_value(r, keys)
                 if v is None:
                     continue
-                fund_rows.append({
-                    "security_id": sid, "statement": kind, "period_type": period_type, "fiscal_year": int(fy) if fy else None,
-                    "fiscal_period": period, "period_start": None, "period_end": pe_ts, "field": field, "value": v,
-                    "currency": r.get("reportedCurrency"), "filing_date": fd, "available_from": avail, "lag_imputed": imputed,
-                    "restatement_rank": 0, "source": source, "source_ref": str(r.get("acceptedDate") or ""),
-                })
+                fund_rows.append((sid, kind, period_type, int(fy) if fy else None, period, None, pe_ts, field, v,
+                                  r.get("reportedCurrency"), fd, avail, imputed, 0, source, str(r.get("acceptedDate") or "")))
 
     # per-symbol statements
     for kind, ep in (("income", "stable/income-statement"), ("balance", "stable/balance-sheet-statement"), ("cashflow", "stable/cash-flow-statement")):
         for key, p in _cached("fmp", ep).items():
             sym, _, period = key.rpartition("_")
-            if sym not in sid_of:
+            if sym not in fund_syms:
                 continue
             rows = _load_cached_json(p)
             if isinstance(rows, list):
@@ -208,7 +219,7 @@ def build_us() -> None:
                     df = pd.read_csv(f, low_memory=False)
                 except Exception:
                     continue
-            df = df[df["symbol"].isin(sid_of.keys())]
+            df = df[df["symbol"].isin(fund_syms)]
             recs = df.to_dict("records")
             by_sym: dict[str, list[dict]] = {}
             for r in recs:
@@ -217,7 +228,9 @@ def build_us() -> None:
                 add_statement_rows(sid_of[sym], kind, rows, "FY" if period == "FY" else "Q", "fmp_bulk")
 
     if fund_rows:
-        fl = pd.DataFrame(fund_rows)
+        fl = pd.DataFrame.from_records(fund_rows, columns=["security_id", "statement", "period_type", "fiscal_year", "fiscal_period", "period_start", "period_end",
+                                                           "field", "value", "currency", "filing_date", "available_from", "lag_imputed", "restatement_rank", "source", "source_ref"])
+        fund_rows = []
         fl = fl.sort_values(["security_id", "statement", "period_type", "period_end", "field", "available_from"])
         fl["restatement_rank"] = fl.groupby(["security_id", "statement", "period_type", "period_end", "field"]).cumcount()
         fl = fl.drop_duplicates(["security_id", "statement", "period_type", "period_end", "field", "value", "available_from"])
@@ -235,7 +248,7 @@ def build_us() -> None:
                         "event_type": etype, "payload": json.dumps(payload, default=str), "source": source, "source_ref": ref})
 
     for sym, p in _cached("fmp", "stable/earnings").items():
-        if sym not in sid_of:
+        if sym not in fund_syms:
             continue
         for r in _load_cached_json(p) or []:
             if r.get("epsActual") is None:
@@ -246,7 +259,7 @@ def build_us() -> None:
                                                     "revenue_actual": r.get("revenueActual"), "revenue_estimate": r.get("revenueEstimated")}, "fmp", f"earn:{r['date']}")
     for key, p in _cached("fmp", "stable/insider-trading/search").items():
         sym = key.rsplit("_p", 1)[0]
-        if sym not in sid_of:
+        if sym not in fund_syms:
             continue
         for r in _load_cached_json(p) or []:
             tt = str(r.get("transactionType", ""))
@@ -263,7 +276,7 @@ def build_us() -> None:
         sym_list = sub.get("tickers") or []
         sid = None
         for s in sym_list:
-            if s in sid_of:
+            if s in fund_syms:
                 sid = sid_of[s]
                 break
         if sid is None:
@@ -275,7 +288,7 @@ def build_us() -> None:
                    {"items": rec.get("items", [""] * len(forms))[i], "accession": rec["accessionNumber"][i],
                     "primary_doc": rec.get("primaryDocument", [""] * len(forms))[i]}, "edgar", rec["accessionNumber"][i])
     for sym, p in _cached("fmp", "stable/dividends").items():
-        if sym not in sid_of:
+        if sym not in fund_syms:
             continue
         rows = _load_cached_json(p) or []
         rows = sorted(rows, key=lambda r: r.get("date", ""))

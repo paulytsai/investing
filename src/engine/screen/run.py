@@ -95,6 +95,11 @@ def build_candidates(as_of: pd.Timestamp, region: str, hyp: Hypotheses, symbols:
         hyp.get(f"thresholds.{k}")
     rf_pct = rf_on(as_of)
     minfo = master.set_index("security_id")
+    # one pass of grouping instead of a full-frame boolean filter per name (matters at 2,500+ names per date)
+    px_by = {k: g for k, g in prices.groupby("security_id", sort=False)} if not prices.empty else {}
+    caps_by = {k: g.sort_values("date") for k, g in caps.groupby("security_id", sort=False)} if not caps.empty else {}
+    ev_by = {k: g for k, g in events.groupby("security_id", sort=False)} if not events.empty else {}
+    empty_px, empty_ev = prices.iloc[0:0], (events.iloc[0:0] if not events.empty else pd.DataFrame())
     cands: list[IdeaCandidate] = []
     for _, u in uni.iterrows():
         sid, sym = u["security_id"], u["symbol"]
@@ -103,10 +108,10 @@ def build_candidates(as_of: pd.Timestamp, region: str, hyp: Hypotheses, symbols:
         sector = (info["sector"] if info is not None else u.get("sector"))
         at = asset_type_for(sym, industry, sector)
         layer = ai_layer_for(sym, industry, sector)
-        px = prices[prices.security_id == sid]
-        cap_rows = caps[caps.security_id == sid].sort_values("date")
-        mcap = float(cap_rows["market_cap"].iloc[-1]) if not cap_rows.empty else (float(u["market_cap"]) if u.get("market_cap") else None)
-        ev = events[events.security_id == sid] if not events.empty else pd.DataFrame()
+        px = px_by.get(sid, empty_px)
+        cap_rows = caps_by.get(sid)
+        mcap = float(cap_rows["market_cap"].iloc[-1]) if cap_rows is not None and not cap_rows.empty else (float(u["market_cap"]) if u.get("market_cap") else None)
+        ev = ev_by.get(sid, empty_ev)
         snap = snaps[sid]
         m = compute_metrics(Inputs(snap, px, mcap, ev, layer, at), as_of, thr)
         ipo = info["ipo_date"] if info is not None else None
