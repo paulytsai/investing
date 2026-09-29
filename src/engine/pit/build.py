@@ -4,6 +4,7 @@ from __future__ import annotations
 import gzip
 import hashlib
 import json
+import re
 from datetime import date, timedelta
 from pathlib import Path
 
@@ -52,6 +53,9 @@ def security_id_for(symbol: str, cik: str | None, ipo: str | None) -> str:
 # ------------------------------------------------------------------------------------------
 # US build
 # ------------------------------------------------------------------------------------------
+NON_EQUITY_NAME = re.compile(r"\b(notes?|debentures?|preferred|pfd|depositary|units?|warrants?|rights|income capital obligations)\b", re.I)
+
+
 def _combine_fundamentals_parts(parts_dir: Path) -> int:
     """DuckDB streams the parts into the final table out of core: dedupe on (key, value, available_from), first-filed
     restatement rank, and the non-US rows of the existing table kept (write_region semantics)."""
@@ -149,7 +153,8 @@ def build_us() -> None:
             "sector": pr.get("sector"), "industry": pr.get("industry"),
             "ipo_date": pr.get("ipoDate") or (dl or {}).get("ipoDate"),
             "delisted_date": (dl or {}).get("delistedDate") if dl else (None if pr.get("isActivelyTrading", True) else None),
-            "delist_reason": None, "is_adr": bool(pr.get("isAdr")), "is_fund": bool(pr.get("isEtf") or pr.get("isFund")),
+            "delist_reason": None, "is_adr": bool(pr.get("isAdr")),
+            "is_fund": bool(pr.get("isEtf") or pr.get("isFund") or NON_EQUITY_NAME.search(str(pr.get("companyName") or ""))),
             "source": "fmp",
         })
     master = pd.DataFrame(master_rows).drop_duplicates("security_id")
@@ -191,6 +196,18 @@ def build_us() -> None:
     if price_frames:
         prices = pd.concat(price_frames, ignore_index=True).drop_duplicates(["security_id", "date"])
         write_region("prices_daily", prices, "US")
+        # listed notes / preferreds / minor share classes share the issuer CIK (FMP even repeats the company market cap);
+        # within a CIK keep the class with the dollar volume, flag the rest like funds (X-07/X-10: not single-stock ideas)
+        recent = prices[prices["date"] >= prices["date"].max() - pd.Timedelta(days=90)]
+        dv = (recent["close_raw"].astype(float) * recent["volume"].fillna(0).astype(float)).groupby(recent["security_id"]).median()
+        master["_dv"] = master["security_id"].map(dv).fillna(0.0)
+        grp_max = master.groupby("cik")["_dv"].transform("max")
+        minor = master["cik"].notna() & (grp_max > 0) & (master["_dv"] < 0.05 * grp_max) & master.groupby("cik")["security_id"].transform("count").gt(1)
+        master.loc[minor, "is_fund"] = True
+        master = master.drop(columns=["_dv"])
+        if minor.any():
+            print(f"[build us] {int(minor.sum())} minor share classes / listed notes flagged (is_fund) e.g. {master.loc[minor, 'symbol'].head(8).tolist()}")
+            write_region("security_master", master, "US")
         # infer delisting for names whose series stopped
         last = prices.groupby("security_id")["date"].max()
     else:

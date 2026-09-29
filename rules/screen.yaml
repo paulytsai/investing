@@ -4,7 +4,7 @@
 # The screen module reads this file; nothing here is hard-coded in Python.
 
 exclusions:                              # applied before scoring; each yields status 'excluded' with the rule id
-  - {id: X-07/X-10/X-14, test: is_fund_or_etf, encoding: HARD, label: "Funds, ETFs, leveraged/futures vehicles are not single-stock ideas"}
+  - {id: X-07/X-10/X-14, test: is_fund_or_etf, encoding: HARD, label: "Funds, ETFs, leveraged/futures vehicles, listed notes/preferreds and minor share classes are not single-stock ideas"}
   - {id: X-04, test: crypto_or_btc_treasury, encoding: HARD, label: "Crypto miners / BTC-treasury companies (no fundamental value)"}
   - {id: X-25, test: bank_black_box, encoding: HARD, label: "Banks as long-term holds are black boxes (allowed only as a tagged trade)"}
   - {id: X-05, test: recent_ipo, encoding: HARD, threshold: hypotheses:universe.min_listing_days, label: "Listed < 12 months: hyped-IPO default exclusion; needs ≥4 visible quarters"}
