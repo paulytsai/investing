@@ -21,6 +21,14 @@ def test_mark_free_text_flags_uncited_numbers():
     assert n == 2 and "40% (unverified)" in t and "$638B (unverified)" in t and "24% (FY2025" in t
 
 
+def test_mark_free_text_respects_sentence_citations_years_and_rule_ids():
+    t, n = mark_free_text("Content per GW rises from $18B with Hopper to $25B with Blackwell (Q2 FY2027, Earnings call transcript). "
+                          "F-105 explains the chart in 2026: price sits 3.6% below its high.")
+    assert n == 1 and "$18B with" in t and "$25B with" in t and "F-105 explains" in t and "2026:" in t and "3.6% (unverified)" in t
+    t2, n2 = mark_free_text("Top-5 hyperscaler capex of about $800B in 2026.")
+    assert n2 == 1 and "Top-5 hyperscaler" in t2 and "$800B (unverified)" in t2
+
+
 def test_checkpoint_thresholds_never_invented():
     cp = Checkpoint(premise="x", kpi="y", source="z", bull_threshold="growth ≥ 30%", bear_threshold="TBD(Paul)")
     assert cp.bull_threshold == "TBD(Paul)"
