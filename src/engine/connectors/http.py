@@ -47,7 +47,7 @@ class HostNotAllowed(RuntimeError):
 class _Bucket:
     def __init__(self, per_minute: float):
         self.rate = per_minute / 60.0
-        self.capacity = max(1.0, per_minute / 6.0)
+        self.capacity = max(1.0, min(per_minute / 6.0, 10.0))   # burst ≤ 10: per-second limits trip before per-minute ones
         self.tokens = self.capacity
         self.ts = time.monotonic()
         self.lock = threading.Lock()
@@ -174,7 +174,8 @@ class Client:
                 ra = r.headers.get("Retry-After")
                 wait = float(ra) if ra and ra.isdigit() else delay
                 if self._429_streak >= 5:
-                    wait = max(wait, 600)
+                    wait = max(wait, 60)
+                print(f"[http] {self.source} 429 on {endpoint} (streak {self._429_streak}); waiting {wait:.0f}s", flush=True)
                 time.sleep(wait)
                 delay = min(delay * 2, 120)
                 continue
