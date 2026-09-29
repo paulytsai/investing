@@ -25,6 +25,7 @@ TABLES: dict[str, pa.Schema] = {
             ("name", pa.string()),
             ("exchange", pa.string()),
             ("currency", pa.string()),
+            ("country", pa.string()),      # ISO-2 domicile from the profile (ADRs: home country) — X-27 geopolitical penalty key
             ("cik", pa.string()),
             ("sector", pa.string()),
             ("industry", pa.string()),

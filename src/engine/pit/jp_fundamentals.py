@@ -113,7 +113,7 @@ def build_jp() -> None:
         sid = f"JP:{code}"
         present = [d for d in dates if any(x["Code"] == code for x in snaps[d])]
         master_rows.append({"security_id": sid, "symbol": code[:4] if len(code) == 5 and code.endswith("0") else code, "region": "JP", "name": r.get("CoNameEn") or r.get("CoName"),
-                            "exchange": r.get("MktNm"), "currency": "JPY", "cik": None, "sector": r.get("S17Nm"), "industry": r.get("S33Nm"),
+                            "exchange": r.get("MktNm"), "currency": "JPY", "country": "JP", "cik": None, "sector": r.get("S17Nm"), "industry": r.get("S33Nm"),
                             "ipo_date": min(present), "delisted_date": (None if dates[-1] in present else (pd.Timestamp(max(present)) + timedelta(days=92)).date()),
                             "delist_reason": None, "is_adr": False, "is_fund": False, "source": "jquants"})
         mem_rows.append({"security_id": sid, "region": "JP", "start_date": min(present), "end_date": (None if dates[-1] in present else (pd.Timestamp(max(present)) + timedelta(days=92)).date()),

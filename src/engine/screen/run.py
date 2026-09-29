@@ -122,7 +122,8 @@ def build_candidates(as_of: pd.Timestamp, region: str, hyp: Hypotheses, symbols:
         period_end = m["period_end"].date() if m.get("period_end") is not None else None
         cands.append(IdeaCandidate(
             security_id=sid, symbol=sym, name=(info["name"] if info is not None else None), region=region, as_of=as_of.date(),
-            sector=sector, industry=industry, asset_type=at, ai_layer=layer, role_hint=role_hint_for(sym, at), market_cap=m.get("market_cap"),
+            sector=sector, industry=industry, country=(str(info["country"]) if info is not None and "country" in info.index and pd.notna(info["country"]) else None),
+            asset_type=at, ai_layer=layer, role_hint=role_hint_for(sym, at), market_cap=m.get("market_cap"),
             price=m.get("price"), currency=(info["currency"] if info is not None and info["currency"] else "USD"), metrics=_jsonable(m),
             stale=bool(m.get("stale")), basis=m.get("basis", "TTM"), period_end=period_end))
     return cands

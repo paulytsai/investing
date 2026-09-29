@@ -81,3 +81,13 @@ def test_yield_trap_gate(hyp):
     cands = score_universe(_universe(t), hyp)
     c = next(x for x in cands if x.symbol == "HIY")
     assert next(g for g in c.gates if g.gate_id == "G5").outcome == "avoid" and not c.eligible
+
+
+def test_china_adr_gets_soft_geopolitical_penalty_not_exclusion(hyp):
+    """X-27 / R-06: a China-domiciled ADR is scored (never excluded) with a SOFT penalty that is visible as a reason."""
+    baba = _cand("BABA")
+    baba.country = "CN"
+    cands = score_universe(_universe(baba), hyp)
+    c = next(x for x in cands if x.symbol == "BABA")
+    pen = [p for p in c.penalties if p.factor_key == "geopolitical_penalty_china"]
+    assert c.action != "excluded" and pen and pen[0].contribution == -10 and "X-27" in pen[0].rule_id

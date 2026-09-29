@@ -243,6 +243,10 @@ def score_universe(cands: list[IdeaCandidate], hyp: Hypotheses, preset_name: str
                     c.penalties.append(ReasonComponent(rule_id=p["id"], factor_key=p["key"], label=p["label"], kind="penalty",
                                                        value=c.metrics["run_up_12m"] * 100, unit="%", threshold=thr, threshold_status=st,
                                                        decision_id=did, contribution=-p["points"], status="scored"))
+                if p["key"].startswith("geopolitical_penalty") and c.country and c.country.upper() in {x.upper() for x in p.get("countries", [])}:
+                    base -= p["points"]
+                    c.penalties.append(ReasonComponent(rule_id=p["id"], factor_key=p["key"], label=p["label"], kind="penalty",
+                                                       value=None, unit="", note=f"domicile {c.country}", contribution=-p["points"], status="scored"))
                 if p["key"] == "cyclical_high_margin_penalty" and c.asset_type in ("commodity_cyclical", "miner_resource") and (c.metrics.get("op_margin_pctile") or 0) >= 75:
                     base -= p["points"]
                     c.penalties.append(ReasonComponent(rule_id=p["id"], factor_key=p["key"], label=p["label"], kind="penalty",

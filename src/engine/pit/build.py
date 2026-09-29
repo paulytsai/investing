@@ -151,7 +151,7 @@ def build_us() -> None:
         sid_of[sym] = sid
         master_rows.append({
             "security_id": sid, "symbol": sym, "region": "US", "name": pr.get("companyName"), "exchange": pr.get("exchange"),
-            "currency": pr.get("currency"), "cik": (str(pr.get("cik")).zfill(10) if pr.get("cik") else None),
+            "currency": pr.get("currency"), "country": (str(pr.get("country") or "US").upper()), "cik": (str(pr.get("cik")).zfill(10) if pr.get("cik") else None),
             "sector": pr.get("sector"), "industry": pr.get("industry"),
             "ipo_date": pr.get("ipoDate") or (dl or {}).get("ipoDate"),
             "delisted_date": (dl or {}).get("delistedDate") if dl else (None if pr.get("isActivelyTrading", True) else None),

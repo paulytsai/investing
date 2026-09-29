@@ -82,6 +82,8 @@ angles:                                  # Idea Strength sub-scores; each factor
 penalties:                               # subtract from Idea Strength (SOFT)
   - {key: run_up_penalty, id: R-31/X-34, label: "Sharp run-up: non-holders don't buy big", threshold: hypotheses:thresholds.run_up_alert_pct, points: 10}
   - {key: cyclical_high_margin_penalty, id: F-26, label: "Cyclical margins above 75th percentile of own history", points: 8}
+  - {key: geopolitical_penalty_china, id: X-27/R-06, label: "China / Hong Kong domicile: geopolitical and governance risk (SOFT, never an exclusion)", points: 10, countries: [CN, HK]}
+  - {key: geopolitical_penalty_em, id: X-27/R-05, label: "Emerging-market domicile: FX, governance and access risk (SOFT)", points: 5, countries: [BR, AR, MX, CL, CO, PE, IN, ID, TR, ZA, RU, KZ, PH, TH, VN, MY, EG, NG, PK, SA, AE, QA, KW]}
 
 asset_type_map:                          # R-04 (HARD tag) by FMP industry keywords; overridable per name
   commodity_cyclical: [鉄鋼, 非鉄金属, 石油・石炭製品, 海運業, 化学, 鉱業, パルプ・紙, 輸送用機器, 空運業, Oil & Gas E&P, Oil & Gas Equipment, Oil & Gas Refining, Steel, Chemicals, Aluminum, Copper, Paper, Semiconductor Memory, Shipping, Airlines, Auto Manufacturers, Agricultural Inputs, Coal, Marine Shipping, Oil & Gas Drilling, Specialty Chemicals]

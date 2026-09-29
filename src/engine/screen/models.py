@@ -73,6 +73,7 @@ class IdeaCandidate(BaseModel):
     as_of: date
     sector: str | None = None
     industry: str | None = None
+    country: str | None = None
     asset_type: str = "non_commodity"
     ai_layer: str = "none"
     role_hint: str = "core_growth"
