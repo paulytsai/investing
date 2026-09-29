@@ -46,6 +46,18 @@ def universe_symbols(fmp: FMP, min_cap: float = 3e8) -> pd.DataFrame:
             rows.append({"symbol": r["symbol"], "name": r.get("companyName"), "exchange": r.get("exchange"), "sector": None,
                          "industry": None, "market_cap": None, "source": "fmp_delisted", "ipo_date": r.get("ipoDate"),
                          "delisted_date": r.get("delistedDate")})
+    # every ticker that ever left the S&P 500 in the window (acquired names are often missing from the delisted list):
+    # survivorship control for the sp500_pit universe and the cap-floor backtest alike
+    try:
+        have = {r["symbol"] for r in rows}
+        for ch in fmp.sp500_history():
+            t = ch.get("removedTicker")
+            if t and t not in have and "." not in t and str(ch.get("date", "")) >= "2009-01-01":
+                rows.append({"symbol": t, "name": ch.get("removedSecurity"), "exchange": None, "sector": None, "industry": None,
+                             "market_cap": None, "source": "sp500_removed", "ipo_date": None, "delisted_date": ch.get("date")})
+                have.add(t)
+    except Exception as e:  # noqa: BLE001
+        print(f"[pull us] sp500 removed tickers skipped: {e}")
     df = pd.DataFrame(rows).drop_duplicates("symbol")
     return df
 
