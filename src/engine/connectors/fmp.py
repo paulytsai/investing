@@ -125,6 +125,7 @@ class FMP:
 
     def filings(self, symbol: str, start: str = "2009-01-01", end: str | None = None, page: int = 0) -> list[dict[str, Any]]:
         out: list[dict[str, Any]] = []
+        end = end or pd.Timestamp.today().strftime("%Y-%m-%d")
         for pg in range(0, 20):
             d = self.get("sec-filings-search/symbol", key=f"{symbol}_p{pg}", max_age_days=3, symbol=symbol,
                          limit=1000, page=pg, **{"from": start, "to": end}) or []
