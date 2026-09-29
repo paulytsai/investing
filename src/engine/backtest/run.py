@@ -63,7 +63,7 @@ def run_backtest(start="2016-03-31", end="2024-09-30", hold_months=24, top=20, r
     out = out_dir or (REPORTS_DIR / "backtest" / run_id)
     out.mkdir(parents=True, exist_ok=True)
     _render(out, rows, pooled, cstats, curve, ic, sens, results, cohorts, book, hyp, dict(start=start, end=end, hold_months=hold_months, top=top,
-                                                                                                region=region, preset=preset, universe_kind=universe_kind or hyp.get("universe.kind"), bench_label=bench_label))
+                                                                                                region=region, preset=preset, universe_kind=universe_kind or hyp.get("universe.kind"), bench_label=bench_label, bench_short=("SPY" if region == "US" else "TOPIX")))
     (out / "run.json").write_text(json.dumps({"as_of": end, "title": f"Backtest {region} {start}→{end}, top {top}, {hold_months}m hold", "entry": "index.html"}))
     (out / "results.json").write_text(json.dumps({"cohorts": rows, "pooled": pooled, "curve": cstats, "rank_ic": ic, "sensitivity": sens}, default=str, indent=1))
     con = ledger()
