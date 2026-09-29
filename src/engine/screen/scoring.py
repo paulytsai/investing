@@ -48,7 +48,7 @@ def _exclusion_hits(cand: IdeaCandidate, m: dict, hyp: Hypotheses) -> list[Reaso
             note = f"revenue TTM {rev:,.0f}" if rev else "no revenue"
         elif t == "cyclical_peak_margins":
             hit = cand.asset_type in ("commodity_cyclical", "miner_resource") and (m.get("op_margin_pctile") or 0) >= float(thr or 90)
-            note = f"operating margin at {m.get('op_margin_pctile', 0):.0f}th pct of own history"
+            note = f"operating margin at {(m.get('op_margin_pctile') or 0):.0f}th pct of own history"
         if hit:
             hits.append(ReasonComponent(rule_id=x["id"], factor_key=t, label=x["label"], kind="exclusion", status="excluded",
                                         encoding=x["encoding"], threshold=thr, threshold_status=status, decision_id=did, note=note or None))
