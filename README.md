@@ -32,6 +32,7 @@ deployments can inject secrets without a file.
 | `FMP_API_KEY` | https://site.financialmodelingprep.com/developer/docs |
 | `TIINGO_API_KEY` | https://www.tiingo.com/account/api/token |
 | `EODHD_API_KEY` | https://eodhd.com/cp/settings/api |
+| `JQUANTS_API_KEY` | https://jpx-jquants.com/ (dashboard, API key) |
 | `FRED_API_KEY` | https://fred.stlouisfed.org/docs/api/api_key.html |
 | `NEWS_API_KEY` | https://newsapi.org/account |
 | `ALPACA_API_KEY` / `ALPACA_SECRET_KEY` | https://app.alpaca.markets/paper/dashboard/overview |
@@ -52,4 +53,22 @@ from investing.fmp import profile, quote, get
 profile("AAPL")["marketCap"]
 quote("MSFT")["price"]
 get("income-statement", symbol="AAPL", period="annual", limit=5)
+```
+
+## J-Quants client
+
+`investing/jquants.py` wraps the J-Quants (JPX) v2 API and reads `JQUANTS_API_KEY` from `.env`.
+It follows `pagination_key` automatically.
+
+```sh
+python -m investing.jquants 7203    # prints listed-issue master data as JSON
+```
+
+```python
+from investing.jquants import master, daily_bars, fins_summary, get
+
+master("7203")[0]["CoNameEn"]
+daily_bars("7203", "20260901", "20260930")
+fins_summary("7203")
+get("markets/calendar", **{"from": "20260901", "to": "20260930"})
 ```
