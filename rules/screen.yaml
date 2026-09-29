@@ -84,10 +84,10 @@ penalties:                               # subtract from Idea Strength (SOFT)
   - {key: cyclical_high_margin_penalty, id: F-26, label: "Cyclical margins above 75th percentile of own history", points: 8}
 
 asset_type_map:                          # R-04 (HARD tag) by FMP industry keywords; overridable per name
-  commodity_cyclical: [Oil & Gas E&P, Oil & Gas Equipment, Oil & Gas Refining, Steel, Chemicals, Aluminum, Copper, Paper, Semiconductor Memory, Shipping, Airlines, Auto Manufacturers, Agricultural Inputs, Coal, Marine Shipping, Oil & Gas Drilling, Specialty Chemicals]
+  commodity_cyclical: [鉄鋼, 非鉄金属, 石油・石炭製品, 海運業, 化学, 鉱業, パルプ・紙, 輸送用機器, 空運業, Oil & Gas E&P, Oil & Gas Equipment, Oil & Gas Refining, Steel, Chemicals, Aluminum, Copper, Paper, Semiconductor Memory, Shipping, Airlines, Auto Manufacturers, Agricultural Inputs, Coal, Marine Shipping, Oil & Gas Drilling, Specialty Chemicals]
   miner_resource: [Gold, Silver, Other Precious Metals, Uranium, Industrial Metals, Other Industrial Metals & Mining, Coking Coal, Thermal Coal]
-  real_estate: [REIT, Real Estate]
-  bank: [Banks, Banks - Regional, Banks - Diversified, Capital Markets, Mortgage Finance, Insurance]
+  real_estate: [REIT, Real Estate, 不動産業]
+  bank: [銀行業, 保険業, 証券、商品先物取引業, その他金融業, Banks, Banks - Regional, Banks - Diversified, Capital Markets, Mortgage Finance, Insurance]
   fund_etf: [Exchange Traded Fund, Asset Management - Closed-End]
 oil_majors: [XOM, CVX, COP, SHEL, BP, TTE, OXY]     # R-04 exception: barbell_insurance, not commodity_cyclical for exit logic
 

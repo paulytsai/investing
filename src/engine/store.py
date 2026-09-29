@@ -211,8 +211,13 @@ def read_df(name: str, where: str | None = None) -> pd.DataFrame:
 
 
 def ledger() -> duckdb.DuckDBPyConnection:
+    """Mutable ledger. If another process holds the file lock, callers get an in-memory connection (their rows are
+    lost from the ledger but never block the work); connectors also append to data/ledger_fallback.jsonl."""
     DATA_DIR.mkdir(parents=True, exist_ok=True)
-    con = duckdb.connect(str(LEDGER_DB))
+    try:
+        con = duckdb.connect(str(LEDGER_DB))
+    except duckdb.IOException:
+        con = duckdb.connect()
     con.execute(
         """
         CREATE TABLE IF NOT EXISTS pull_ledger (

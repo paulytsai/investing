@@ -6,7 +6,7 @@ import re
 
 from .schemas import Claim
 
-NUM_RE = re.compile(r"(?<![\w(])[$€¥]?\d[\d,]*\.?\d*\s?(%|x|bn|B|M|T|億|兆|pp|bp)?(?![\w)])")
+NUM_RE = re.compile(r"(?<![\w(])[$€¥]?\d[\d,]*\.?\d*\s?(%|x|bn|B|M|T|億|兆|pp|bp)?(?![\w)\-])")
 
 
 def doc_ids(messages: list[dict]) -> set[str]:

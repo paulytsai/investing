@@ -117,16 +117,19 @@ class Client:
 
     def _ledger_put(self, endpoint: str, key: str, params: dict[str, Any] | None, status: str,
                     http_status: int | None, rows: int | None, err: str | None) -> None:
+        row = [self.source, endpoint, str(key), self._hash(params), status, http_status, rows, datetime.utcnow(), (err or "")[:500]]
         with self._ledger_lock:
-            con = ledger()
             try:
-                con.execute(
-                    "INSERT OR REPLACE INTO pull_ledger VALUES (?,?,?,?,?,?,?,?,?)",
-                    [self.source, endpoint, str(key), self._hash(params), status, http_status, rows,
-                     datetime.utcnow(), (err or "")[:500]],
-                )
-            finally:
-                con.close()
+                con = ledger()
+                try:
+                    con.execute("INSERT OR REPLACE INTO pull_ledger VALUES (?,?,?,?,?,?,?,?,?)", row)
+                finally:
+                    con.close()
+            except Exception:  # another process holds the DuckDB lock → append to the JSONL fallback
+                p = RAW_DIR.parent / "ledger_fallback.jsonl"
+                p.parent.mkdir(parents=True, exist_ok=True)
+                with open(p, "a", encoding="utf-8") as f:
+                    f.write(json.dumps(row, default=str) + "\n")
 
     # ---- request ---------------------------------------------------------------------------
     def get(self, endpoint: str, params: dict[str, Any] | None = None, *, key: str = "_",
