@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import base64
 import json
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import pandas as pd
 
@@ -37,41 +38,57 @@ def _image_block(path) -> dict | None:
     return {"type": "image", "source": {"type": "base64", "media_type": mt, "data": data}}
 
 
-def classify_threads(limit: int = 200) -> int:
+def _content_for(r) -> tuple[list[dict], list[str]]:
+    media = json.loads(r["media_urls"]) if isinstance(r["media_urls"], str) else []
+    content: list[dict] = [{"type": "text", "text": f"<thread date='{pd.Timestamp(r['first_at']).date()}' posts='{r['n_posts']}'>\n{r['full_text']}\n</thread>"}]
+    keys = []
+    for m in media[:6]:
+        blk = _image_block(media_path(m["media_key"]))
+        if blk:
+            content.append({"type": "text", "text": f"[image media_key={m['media_key']}]"})
+            content.append(blk)
+            keys.append(m["media_key"])
+    content.append({"type": "text", "text": "Return the XThreadTags object. Use the media_key labels for chart descriptions."})
+    return content, keys
+
+
+def classify_threads(limit: int = 200, workers: int = 4) -> int:
+    """Tag pending threads; `workers` parallel calls (each cached by request hash). Effort 'medium' — a tagging task."""
     if not secret("ANTHROPIC_API_KEY"):
         print("[x classify] no ANTHROPIC_API_KEY — threads stay pending; images flagged for later analysis")
         return 0
-    from ..research.llm import parse_structured
+    from ..research.llm import BUDGET, parse_structured
 
     th = read_df("x_threads")
     todo = th[th["analysis_status"] != "done"].sort_values("first_at", ascending=False).head(limit)
+
+    def one(i, r):
+        content, _ = _content_for(r)
+        return i, parse_structured(SYSTEM, [{"role": "user", "content": content}], XThreadTags, cache_key=f"x:{r['conversation_id']}", effort="medium")
+
     n = 0
-    for i, r in todo.iterrows():
-        media = json.loads(r["media_urls"]) if isinstance(r["media_urls"], str) else []
-        content: list[dict] = [{"type": "text", "text": f"<thread date='{pd.Timestamp(r['first_at']).date()}' posts='{r['n_posts']}'>\n{r['full_text']}\n</thread>"}]
-        keys = []
-        for m in media[:6]:
-            blk = _image_block(media_path(m["media_key"]))
-            if blk:
-                content.append({"type": "text", "text": f"[image media_key={m['media_key']}]"})
-                content.append(blk)
-                keys.append(m["media_key"])
-        content.append({"type": "text", "text": "Return the XThreadTags object. Use the media_key labels for chart descriptions."})
-        try:
-            tags: XThreadTags = parse_structured(SYSTEM, [{"role": "user", "content": content}], XThreadTags, cache_key=f"x:{r['conversation_id']}")
-        except Exception as e:  # noqa: BLE001
-            print(f"[x classify] {r['conversation_id']}: {str(e)[:120]}")
-            th.loc[i, "analysis_status"] = "error"
-            continue
-        th.loc[i, "market_relevant"] = bool(tags.market_relevant)
-        th.loc[i, "asset_classes"] = json.dumps(tags.asset_classes)
-        th.loc[i, "sectors"] = json.dumps(tags.sectors)
-        th.loc[i, "themes"] = json.dumps(tags.themes)
-        th.loc[i, "tickers"] = json.dumps(tags.tickers)
-        th.loc[i, "summary"] = tags.summary
-        th.loc[i, "chart_descriptions"] = json.dumps([c.model_dump() for c in tags.charts])
-        th.loc[i, "analysis_status"] = "done"
-        n += 1
+    with ThreadPoolExecutor(max_workers=workers) as ex:
+        futs = {ex.submit(one, i, r): i for i, r in todo.iterrows()}
+        for f in as_completed(futs):
+            i = futs[f]
+            try:
+                _, tags = f.result()
+            except Exception as e:  # noqa: BLE001
+                print(f"[x classify] {th.loc[i, 'conversation_id']}: {str(e)[:120]}", flush=True)
+                th.loc[i, "analysis_status"] = "error"
+                continue
+            th.loc[i, "market_relevant"] = bool(tags.market_relevant)
+            th.loc[i, "asset_classes"] = json.dumps(tags.asset_classes)
+            th.loc[i, "sectors"] = json.dumps(tags.sectors)
+            th.loc[i, "themes"] = json.dumps(tags.themes)
+            th.loc[i, "tickers"] = json.dumps(tags.tickers)
+            th.loc[i, "summary"] = tags.summary
+            th.loc[i, "chart_descriptions"] = json.dumps([c.model_dump() for c in tags.charts])
+            th.loc[i, "analysis_status"] = "done"
+            n += 1
+            if n % 25 == 0:
+                print(f"[x classify] {n}/{len(todo)} tagged, ${BUDGET.spent_usd:.2f} spent", flush=True)
+                write_table("x_threads", th)
     write_table("x_threads", th)
-    print(f"[x classify] tagged {n} threads")
+    print(f"[x classify] tagged {n} threads; LLM spend this run ${BUDGET.spent_usd:.2f} over {BUDGET.calls} calls", flush=True)
     return n

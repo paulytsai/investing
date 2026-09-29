@@ -139,7 +139,10 @@ def research(symbol: str, as_of: str = typer.Option(None)) -> None:
     """Write the full research page (thesis, lenses, phases) for SYMBOL using the Claude narrative layer."""
     from .screen.run import run_ideas
 
-    run_ideas(as_of=as_of, top=1, regions=["us", "jp"], preset=None, narrate=True, symbols=[symbol.upper()])
+    region = "jp" if symbol.isdigit() else "us"
+    r = run_ideas(as_of=as_of, top=20, regions=[region], preset=None, narrate=True, narrate_symbols=[symbol.upper()], quiet=True)
+    if r:
+        typer.echo(f"[research] {symbol.upper()} → {r['path'] / 'ideas' / (symbol.upper() + '.html')}")
 
 
 @app.command("backtest")
@@ -201,11 +204,11 @@ def x_pull(handle: str = typer.Option("TimmerFidelity"), first_page_only: bool =
 
 
 @x_app.command("classify")
-def x_classify(limit: int = typer.Option(200)) -> None:
+def x_classify(limit: int = typer.Option(400), workers: int = typer.Option(4)) -> None:
     """Tag threads (market relevant / personal, asset classes, sectors, themes, tickers, chart descriptions) with the Claude layer."""
     from .inbox.x_classify import classify_threads
 
-    classify_threads(limit=limit)
+    classify_threads(limit=limit, workers=workers)
 
 
 @x_app.command("summary")

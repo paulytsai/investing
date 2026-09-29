@@ -124,7 +124,7 @@ def build_candidates(as_of: pd.Timestamp, region: str, hyp: Hypotheses, symbols:
 
 
 def run_ideas(as_of=None, top: int = 20, regions: list[str] | None = None, preset: str | None = None, narrate: bool = False,
-              symbols: list[str] | None = None, out_dir=None, quiet: bool = False) -> dict:
+              symbols: list[str] | None = None, out_dir=None, quiet: bool = False, narrate_symbols: list[str] | None = None) -> dict:
     hyp = Hypotheses.load()
     as_of = last_trading_day(as_of)
     regions = [r.upper() for r in (regions or ["US"])]
@@ -142,7 +142,7 @@ def run_ideas(as_of=None, top: int = 20, regions: list[str] | None = None, prese
     run_id = f"{as_of.date()}_{datetime.now().strftime('%H%M%S')}"
     out = out_dir or (REPORTS_DIR / "ideas" / run_id)
     out.mkdir(parents=True, exist_ok=True)
-    _render(all_cands, chosen, as_of, out, hyp, preset or hyp.get("screen.preset"), regions, top, narrate)
+    _render(all_cands, chosen, as_of, out, hyp, preset or hyp.get("screen.preset"), regions, top, narrate, narrate_symbols)
     (out / "run.json").write_text(json.dumps({"as_of": str(as_of.date()), "title": f"Top {top} ideas ({', '.join(regions)})", "entry": "board.html",
                                               "n_scored": len(all_cands), "preset": preset or hyp.get("screen.preset")}, indent=1))
     (out / "candidates.json").write_text(json.dumps([c.model_dump(mode="json") for c in all_cands], default=str))
@@ -172,7 +172,7 @@ def _view(c: IdeaCandidate) -> dict:
     return d
 
 
-def _render(all_cands, chosen, as_of, out, hyp, preset, regions, top, narrate) -> None:
+def _render(all_cands, chosen, as_of, out, hyp, preset, regions, top, narrate, narrate_symbols=None) -> None:
     r = rules()
     angle_keys = list(r["angles"].keys())
     angle_labels = {k: v["label"] for k, v in r["angles"].items()}
@@ -210,6 +210,9 @@ def _render(all_cands, chosen, as_of, out, hyp, preset, regions, top, narrate) -
     bench["date"] = pd.to_datetime(bench["date"])
     bench_s = bench.set_index("date")["level"].sort_index()
     pages = ranked[: max(top * 5, 100)] if not narrate else ranked[:top]
+    if narrate_symbols:   # `engine research SYM`: scored against the whole region, page + narrative for these only
+        want = {x.upper() for x in narrate_symbols}
+        pages = [c for c in all_cands if c.symbol.upper() in want]
     for c in pages:
         px = prices[prices.security_id == c.security_id]
         ev = events[events.security_id == c.security_id] if not events.empty else pd.DataFrame()
@@ -225,7 +228,7 @@ def _render(all_cands, chosen, as_of, out, hyp, preset, regions, top, narrate) -
                                  subtitle="10 years · price, TTM P/E band, TTM EPS, events, phases", currency=c.currency)
         v = _view(c)
         narrative = None
-        if narrate and c in chosen:
+        if narrate and (c in chosen or (narrate_symbols and c.symbol.upper() in {x.upper() for x in narrate_symbols})):
             from ..research.stages import narrative_html
 
             narrative = narrative_html(c, snap, phases)
