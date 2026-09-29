@@ -18,6 +18,54 @@ from .rules import ai_layer_for, asset_type_for, role_hint_for, rules
 from .scoring import score_universe, select_top
 
 
+def _jsonable(o):
+    import numpy as np
+
+    if isinstance(o, dict):
+        return {k: _jsonable(v) for k, v in o.items()}
+    if isinstance(o, (list, tuple)):
+        return [_jsonable(v) for v in o]
+    if isinstance(o, (pd.Timestamp, date)):
+        return str(pd.Timestamp(o).date())
+    if isinstance(o, (np.floating, float)):
+        return None if (np.isnan(o) or np.isinf(o)) else float(o)
+    if isinstance(o, (np.integer,)):
+        return int(o)
+    if isinstance(o, np.bool_):
+        return bool(o)
+    return o
+
+
+def rf_on(as_of) -> float:
+    """10-yr UST (DGS10) visible at as_of — the hurdle anchor (user-flagged benchmark; spec I-01)."""
+    df = read_df("macro_daily", f"series_id = 'DGS10' AND date <= DATE '{pd.Timestamp(as_of).date()}'") if has_table("macro_daily") else pd.DataFrame()
+    if df.empty:
+        return 4.0
+    return float(df.sort_values("date")["value"].iloc[-1])
+
+
+def run_dcf(m: dict, snap, asset_type: str, rf_pct: float, hyp: Hypotheses) -> dict | None:
+    from ..frameworks.dcf import DCFInputs, hurdle_check, scenario_dcf
+
+    price, shares = m.get("price"), (snap.metrics.get("shares_diluted") if snap else None)
+    if not price or not shares:
+        return None
+    params = {k: (hyp.get(f"dcf.{k}") if k != "scenarios" else hyp._data["dcf"]["scenarios"]) for k in
+              ("erp_pct", "beta_floor", "beta_cap", "terminal_growth_pct", "horizon_years", "growth_cap_pct", "scenarios")}
+    mid = None
+    fy = snap.fy_history if snap else None
+    if asset_type in ("commodity_cyclical", "miner_resource") and fy is not None and {"fcf", "revenue"} <= set(fy.columns):
+        mm = (fy["fcf"] / fy["revenue"]).dropna()
+        mid = float(mm.median()) if len(mm) >= 5 else None
+    inp = DCFInputs(price=float(price), shares=float(shares), net_debt=float(m.get("net_debt") or 0.0), fcf_ttm=m.get("fcf_ttm") or 0.0,
+                    revenue_ttm=m.get("revenue_ttm"), trailing_growth=m.get("rev_cagr_3y"), rf_pct=rf_pct, beta=1.0, asset_type=asset_type, mid_cycle_margin=mid)
+    res = hurdle_check(scenario_dcf(inp, params), rf_pct, float(hyp.get("thresholds.hurdle_margin_pct")))
+    d = res.__dict__.copy()
+    d["summary"] = res.summary()
+    d["range_per_share"] = list(res.range_per_share)
+    return d
+
+
 def last_trading_day(as_of=None) -> pd.Timestamp:
     cal = read_df("trading_calendar", "region = 'US'")
     d = pd.Timestamp(as_of) if as_of else pd.Timestamp(date.today())
@@ -45,6 +93,7 @@ def build_candidates(as_of: pd.Timestamp, region: str, hyp: Hypotheses, symbols:
     thr = {k: v["value"] if isinstance(v, dict) else v for k, v in hyp._data.get("thresholds", {}).items()}
     for k in list(thr):
         hyp.get(f"thresholds.{k}")
+    rf_pct = rf_on(as_of)
     minfo = master.set_index("security_id")
     cands: list[IdeaCandidate] = []
     for _, u in uni.iterrows():
@@ -62,11 +111,15 @@ def build_candidates(as_of: pd.Timestamp, region: str, hyp: Hypotheses, symbols:
         m = compute_metrics(Inputs(snap, px, mcap, ev, layer, at), as_of, thr)
         ipo = info["ipo_date"] if info is not None else None
         m["listing_days"] = (as_of - pd.Timestamp(ipo)).days if ipo is not None and pd.notna(ipo) else None
+        m["dcf"] = run_dcf(m, snap, at, rf_pct, hyp)
+        if m["dcf"] and m["dcf"].get("implied_growth_gap_pp") is not None:
+            m["implied_growth_gap"] = m["dcf"]["implied_growth_gap_pp"]
+        period_end = m["period_end"].date() if m.get("period_end") is not None else None
         cands.append(IdeaCandidate(
             security_id=sid, symbol=sym, name=(info["name"] if info is not None else None), region=region, as_of=as_of.date(),
             sector=sector, industry=industry, asset_type=at, ai_layer=layer, role_hint=role_hint_for(sym, at), market_cap=m.get("market_cap"),
-            price=m.get("price"), currency=(info["currency"] if info is not None and info["currency"] else "USD"), metrics=m,
-            stale=bool(m.get("stale")), basis=m.get("basis", "TTM"), period_end=(m["period_end"].date() if m.get("period_end") is not None else None)))
+            price=m.get("price"), currency=(info["currency"] if info is not None and info["currency"] else "USD"), metrics=_jsonable(m),
+            stale=bool(m.get("stale")), basis=m.get("basis", "TTM"), period_end=period_end))
     return cands
 
 
@@ -160,5 +213,5 @@ def _render(all_cands, chosen, as_of, out, hyp, preset, regions, top, narrate) -
                                  subtitle="10 years · price, TTM P/E band, TTM EPS, events")
         v = _view(c)
         html = itpl.render(title=f"{c.symbol} — idea", c=v, m=c.metrics, chart_id=spec["id"], chart_json=to_json(spec), macro=macro,
-                           n_scored=len(all_cands), phases=None, narrative=None, dcf=None, generated=render.now(), assets="../../../assets/")
+                           n_scored=len(all_cands), phases=None, narrative=None, dcf=c.metrics.get("dcf"), generated=render.now(), assets="../../../assets/")
         render.write(out / "ideas" / f"{c.symbol}.html", html)
