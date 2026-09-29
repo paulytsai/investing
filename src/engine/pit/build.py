@@ -7,6 +7,7 @@ import json
 from datetime import date, timedelta
 from pathlib import Path
 
+import duckdb
 import numpy as np
 import pandas as pd
 
@@ -51,6 +52,43 @@ def security_id_for(symbol: str, cik: str | None, ipo: str | None) -> str:
 # ------------------------------------------------------------------------------------------
 # US build
 # ------------------------------------------------------------------------------------------
+def _combine_fundamentals_parts(parts_dir: Path) -> int:
+    """DuckDB streams the parts into the final table out of core: dedupe on (key, value, available_from), first-filed
+    restatement rank, and the non-US rows of the existing table kept (write_region semantics)."""
+    out = table_path("fundamentals_long")
+    tmp = out.with_suffix(".tmp.parquet")
+    casts = ("CAST(security_id AS VARCHAR) AS security_id, CAST(statement AS VARCHAR) AS statement, CAST(period_type AS VARCHAR) AS period_type, "
+             "CAST(fiscal_year AS INTEGER) AS fiscal_year, CAST(fiscal_period AS VARCHAR) AS fiscal_period, CAST(period_start AS DATE) AS period_start, "
+             "CAST(period_end AS DATE) AS period_end, CAST(field AS VARCHAR) AS field, CAST(value AS DOUBLE) AS value, CAST(currency AS VARCHAR) AS currency, "
+             "CAST(filing_date AS DATE) AS filing_date, CAST(available_from AS DATE) AS available_from, CAST(lag_imputed AS BOOLEAN) AS lag_imputed, "
+             "CAST(restatement_rank AS SMALLINT) AS restatement_rank, CAST(source AS VARCHAR) AS source, CAST(source_ref AS VARCHAR) AS source_ref")
+    keep_sql = ""
+    if out.exists():
+        keep_sql = f"UNION ALL SELECT {casts} FROM read_parquet('{out.as_posix()}') WHERE security_id NOT LIKE 'US:%'"
+    con = duckdb.connect()
+    con.execute(f"""
+        COPY (
+          WITH us AS (
+            SELECT DISTINCT ON (security_id, statement, period_type, period_end, field, value, available_from)
+                   security_id, statement, period_type, fiscal_year, fiscal_period, period_start, period_end, field, value, currency,
+                   filing_date, available_from, lag_imputed, source, source_ref
+            FROM read_parquet('{(parts_dir / "*.parquet").as_posix()}')
+            ORDER BY security_id, statement, period_type, period_end, field, value, available_from
+          ),
+          ranked AS (
+            SELECT *, row_number() OVER (PARTITION BY security_id, statement, period_type, period_end, field ORDER BY available_from) - 1 AS restatement_rank
+            FROM us
+          )
+          SELECT {casts} FROM ranked
+          {keep_sql}
+        ) TO '{tmp.as_posix()}' (FORMAT PARQUET)
+    """)
+    n = con.execute(f"SELECT count(*) FROM read_parquet('{tmp.as_posix()}') WHERE security_id LIKE 'US:%'").fetchone()[0]
+    con.close()
+    tmp.replace(out)
+    return int(n)
+
+
 def build_us() -> None:
     fmp = FMP()
     lags = sources()["lags"]
@@ -201,6 +239,27 @@ def build_us() -> None:
                 fund_rows.append((sid, kind, period_type, int(fy) if fy else None, period, None, pe_ts, field, v,
                                   r.get("reportedCurrency"), fd, avail, imputed, 0, source, str(r.get("acceptedDate") or "")))
 
+    FUND_COLS = ["security_id", "statement", "period_type", "fiscal_year", "fiscal_period", "period_start", "period_end", "field", "value", "currency", "filing_date", "available_from", "lag_imputed", "restatement_rank", "source", "source_ref"]
+    parts_dir = table_path("fundamentals_long").parent / "_parts_fundamentals_us"
+    if parts_dir.exists():
+        for old in parts_dir.glob("*.parquet"):
+            old.unlink()
+    parts_dir.mkdir(parents=True, exist_ok=True)
+    n_parts = [0]
+
+    def flush(force: bool = False) -> None:
+        """Stream accumulated rows to a parquet part so the whole universe never sits in RAM at once."""
+        if not fund_rows or (not force and len(fund_rows) < 2_000_000):
+            return
+        part = pd.DataFrame.from_records(fund_rows, columns=FUND_COLS)
+        fund_rows.clear()
+        for col in ("period_start", "period_end", "filing_date", "available_from"):
+            part[col] = pd.to_datetime(part[col], errors="coerce")
+        part["value"] = pd.to_numeric(part["value"], errors="coerce").astype("float64")
+        part["fiscal_year"] = pd.to_numeric(part["fiscal_year"], errors="coerce").astype("Int32")
+        part.to_parquet(parts_dir / ("part%04d.parquet" % n_parts[0]), index=False)
+        n_parts[0] += 1
+
     # per-symbol statements
     for kind, ep in (("income", "stable/income-statement"), ("balance", "stable/balance-sheet-statement"), ("cashflow", "stable/cash-flow-statement")):
         for key, p in _cached("fmp", ep).items():
@@ -210,6 +269,7 @@ def build_us() -> None:
             rows = _load_cached_json(p)
             if isinstance(rows, list):
                 add_statement_rows(sid_of[sym], kind, rows, "FY" if period == "annual" else "Q", "fmp")
+            flush()
     # bulk statements (CSV)
     for kind, ep in (("income", "stable/income-statement-bulk"), ("balance", "stable/balance-sheet-statement-bulk"), ("cashflow", "stable/cash-flow-statement-bulk")):
         for key, p in _cached("fmp", ep).items():
@@ -226,15 +286,13 @@ def build_us() -> None:
                 by_sym.setdefault(r["symbol"], []).append(r)
             for sym, rows in by_sym.items():
                 add_statement_rows(sid_of[sym], kind, rows, "FY" if period == "FY" else "Q", "fmp_bulk")
-
-    if fund_rows:
-        fl = pd.DataFrame.from_records(fund_rows, columns=["security_id", "statement", "period_type", "fiscal_year", "fiscal_period", "period_start", "period_end",
-                                                           "field", "value", "currency", "filing_date", "available_from", "lag_imputed", "restatement_rank", "source", "source_ref"])
-        fund_rows = []
-        fl = fl.sort_values(["security_id", "statement", "period_type", "period_end", "field", "available_from"])
-        fl["restatement_rank"] = fl.groupby(["security_id", "statement", "period_type", "period_end", "field"]).cumcount()
-        fl = fl.drop_duplicates(["security_id", "statement", "period_type", "period_end", "field", "value", "available_from"])
-        write_region("fundamentals_long", fl, "US")
+            flush()
+    flush(force=True)
+    n_fund = 0
+    if n_parts[0]:
+        n_fund = _combine_fundamentals_parts(parts_dir)
+        for old in parts_dir.glob("*.parquet"):
+            old.unlink()
 
     # --- events ----------------------------------------------------------------------------------
     ev_rows = []
@@ -307,7 +365,7 @@ def build_us() -> None:
             if not keep.empty:
                 new_ev = pd.concat([new_ev, keep], ignore_index=True).drop_duplicates("event_id")
         write_region("events", new_ev, "US")
-    print(f"[build us] master={len(master)} prices={len(price_frames)} fundamentals_rows={len(fund_rows)} events={len(ev_rows)}")
+    print(f"[build us] master={len(master)} prices={len(price_frames)} fundamentals_rows={n_fund} events={len(ev_rows)}")
 
 
 def build(region: str = "us") -> None:
