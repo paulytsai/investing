@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from ..config import DATA_DIR, holdings, sources
+from ..config import DATA_DIR, Hypotheses, holdings, sources
 from ..store import RAW_DIR
 from ..connectors.edgar import EDGAR
 from ..connectors.fmp import FMP
@@ -30,6 +30,16 @@ def universe_symbols(fmp: FMP, min_cap: float = 3e8) -> pd.DataFrame:
                               marketCapMoreThan=int(min_cap)):
             rows.append({"symbol": r["symbol"], "name": r.get("companyName"), "exchange": r.get("exchange"), "sector": r.get("sector"),
                          "industry": r.get("industry"), "market_cap": r.get("marketCap"), "source": "fmp_screener",
+                         "ipo_date": None, "delisted_date": None})
+    # foreign-domiciled names listed on US exchanges (ADRs, Irish/Bermuda/Canadian filers…) above the cap floor:
+    # Chinese and EM names carry the X-27 SOFT geopolitical penalty in the screen, they are never excluded here
+    floor = float(Hypotheses.load().get("universe.cap_floor_usd") or 2e9)
+    for exch in ("NYSE", "NASDAQ"):
+        for r in fmp.screener(exchange=exch, isEtf="false", isFund="false", isActivelyTrading="true", marketCapMoreThan=int(floor)):
+            if str(r.get("country") or "US") == "US" or "." in r["symbol"] or "-" in r["symbol"]:
+                continue
+            rows.append({"symbol": r["symbol"], "name": r.get("companyName"), "exchange": r.get("exchange"), "sector": r.get("sector"),
+                         "industry": r.get("industry"), "market_cap": r.get("marketCap"), "source": "fmp_screener_foreign",
                          "ipo_date": None, "delisted_date": None})
     for r in fmp.delisted():
         if r.get("exchange") in US_EXCHANGES and "." not in str(r.get("symbol", "")):
