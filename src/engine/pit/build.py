@@ -13,7 +13,7 @@ import pandas as pd
 from ..config import sources
 from ..connectors.fmp import FMP
 from ..connectors.fred import SERIES
-from ..store import RAW_DIR, write_table
+from ..store import RAW_DIR, read_df, table_path, write_table
 from .fields import FMP_FIELDS, first_value
 from .prices import frame_from_fmp
 
@@ -75,7 +75,8 @@ def build_us() -> None:
 
     # --- macro + fx --------------------------------------------------------------------------
     macro_rows = []
-    for sid, p in _cached("fred", "fred/series/observations").items():
+    for key, p in _cached("fred", "fred/series/observations").items():
+        sid = key.split("_")[0]
         d = _load_cached_json(p)
         for o in d.get("observations", []):
             if o.get("value") not in (None, ".", ""):
@@ -287,7 +288,12 @@ def build_us() -> None:
                 ev(sid_of[sym], r.get("declarationDate") or r["date"], "dividend_change", {"from": prev, "to": amt}, "fmp", f"div:{r['date']}")
             prev = amt
     if ev_rows:
-        write_table("events", pd.DataFrame(ev_rows).drop_duplicates("event_id"))
+        new_ev = pd.DataFrame(ev_rows).drop_duplicates("event_id")
+        if table_path("events").exists():                      # keep regulatory / macro rows pulled by the inbox
+            keep = read_df("events", "security_id = 'MACRO'")
+            if not keep.empty:
+                new_ev = pd.concat([new_ev, keep], ignore_index=True).drop_duplicates("event_id")
+        write_table("events", new_ev)
     print(f"[build us] master={len(master)} prices={len(price_frames)} fundamentals_rows={len(fund_rows)} events={len(ev_rows)}")
 
 

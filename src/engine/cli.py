@@ -168,6 +168,14 @@ def inbox_pull(label: str = typer.Option("WAAR"), since: str = typer.Option(None
     pull_inbox(label=label, since=since)
 
 
+@inbox_app.command("regulatory")
+def inbox_regulatory() -> None:
+    """Pull Federal Register documents for the configured searches into the events table."""
+    from .inbox.regulatory import pull_regulatory
+
+    pull_regulatory()
+
+
 @inbox_app.command("parse")
 def inbox_parse() -> None:
     from .inbox.parse import parse_inbox

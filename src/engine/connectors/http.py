@@ -72,8 +72,14 @@ class Response:
     from_cache: bool
 
 
-def _redact(params: dict[str, Any] | None) -> dict[str, Any]:
-    return {k: ("<redacted>" if k in _REDACT else v) for k, v in (params or {}).items()}
+def _items(params) -> list[tuple[str, Any]]:
+    if params is None:
+        return []
+    return list(params.items()) if isinstance(params, dict) else list(params)
+
+
+def _redact(params) -> list[tuple[str, Any]]:
+    return [(k, ("<redacted>" if k in _REDACT else v)) for k, v in _items(params)]
 
 
 class Client:
@@ -100,9 +106,9 @@ class Client:
 
     # ---- cache -----------------------------------------------------------------------------
     @staticmethod
-    def _hash(params: dict[str, Any] | None) -> str:
-        clean = {k: v for k, v in (params or {}).items() if k not in _REDACT}
-        return hashlib.sha1(json.dumps(clean, sort_keys=True, default=str).encode()).hexdigest()[:12]
+    def _hash(params) -> str:
+        clean = sorted((k, str(v)) for k, v in _items(params) if k not in _REDACT)
+        return hashlib.sha1(json.dumps(clean, default=str).encode()).hexdigest()[:12]
 
     def cache_path(self, endpoint: str, key: str, params: dict[str, Any] | None, ext: str = "json") -> Path:
         safe_ep = endpoint.strip("/").replace("/", "_")

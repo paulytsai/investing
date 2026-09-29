@@ -1,0 +1,12 @@
+# Federal Register searches → regulatory events (event_type = regulatory; security_id = MACRO or a tagged sector).
+# Context for the macro dashboard, chart markers and the drivers module. Never a scoring input (X-28: thematic/political traps).
+lookback_days: 365
+searches:
+  - {id: export_controls_semis, term: "export controls semiconductors", sectors: [Technology], themes: [AI, semiconductors, China]}
+  - {id: tariffs, term: "tariff modification harmonized tariff schedule", sectors: [Industrials, Consumer], themes: [tariffs, trade]}
+  - {id: antitrust_tech, term: "antitrust digital platforms", sectors: [Technology, Communication Services], themes: [antitrust]}
+  - {id: nuclear_licensing, term: "Nuclear Regulatory Commission reactor licensing", sectors: [Utilities, Energy], themes: [nuclear, uranium, AI power]}
+  - {id: power_interconnection, term: "FERC interconnection transmission data center", sectors: [Utilities], themes: [AI power, grid]}
+  - {id: oil_gas_leasing, term: "oil and gas leasing offshore", sectors: [Energy], themes: [oil, energy]}
+  - {id: sec_disclosure, term: "Securities and Exchange Commission disclosure rule", sectors: [Financials], themes: [regulation]}
+  - {id: drug_pricing, term: "Medicare drug price negotiation", sectors: [Healthcare], themes: [drug pricing]}

@@ -36,7 +36,7 @@ class FRED:
         d = self.c.get(
             "fred/series/observations",
             {"series_id": series_id, "api_key": self.key, "file_type": "json", "observation_start": start},
-            key=series_id, max_age_days=1,
+            key=f"{series_id}_{start}", max_age_days=1,
         ).data
         rows = []
         for o in d.get("observations", []):
