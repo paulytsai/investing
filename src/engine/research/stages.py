@@ -1,28 +1,46 @@
-"""Research stages: one structured call returns ThesisRecord v0 + MoatLite + LensVerdicts + Checkpoints (+ the tension);
+"""Research stages: three structured calls over one shared (cached) context — ThesisRecord v0; MoatLite + LensVerdicts;
+Checkpoints + the tension (one call with the whole bundle exceeds the structured-output grammar limit);
 verification marks unverified claims; HTML rendering for the idea page."""
 from __future__ import annotations
 
+import copy
 import html
 
 from ..screen.models import IdeaCandidate
 from .context import SYSTEM, build_context, financial_read
 from .llm import NarrativeUnavailable, parse_structured
-from .schemas import ResearchBundle
+from .schemas import CheckpointSet, MoatAndLenses, ResearchBundle, ThesisRecordV0
 from .verify import doc_ids, mark_free_text, verify_claim
 
-INSTRUCTION = """Using only the documents above, produce the ResearchBundle for {symbol} as of {as_of}:
-- thesis: the three questions, main character (is it the indispensable #1?), drivers (price × quantity), why_bought in one line, break conditions, edge statement, horizon (years), confidence, role/asset_type/ai_layer proposals, weaknesses (the bear case, honestly).
-- moat: toll-booth scorecard (F-01/F-02/F-03).
-- lenses: Buffett / Danoff / Tillinghast / Lynch verdicts with reasons; list split items.
-- checkpoints (点検材料): 3–6 dated premises with KPI and source; thresholds TBD(Paul) unless stated; propose suggested_bull/suggested_bear separately.
-- the_tension: the one question that decides the idea.
-Cite every number as (period, source)."""
+PREAMBLE = "Using only the documents above, for {symbol} as of {as_of}. Cite every number as (period, source).\n"
+STAGES = {
+    "thesis": (ThesisRecordV0, "Produce the ThesisRecordV0: the three questions, main character (is it the indispensable #1?), drivers "
+               "(price × quantity), why_bought in one line, break conditions, edge statement, horizon (years), confidence, "
+               "role/asset_type/ai_layer proposals, weaknesses (the bear case, honestly)."),
+    "moat_lenses": (MoatAndLenses, "Produce MoatAndLenses: the toll-booth scorecard (F-01/F-02/F-03) and the Buffett / Danoff / "
+                    "Tillinghast / Lynch verdicts with reasons and cited claims; list split items."),
+    "checkpoints": (CheckpointSet, "Produce CheckpointSet: 3–6 dated 点検材料 premises with KPI and source; thresholds TBD(Paul) "
+                    "unless stated in the philosophy; propose suggested_bull/suggested_bear separately; the_tension = the one "
+                    "question that decides the idea."),
+}
+
+
+def _stage(msgs: list[dict], c: IdeaCandidate, name: str):
+    schema, instr = STAGES[name]
+    m = copy.deepcopy(msgs)
+    m[0]["content"].append({"type": "text", "text": PREAMBLE.format(symbol=c.symbol, as_of=c.as_of) + instr})
+    return parse_structured(SYSTEM, m, schema, cache_key=f"research:{c.symbol}:{c.as_of}:{name}")
 
 
 def research_bundle(c: IdeaCandidate, phases: list[dict] | None = None) -> ResearchBundle:
     msgs = build_context(c, phases)
-    msgs[0]["content"].append({"type": "text", "text": INSTRUCTION.format(symbol=c.symbol, as_of=c.as_of)})
-    b: ResearchBundle = parse_structured(SYSTEM, msgs, ResearchBundle, cache_key=f"research:{c.symbol}:{c.as_of}")
+    last = msgs[0]["content"][-1]
+    if isinstance(last, dict) and last.get("type") == "text":
+        last["cache_control"] = {"type": "ephemeral"}   # the context is shared by the three stage calls
+    thesis = _stage(msgs, c, "thesis")
+    ml = _stage(msgs, c, "moat_lenses")
+    cp = _stage(msgs, c, "checkpoints")
+    b = ResearchBundle(thesis=thesis, moat=ml.moat, lenses=ml.lenses, checkpoints=cp.checkpoints, the_tension=cp.the_tension)
     ids = doc_ids(msgs)
     fr = financial_read(c)
     unv = 0

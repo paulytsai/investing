@@ -74,7 +74,8 @@ def rank_ic(cohort_scored: dict[pd.Timestamp, list], results_by_formation: dict[
     ics: dict[str, list[float]] = {k: [] for k in angle_keys + ["idea_strength"]}
     for f, cands in cohort_scored.items():
         rets = results_by_formation.get(f, {})
-        rows = [(c, rets[c.security_id]) for c in cands if c.eligible and c.security_id in rets and rets[c.security_id] is not None]
+        rows = [(c, rets[c.security_id]) for c in cands if c.eligible and c.security_id in rets and rets[c.security_id] is not None
+                and not (isinstance(rets[c.security_id], float) and np.isnan(rets[c.security_id]))]
         if len(rows) < 8:
             continue
         y = np.array([r for _, r in rows])
@@ -82,11 +83,15 @@ def rank_ic(cohort_scored: dict[pd.Timestamp, list], results_by_formation: dict[
             x = np.array([next((a.score for a in c.angles if a.key == k), np.nan) for c, _ in rows], dtype=float)
             m = ~np.isnan(x)
             if m.sum() >= 8 and np.std(x[m]) > 0:
-                ics[k].append(float(stats.spearmanr(x[m], y[m]).correlation))
+                ic = float(stats.spearmanr(x[m], y[m]).correlation)
+                if not np.isnan(ic):
+                    ics[k].append(ic)
         x = np.array([c.idea_strength if c.idea_strength is not None else np.nan for c, _ in rows], dtype=float)
         m = ~np.isnan(x)
-        if m.sum() >= 8:
-            ics["idea_strength"].append(float(stats.spearmanr(x[m], y[m]).correlation))
+        if m.sum() >= 8 and np.std(x[m]) > 0:
+            ic = float(stats.spearmanr(x[m], y[m]).correlation)
+            if not np.isnan(ic):
+                ics["idea_strength"].append(ic)
     out = {}
     for k, v in ics.items():
         if not v:

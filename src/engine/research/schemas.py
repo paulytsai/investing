@@ -89,6 +89,16 @@ class Checkpoint(BaseModel):
         return v
 
 
+class MoatAndLenses(BaseModel):
+    moat: MoatLite
+    lenses: LensVerdicts
+
+
+class CheckpointSet(BaseModel):
+    checkpoints: list[Checkpoint]
+    the_tension: str = ""
+
+
 class ResearchBundle(BaseModel):
     thesis: ThesisRecordV0
     moat: MoatLite
