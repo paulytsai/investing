@@ -96,9 +96,13 @@ def build_us() -> None:
     delisted = {r["symbol"]: r for r in (fmp.delisted() if _cached("fmp", "stable/delisted-companies") else [])}
     master_rows = []
     sid_of: dict[str, str] = {}
-    for sym, pr in profiles.items():
+    seen_sids: set[str] = set()
+    for sym, pr in sorted(profiles.items(), key=lambda kv: -(kv[1].get("marketCap") or 0)):
         dl = delisted.get(sym)
         sid = security_id_for(sym, pr.get("cik"), pr.get("ipoDate"))
+        if sid in seen_sids:                 # share classes (GOOG/GOOGL): keep the larger class as the CIK id
+            sid = f"{sid}:{sym}"
+        seen_sids.add(sid)
         sid_of[sym] = sid
         master_rows.append({
             "security_id": sid, "symbol": sym, "region": "US", "name": pr.get("companyName"), "exchange": pr.get("exchange"),
@@ -131,7 +135,7 @@ def build_us() -> None:
             for r in _load_cached_json(p) or []:
                 cap_rows.append({"security_id": sid, "date": r["date"], "market_cap": r["marketCap"], "source": "fmp"})
     if price_frames:
-        prices = pd.concat(price_frames, ignore_index=True)
+        prices = pd.concat(price_frames, ignore_index=True).drop_duplicates(["security_id", "date"])
         write_table("prices_daily", prices)
         # infer delisting for names whose series stopped
         last = prices.groupby("security_id")["date"].max()

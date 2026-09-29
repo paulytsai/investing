@@ -8,8 +8,8 @@ meta:
 
 universe:
   kind: {value: cap_floor, decision_id: D-53, note: "cap_floor = all US common stocks above the PIT floor; sp500_pit = historical S&P 500 members"}
-  cap_floor_usd: {value: 2.0e9, decision_id: D-53, note: "point-in-time market cap floor, US"}
-  cap_floor_jpy: {value: 1.0e11, decision_id: D-55, note: "point-in-time market cap floor, Japan (¥100B)"}
+  cap_floor_usd: {value: 2.0e+9, decision_id: D-53, note: "point-in-time market cap floor, US"}
+  cap_floor_jpy: {value: 1.0e+11, decision_id: D-55, note: "point-in-time market cap floor, Japan (¥100B)"}
   min_listing_days: {value: 365, decision_id: D-53, note: "need ≥4 visible quarters; also X-05 hyped-IPO default exclusion"}
   jp_markets: {value: [プライム, スタンダード], decision_id: D-55}
 
@@ -39,12 +39,12 @@ thresholds:
   dividend_coverage_min: {value: 1.2, decision_id: D-71, note: "FCF ÷ dividends; OHI AFFO payout 92% cited"}
   drawdown_research_trigger_pct: {value: 25, decision_id: D-22, note: "R-21 research trigger; scores only with F-12 multiple-led"}
   run_up_alert_pct: {value: 50, decision_id: D-28, note: "R-31: NVDA +50%/1yr example"}
-  revenue_floor_usd: {value: 1.0e8, decision_id: D-24, note: "X-01/X-02 pre-revenue → speculative"}
+  revenue_floor_usd: {value: 1.0e+8, decision_id: D-24, note: "X-01/X-02 pre-revenue → speculative"}
   cyclical_peak_margin_pctile: {value: 90, decision_id: D-25, note: "R-15 block when margins at ≥ this own-history percentile"}
   hurdle_margin_pct: {value: 3.0, decision_id: D-47, note: "expected return must exceed 10Y UST by this"}
   speculation_cagr_ceiling_pct: {value: 25, decision_id: D-24, note: "stated range 20–30 (F-91); midpoint used"}
   high_yield_pct: {value: 5, decision_id: D-71, note: "stated (R-16) — not a hypothesis, kept here for the yield gate"}
-  insider_buy_signal_usd: {value: 1.0e6, decision_id: D-57, note: "G1 proxy: officer open-market buys in 12m"}
+  insider_buy_signal_usd: {value: 1.0e+6, decision_id: D-57, note: "G1 proxy: officer open-market buys in 12m"}
   ip_pattern_rd_pct: {value: 20, decision_id: none, note: "stated (F-106)"}
 
 dcf:

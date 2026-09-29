@@ -136,8 +136,14 @@ class Hypotheses:
 
     def get(self, path: str) -> Any:
         e = self.entry(path)
-        self.used[path] = {"value": e.get("value"), "decision_id": e.get("decision_id"), "note": e.get("note")}
-        return e["value"]
+        v = e.get("value")
+        if isinstance(v, str):
+            try:
+                v = float(v) if any(ch in v for ch in ".eE") else int(v)   # YAML 1.1 reads 2.0e9 as a string
+            except ValueError:
+                pass
+        self.used[path] = {"value": v, "decision_id": e.get("decision_id"), "note": e.get("note")}
+        return v
 
     def preset(self, name: str | None = None) -> dict[str, float]:
         name = name or self.get("screen.preset")

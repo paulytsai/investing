@@ -26,6 +26,19 @@ class Snapshot:
     n_quarters: int = 0
     prior_ttm: dict[str, float | None] = field(default_factory=dict)
     fy_history: pd.DataFrame | None = None
+    q_rows: pd.DataFrame | None = None   # visible quarterly rows (period_end, field, value, available_from)
+
+    def eps_ttm_series(self) -> pd.Series:
+        """TTM diluted EPS keyed by the date each quarter became visible (available_from) — for P/E history."""
+        if self.q_rows is None or self.q_rows.empty:
+            return pd.Series(dtype=float)
+        q = self.q_rows[self.q_rows.field == "eps_diluted"].sort_values("period_end")
+        if q.empty:
+            return pd.Series(dtype=float)
+        q = q.drop_duplicates("period_end")
+        ttm = q["value"].rolling(4).sum()
+        s = pd.Series(ttm.values, index=pd.to_datetime(q["available_from"]).values).dropna()
+        return s[~s.index.duplicated(keep="last")].sort_index()
 
 
 def _visible(as_of: pd.Timestamp, security_ids: list[str] | None = None) -> pd.DataFrame:
@@ -123,6 +136,7 @@ def build_snapshot(security_id: str, as_of: pd.Timestamp, vis: pd.DataFrame) -> 
         snap.stale = True
     if not fy.empty:
         snap.fy_history = fy.pivot_table(index="period_end", columns="field", values="value", aggfunc="first").sort_index()
+    snap.q_rows = vis[(vis.security_id == security_id) & (vis.period_type == "Q")][["period_end", "field", "value", "available_from"]]
     return snap
 
 
