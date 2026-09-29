@@ -185,16 +185,17 @@ def write_region(name: str, df: pd.DataFrame, region: str) -> Path:
     bench_ids = {"US": {"SPY_TR", "SPY_PR", "RSP_TR", "RSP_PR", "QQQ_TR", "QQQ_PR", "XLE_TR", "XLE_PR", "VNQ_TR", "VNQ_PR", "URA_TR", "URA_PR",
                         "XLRE_TR", "XLRE_PR"}, "JP": {"TOPIX_PR"}}
     if has_table(name):
-        old = read_df(name)
+        cols = {f.name for f in TABLES[name]}
+        # read only the rows to keep (the full-universe prices table is ~37M rows; never load it twice)
         if name == "benchmark_daily":
             others = set().union(*(v for k, v in bench_ids.items() if k != region))
-            keep = old[old["benchmark_id"].isin(others)]
-        elif "region" in old.columns:
-            keep = old[old["region"] != region]
-        elif "security_id" in old.columns:
-            keep = old[~old["security_id"].astype(str).str.startswith(f"{region}:")]
+            keep = read_df(name, "benchmark_id IN (" + ",".join("'" + b + "'" for b in sorted(others)) + ")") if others else read_df(name, "1 = 0")
+        elif "region" in cols:
+            keep = read_df(name, f"region <> '{region}'")
+        elif "security_id" in cols:
+            keep = read_df(name, f"security_id NOT LIKE '{region}:%'")
         else:
-            keep = old.iloc[0:0]
+            keep = read_df(name, "1 = 0")
         if not keep.empty:
             df = pd.concat([keep, df], ignore_index=True)
             if "event_id" in df.columns:  # MACRO events are region-less and may be carried by either build

@@ -70,6 +70,8 @@ def _combine_fundamentals_parts(parts_dir: Path) -> int:
     if out.exists():
         keep_sql = f"UNION ALL SELECT {casts} FROM read_parquet('{out.as_posix()}') WHERE security_id NOT LIKE 'US:%'"
     con = duckdb.connect()
+    con.execute("SET memory_limit='3GB'")
+    con.execute(f"SET temp_directory='{(out.parent / '_duckdb_tmp').as_posix()}'")
     con.execute(f"""
         COPY (
           WITH us AS (
@@ -181,13 +183,12 @@ def build_us() -> None:
         if isinstance(full, list) and full:
             price_frames.append(frame_from_fmp(sym, full, div if isinstance(div, list) else [], splits if isinstance(splits, list) else [], sid))
         for p in cap_c.get(sym, []):
-            for r in _load_cached_json(p) or []:
-                mc = r.get("marketCap")
-                if mc is None:
-                    continue
-                cap_rows.append({"security_id": sid, "date": r["date"], "market_cap": mc, "source": "fmp"})
-                if float(mc) > max_cap.get(sym, 0.0):
-                    max_cap[sym] = float(mc)
+            rows_ = [r for r in (_load_cached_json(p) or []) if r.get("marketCap") is not None]
+            if not rows_:
+                continue
+            cap_rows.append(pd.DataFrame({"security_id": sid, "date": [r["date"] for r in rows_],
+                                          "market_cap": pd.to_numeric([r["marketCap"] for r in rows_], errors="coerce"), "source": "fmp"}))
+            max_cap[sym] = max(max_cap.get(sym, 0.0), float(cap_rows[-1]["market_cap"].max()))
     # names that never reached half the universe cap floor can never enter a cohort: skip their statements/events
     floor = float(Hypotheses.load().get("universe.cap_floor_usd") or 2e9)
     held = {str(h.get("symbol", "")).upper() for h in (holdings().get("positions") or [])} if isinstance(holdings(), dict) else set()
@@ -210,11 +211,17 @@ def build_us() -> None:
             write_region("security_master", master, "US")
         # infer delisting for names whose series stopped
         last = prices.groupby("security_id")["date"].max()
+        n_prices = len(price_frames)
+        del prices, recent, price_frames   # ~37M rows for the full universe: release before the fundamentals stage
+        price_frames = []
     else:
         last = pd.Series(dtype="object")
+        n_prices = 0
     if cap_rows:
-        caps = pd.DataFrame(cap_rows).drop_duplicates(["security_id", "date"])
+        caps = pd.concat(cap_rows, ignore_index=True).drop_duplicates(["security_id", "date"])
+        cap_rows = []
         write_region("market_cap_daily", caps, "US")
+        del caps
 
     # --- universe membership (interval) ------------------------------------------------------
     today = pd.Timestamp(date.today())
@@ -382,7 +389,7 @@ def build_us() -> None:
             if not keep.empty:
                 new_ev = pd.concat([new_ev, keep], ignore_index=True).drop_duplicates("event_id")
         write_region("events", new_ev, "US")
-    print(f"[build us] master={len(master)} prices={len(price_frames)} fundamentals_rows={n_fund} events={len(ev_rows)}")
+    print(f"[build us] master={len(master)} prices={n_prices} fundamentals_rows={n_fund} events={len(ev_rows)}")
 
 
 def build(region: str = "us") -> None:
