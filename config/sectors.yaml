@@ -57,6 +57,8 @@ scoring:                              # sector score = weighted z across sectors
   min_members: 8                      # fewer members → "thin" (neutral, flagged)
   slots: {overweight: 3.0, neutral: 1.0, underweight: 0.25, avoid: 0.0}  # relative slot weights × eligible_members^size_power
   size_power: 0.25                    # weak size effect: the stance decides, the sector's depth only nudges
+  bet_multiplier: {overweight: 1.5, neutral: 1.0, underweight: 0.5, avoid: 0.0, thin: 1.0}   # recommended sector weight = market weight × multiplier, renormalised (D-58)
+  cycle_breadth_min_pct: 10           # a theme is a live cycle once ≥10% of calls in a quarter mention it
 theme_for_sector:                     # which diffusion theme speaks for each sector (breadth trend input)
   ai_energy: ai_power_grid
   ai_chips: memory_hbm

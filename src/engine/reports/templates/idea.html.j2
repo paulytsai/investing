@@ -57,6 +57,16 @@
   <div><div class="label muted small">Hurdle (F-18 / R-17)</div><div>{% if dcf and dcf.hurdle and dcf.hurdle.passes is not none %}expected return <b>{{ '%.1f%%'|format(dcf.expected_return_pct) }}</b>/yr (5-yr path to base value) vs hurdle {{ '%.1f%%'|format(dcf.hurdle.hurdle_pct) }} (10Y {{ '%.2f%%'|format(dcf.inputs.rf_pct) }} + margin) → <b>{{ 'pass' if dcf.hurdle.passes else 'fail' }}</b> <span class="badge alert">hypothesis D-47</span>{% else %}–{% endif %}</div></div>
 </div>
 
+{% if sector_call %}
+<h2>Sector view first — {{ sector_call.label }} (R-23 / F-39)</h2>
+<div class="card">
+  <p><span class="badge {{ 'buy' if sector_call.stance=='overweight' else ('excluded' if sector_call.stance in ('avoid','underweight') else '') }}">{{ sector_call.stance }}</span>
+  {% if sector_call.bet %}<b>Recommended bet:</b> {{ sector_call.bet.summary }}{% endif %}</p>
+  <ul class="small">{% for r in sector_call.rationale %}<li>{{ r }}</li>{% endfor %}</ul>
+  <p class="small muted">Sector stance and bet are hypotheses (D-58 / D-27): score = weighted z of growth, momentum, quality, valuation and theme diffusion across {{ sector_call.n_members }} members. The stock below was chosen inside this sector, after the sector call.</p>
+</div>
+{% endif %}
+
 {% if dcf %}
 <h2>DCF — expected value and range (F-77), what's priced in (F-16)</h2>
 <div class="card">

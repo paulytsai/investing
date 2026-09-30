@@ -46,3 +46,22 @@ def test_sector_calls_then_slots_then_selection():
     picks = select_top(cands, 10, 6, calls)
     assert picks and all(p.theme_sector != "energy" for p in picks) and sum(p.theme_sector == "ai_chips" for p in picks) >= 1
     assert isinstance(calls["ai_chips"], SectorCall) and calls["ai_chips"].slots == slots["ai_chips"]
+
+
+def test_sector_bets_scale_market_weight_by_stance():
+    import pandas as pd
+    from engine.screen.models import IdeaCandidate
+    from engine.screen.sectors import SectorCall, sector_bets
+
+    def cand(sid, sector, cap):
+        return IdeaCandidate(security_id=sid, symbol=sid, region="US", as_of=pd.Timestamp("2024-06-30").date(), asset_type="non_commodity",
+                             market_cap=cap, theme_sector=sector, metrics={})
+    cands = [cand("A", "ai_chips", 300.0), cand("B", "energy", 100.0), cand("C", "energy", 100.0)]
+    calls = {"ai_chips": SectorCall(sector="ai_chips", label="Chips", as_of="2024-06-30", n_members=1, n_eligible=1, score=90, stance="overweight"),
+             "energy": SectorCall(sector="energy", label="Energy", as_of="2024-06-30", n_members=2, n_eligible=2, score=20, stance="underweight")}
+    sector_bets(calls, cands, pd.Timestamp("2024-06-30"), {"weights": {"A": 0.15, "B": 0.05}})
+    b = calls["ai_chips"].bet
+    assert abs(b["market_weight"] - 0.6) < 1e-9 and b["recommended_weight"] > 0.6 and b["direction"] == "overweight"
+    assert abs(calls["energy"].bet["recommended_weight"] + b["recommended_weight"] - 1.0) < 1e-9
+    assert calls["energy"].bet["direction"] == "underweight" and abs(calls["energy"].bet["kelly_implied_weight"] - 0.05) < 1e-12
+    assert "vs" in b["summary"] and "market weight" in b["summary"]

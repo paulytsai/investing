@@ -66,6 +66,7 @@ class SectorCall(BaseModel):
     slots: int = 0
     theme: str | None = None
     diffusion: dict = Field(default_factory=dict)
+    bet: dict = Field(default_factory=dict)         # the recommended sector bet: market weight, recommended weight, active bet, Kelly-implied, cycle status
 
 
 AGG = {   # aggregate: (metric key, statistic, direction, group, label)
@@ -216,3 +217,75 @@ def allocate_slots(calls: dict[str, SectorCall], top_n: int, max_per_sector: int
     for s in calls:
         calls[s].slots = slots[s]
     return slots
+
+
+def cycle_status(theme: str | None, as_of: pd.Timestamp, min_breadth: float = 10.0) -> dict:
+    """Where the theme is in its cycle, point-in-time from completed quarters: breadth now vs peak, quarters since it first
+    reached `min_breadth` of calls (cycle age), and the trend over four quarters (expanding / plateau / contracting)."""
+    from ..store import has_table, read_df
+    from ..text.themes import _quarter
+
+    if not theme or not has_table("theme_quarterly"):
+        return {}
+    tq = read_df("theme_quarterly", f"theme = '{theme}'").sort_values("quarter")
+    tq = tq[tq["quarter"] < _quarter(as_of)]
+    if len(tq) < 5:
+        return {}
+    b = tq["breadth_pct"].astype(float).values
+    now, peak, ago4 = float(b[-1]), float(b.max()), float(b[-5])
+    live = tq[tq["breadth_pct"] >= min_breadth]
+    started = str(live["quarter"].iloc[0]) if len(live) else None
+    age_q = int(len(tq) - tq.index.get_loc(live.index[0])) if len(live) else 0
+    trend = "expanding" if ago4 > 0 and now / ago4 >= 1.15 else ("contracting" if ago4 > 0 and now / ago4 <= 0.85 else "plateau")
+    if now < min_breadth:
+        phase = "not a cycle yet" if peak < min_breadth else "faded"
+    elif now >= peak * 0.9:
+        phase = "at or near peak breadth" if trend != "expanding" else "expanding to new highs"
+    elif now <= peak * 0.75:
+        phase = "off its peak by 25%+ (cycle-over signal, D-24)"
+    else:
+        phase = "below peak"
+    return {"theme": theme, "quarter": str(tq["quarter"].iloc[-1]), "breadth_now": now, "breadth_peak": peak, "breadth_4q_ago": ago4,
+            "cycle_started": started, "cycle_age_quarters": age_q, "trend": trend, "phase": phase}
+
+
+def sector_bets(calls: dict[str, SectorCall], cands: list[IdeaCandidate], as_of: pd.Timestamp, sizing: dict | None = None) -> dict[str, SectorCall]:
+    """Attach the recommended sector bet to every call: market weight (the sector's share of scored market cap), recommended
+    weight (market weight × stance multiplier, renormalised to 100%), the active bet in percentage points, what the chosen
+    names' Kelly weights imply for the sector, and the theme's cycle status. Written back onto the SectorCall."""
+    k = cfg()
+    mult = k["scoring"].get("bet_multiplier", {"overweight": 1.5, "neutral": 1.0, "underweight": 0.5, "avoid": 0.0, "thin": 1.0})
+    min_b = float(k["scoring"].get("cycle_breadth_min_pct", 10))
+    caps: dict[str, float] = {}
+    for c in cands:
+        if c.market_cap:
+            caps[c.theme_sector] = caps.get(c.theme_sector, 0.0) + float(c.market_cap)
+    total = sum(caps.values()) or 1.0
+    mkt = {s: caps.get(s, 0.0) / total for s in calls}
+    raw = {s: mkt[s] * float(mult.get(calls[s].stance, 1.0)) for s in calls}
+    rsum = sum(raw.values()) or 1.0
+    rec = {s: v / rsum for s, v in raw.items()}
+    kw = (sizing or {}).get("weights") or {}
+    by_sid = {c.security_id: c for c in cands}
+    kelly_by = {}
+    for sid, w in kw.items():
+        c = by_sid.get(sid)
+        if c is not None:
+            kelly_by[c.theme_sector] = kelly_by.get(c.theme_sector, 0.0) + float(w)
+    for s, call in calls.items():
+        bet = rec[s] - mkt[s]
+        call.bet = {"market_weight": mkt[s], "recommended_weight": rec[s], "active_bet_pp": bet * 100.0,
+                    "direction": ("overweight" if bet > 0.005 else ("underweight" if bet < -0.005 else "market weight")),
+                    "multiplier": float(mult.get(call.stance, 1.0)), "kelly_implied_weight": kelly_by.get(s, 0.0),
+                    "cycle": cycle_status(call.theme, as_of, min_b),
+                    "summary": ""}
+        cyc = call.bet["cycle"]
+        txt = (f"{call.bet['direction']}: {rec[s]*100:.1f}% vs {mkt[s]*100:.1f}% market weight ({bet*100:+.1f} pp), stance {call.stance} "
+               f"(score {call.score:.0f}/100)" if call.score is not None else f"{call.bet['direction']}: stance {call.stance}")
+        if kelly_by.get(s):
+            txt += f"; the chosen names' Kelly weights put {kelly_by[s]*100:.1f}% here"
+        if cyc:
+            txt += (f"; theme '{cyc['theme']}' {cyc['phase']} — {cyc['breadth_now']:.0f}% of calls in {cyc['quarter']} vs peak {cyc['breadth_peak']:.0f}%, "
+                    f"{cyc['trend']} over four quarters" + (f", cycle age {cyc['cycle_age_quarters']} quarters since {cyc['cycle_started']}" if cyc['cycle_started'] else ""))
+        call.bet["summary"] = txt
+    return calls

@@ -172,6 +172,9 @@ def run_ideas(as_of=None, top: int = 20, regions: list[str] | None = None, prese
     sector_calls = evaluate_sectors(all_cands, as_of, hyp)          # stage 1: the sector call, before any stock is chosen
     chosen = select_top(all_cands, top, int(max_sector) if max_sector else None, sector_calls)
     sizing = size_positions(chosen, as_of, hyp)                     # Kelly: per-name scenario Kelly + portfolio Kelly weights
+    from .sectors import sector_bets
+
+    sector_bets(sector_calls, all_cands, as_of, sizing)             # the recommended sector bet, written onto each call
     run_id = f"{as_of.date()}_{datetime.now().strftime('%H%M%S')}"
     out = out_dir or (REPORTS_DIR / "ideas" / run_id)
     out.mkdir(parents=True, exist_ok=True)
@@ -190,6 +193,9 @@ def run_ideas(as_of=None, top: int = 20, regions: list[str] | None = None, prese
         print(f"[ideas] {len(all_cands)} scored, {len(chosen)} chosen → {out / 'board.html'}")
         for sc in sorted(sector_calls.values(), key=lambda x: -(x.score or 0)):
             print(f"  [sector] {sc.stance:<12} {sc.label[:44]:<44} score {sc.score if sc.score is not None else float('nan'):5.1f} members {sc.n_members:4d} slots {sc.slots}")
+            if sc.bet:
+                print(f"           bet: {sc.bet['summary']}")
+                print(f"           why: {'; '.join(sc.rationale[1:4])}")
         for c in chosen:
             w = (sizing.get("weights") or {}).get(c.security_id)
             print(f"  #{c.rank:<3} {c.symbol:<6} strength {c.idea_strength:5.1f}  {c.action:<14} {c.theme_sector:<18} kelly {(w or 0)*100:4.1f}%  {c.action_reason[:60]}")
@@ -304,5 +310,6 @@ def _render(all_cands, chosen, as_of, out, hyp, preset, regions, top, narrate, n
             narrative = narrative_html(c, snap, phases)
         html = itpl.render(title=f"{c.symbol} — idea", c=v, m=c.metrics, chart_id=spec["id"], chart_json=to_json(spec), macro=macro,
                            n_scored=len(all_cands), phases=phases, narrative=narrative, dcf=c.metrics.get("dcf"), generated=render.now(), assets="../../../assets/",
-                           kelly=(sizing.get("blocks") or {}).get(c.security_id), kelly_weight=(sizing.get("weights") or {}).get(c.security_id), n_top=len(chosen))
+                           kelly=(sizing.get("blocks") or {}).get(c.security_id), kelly_weight=(sizing.get("weights") or {}).get(c.security_id), n_top=len(chosen),
+                           sector_call=(sector_calls or {}).get(c.theme_sector))
         render.write(out / "ideas" / f"{c.symbol}.html", html)
