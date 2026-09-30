@@ -267,10 +267,14 @@ def text_read(limit: int = typer.Option(300, help="names to read, by latest scre
         want = {x.strip().upper() for x in symbols.split(",") if x.strip()}
         pairs = [(r.security_id, r.symbol) for r in m.itertuples(index=False) if r.symbol in want]
     else:
-        runs = sorted(glob.glob(str(REPORTS_DIR / "ideas" / "*" / "candidates.json")))
+        import os
+
+        runs = sorted(glob.glob(str(REPORTS_DIR / "ideas" / "*" / "candidates.json")), key=os.path.getmtime)
+        runs = [r for r in runs if os.path.getsize(r) > 2_000_000] or runs     # the latest full-universe screen, not a one-name research run
         if not runs:
             typer.echo("no ideas run yet; pass --symbols or run `engine ideas` first")
             raise typer.Exit(1)
+        typer.echo(f"[text read] ranking from {runs[-1]}")
         cands = _json.load(open(runs[-1]))
         ranked = sorted([c for c in cands if c.get("rank") and c.get("region") == "US"], key=lambda c: c["rank"])[:limit]
         pairs = [(c["security_id"], c["symbol"]) for c in ranked]
