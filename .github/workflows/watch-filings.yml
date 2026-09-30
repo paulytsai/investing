@@ -1,0 +1,47 @@
+name: Watch large-holding filings
+
+on:
+  schedule:
+    # Every 15 minutes, 09:00-18:59 JST (00:00-09:59 UTC), Monday-Friday.
+    - cron: "*/15 0-9 * * 1-5"
+  workflow_dispatch:
+
+concurrency:
+  group: watch-filings
+  cancel-in-progress: false
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Restore the list of filings already alerted on
+        uses: actions/cache/restore@v4
+        with:
+          path: state
+          key: watch-state-${{ github.run_id }}
+          restore-keys: watch-state-
+      - name: Check for new filings
+        env:
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          SMTP_HOST: ${{ secrets.SMTP_HOST }}
+          SMTP_PORT: ${{ secrets.SMTP_PORT }}
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_PASS: ${{ secrets.SMTP_PASS }}
+          ALERT_EMAIL_TO: ${{ secrets.ALERT_EMAIL_TO }}
+          JQUANTS_API_KEY: ${{ secrets.JQUANTS_API_KEY }}
+        run: |
+          # First run: remember the last week's filings without alerting on them.
+          if [ ! -f state/seen_filings.json ]; then python scripts/watch_filings.py --seed --days 7; fi
+          python scripts/watch_filings.py --days 3
+      - name: Save the list of filings already alerted on
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: state
+          key: watch-state-${{ github.run_id }}

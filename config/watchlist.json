@@ -1,0 +1,14 @@
+{
+  "_comment": "EDINET filer codes to watch. Look up new codes at https://ufocatch.com/large-shareholding/ (株主検索). Joint filings list only the lead filer, so include every entity in a group.",
+  "groups": {
+    "Murakami family": {
+      "E35393": "City Index Eleventh", "E31712": "Aya Nomura", "E26526": "ATRA", "E27236": "Minami Aoyama Fudosan",
+      "E24231": "Reno", "E04037": "S-Grant", "E26513": "Fortis", "E26527": "Office Support", "E04917": "C&I Holdings",
+      "E40184": "City Index First", "E39600": "City Index Third", "E42031": "City Index Fifth",
+      "E41818": "M Holdings", "E34604": "Yukihiro Nomura", "E40616": "Kadan Capital Fund", "E40411": "Yuzawa"
+    },
+    "Murakami Takateru": {"E38513": "Takateru Murakami", "E38425": "MI2", "E40967": "MI5", "E40978": "MI1"},
+    "Effissimo Capital": {"E11852": "Effissimo"},
+    "Strategic Capital": {"E27325": "Strategic Capital"}
+  }
+}
