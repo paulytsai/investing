@@ -14,7 +14,14 @@ Built in v1 are marked ✅; proposed next steps ☐. Every item maps to the spec
 - ✅ **Reverse DCF** "growth the price implies" as a factor; scenario DCF with expected value **and** range (F-77).
 - ✅ **Weight presets** (paul_default, growth/value/quality tilt, crisis mode) and a board that re-ranks on any angle.
 - ☐ Estimate-revision direction (F-17) as a live-only component using FMP analyst estimates + price-target history.
-- ☐ Receipts ratio (F-40) from XBRL RPO for AI sellers; AI three dials (F-45) from transcripts.
+- ✅ **Text layer (cognitive reading of disclosures)** — two tiers feeding the angles as SOFT components:
+  - *Lexical, point-in-time, backtestable*: every earnings-call transcript since 2015 and the latest 10-K Items 1/1A/7 and 10-Q MD&A are scanned for
+    demand/backlog/capacity language (F-42/F-40), price increases sticking vs erosion (F-08), guidance raised vs cut (F-17), 主役 language — share gains,
+    #1, sole supplier, switching costs (F-01/R-09), AI receipts (F-45), customer concentration (R-18) and red flags — going concern, restatement, material
+    weakness, covenant, investigation (X-19). Each hit keeps its sentence and document date; scores are per 10k words over the two latest calls and the latest filing.
+  - *Claude read, live-only* (`engine text read`, Sonnet, cost-capped): a structured TextRead per name — demand, pricing power, competitive position and
+    is-number-one, guidance, the AI three dials, red flags, tone — each with quoted evidence; used like estimate revisions (live factors, absent in the backtest).
+- ☐ Receipts ratio (F-40) from XBRL RPO for AI sellers (the text tier already reads AI backlog/RPO language).
 - ☐ 13F "informed holders added" (F-111), SOFT only.
 - ✅ Japan pilot (Core30 + Large70) screened and backtested from 2017-12-31 on J-Quants 決算短信 point-in-time data (DiscDate), split-restated per-share figures, 簡易FCF / ROIC proxies labelled.
 - ☐ Japan-specific yardsticks (総還元 vs JGB; R-38 FX-sensitivity check) and EDINET governance parsing for G1/G2.

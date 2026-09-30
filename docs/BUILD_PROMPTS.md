@@ -66,6 +66,12 @@ workflows (W3, W4, W6, W7, M8).
 > until confirmed), tables `x_posts`/`x_threads`, `engine x classify` (market relevant / personal, asset classes, sectors,
 > themes, tickers, chart descriptions), `engine x summary`, offline tests with saved sample responses.
 
+## Text layer — transcripts and filings as idea-sourcing signals (done)
+> Add `text/`: `pull.py` (every transcript since 2015 + latest 10-K/10-Q items for cohort-relevant names, dated), `lexical.py` (pure regex
+> signal extractor with quotes: demand, pricing, guidance, leadership, concentration, red flags, AI receipts), `build.py` (→ `text_signals`,
+> point-in-time; `text_factors()` per name), `read.py` (Claude structured `TextRead`, Sonnet, live-only, cached, budget-capped). Wire the
+> factors into `rules/screen.yaml` angles as SOFT components with spec ids; live-only factors never count against coverage in the backtest.
+
 ## Next prompts (not yet built)
 
 ### Full-universe runs

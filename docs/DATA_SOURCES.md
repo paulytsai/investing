@@ -22,6 +22,10 @@ Verified 2026-09-29 from this environment (keys from environment secrets; see `.
 5. **XBRL `RevenueRemainingPerformanceObligation`**: 11/12 AI-related names (VRT missing) → receipts ratio (F-40) is computable for most sellers-to-the-build-out; missing → ALERT annotation.
 6. `historical-market-capitalization` reaches 2009 (AAPL: 4,462 rows). USDJPY history from 2009.
 
+## Text documents
+- `engine text pull` stores every FMP earnings-call transcript since 2015 (dated by call; `available_from` = next trading day) and the latest 10-K (Items 1, 1A, 7; 20-F Items 4, 5) and 10-Q (Item 2) from EDGAR for every name whose market cap ever reached the cap floor since 2015, plus holdings. Raw HTTP is cached; tables `transcripts`, `filings_text`.
+- `engine text build` runs the lexical extractor → `text_signals` (one row per document × category with count, words and the first quote). `engine text read` writes `text_reads` (Claude tier, request-hash cached).
+
 ## Pull mechanics (learned on the full US universe, 9,237 symbols)
 - The per-symbol phase is CPU-bound in one Python process (JSON + gzip); run it as shards: `ENGINE_RPS_SCALE=0.1 engine pull us --no-refresh-bulk --shard i/3` × 3 processes, each with `--workers 4`. Results are persisted per symbol in `data/raw/fmp/pull_us_results.jsonl` and re-runs skip completed symbols.
 - FMP throttles well below the advertised 3,000 calls/min when several processes burst: 4 shards at ~2,500/min aggregate drew persistent 429s and a cooldown. ~750 calls/min aggregate with a 10-request burst cap runs clean. The client logs every 429 wait.
