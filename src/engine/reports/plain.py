@@ -18,6 +18,11 @@ GATE_OUT = {"pass": "passes", "size_cap": "passes, but with a size cap", "checkp
             "veto": "fails — vetoed", "exclude_from_core": "not core-eligible (speculative sizing only)", "size_as_non_core": "size as non-core"}
 
 
+def _ord(n: str) -> str:
+    i = int(n)
+    return f"{i}{'th' if 10 <= i % 100 <= 20 else {1: 'st', 2: 'nd', 3: 'rd'}.get(i % 10, 'th')}"
+
+
 def _get(obj, k):
     return obj.get(k) if isinstance(obj, dict) else getattr(obj, k, None)
 
@@ -77,7 +82,7 @@ def plain_reason(r) -> str:
         "net_debt_ebitda": (f"It holds net cash ({n} times EBITDA)." if x < 0 else f"Net debt is {n} times EBITDA{' — high' if x > 3 else ''}."),
         "text_red_flags": ("No red-flag language in its filings (going concern, restatement, material weakness, covenant, investigation)." if x == 0 else f"Red-flag language in its filings: {n} mentions (going concern, restatement, material weakness, covenant, investigation)."),
         "llm_red_flags": (f"Claude's reading found {n} red flags in the latest documents." if x > 0 else "Claude's reading found no red flags in the latest documents."),
-        "pe_own_pctile": f"Its P/E sits at the {x:.0f}th percentile of its own 10-year range — {'cheaper than usual' if x < 40 else ('about normal' if x < 60 else 'dearer than usual')} for this company.",
+        "pe_own_pctile": f"Its P/E sits at the {_ord(str(int(round(x))))} percentile of its own 10-year range — {'cheaper than usual' if x < 40 else ('about normal' if x < 60 else 'dearer than usual')} for this company.",
         "peg": f"PEG ratio {n} (P/E divided by earnings growth; around 1 or below is reasonable).",
         "multiple_led_drawdown": (f"Down {n} from its 3-year high while earnings held — the fall is in the multiple, not the business." if x > 0 else "No multiple-only drawdown: any price fall tracks weaker earnings."),
         "implied_growth_gap": (f"Trailing growth exceeds what the price implies by {n} points — the market underprices its growth." if x > 0 else f"The price implies faster growth than it has delivered ({n} points)."),
@@ -159,11 +164,6 @@ _SECTOR_LINE = [
 ]
 
 
-def _ord(n: str) -> str:
-    i = int(n)
-    return f"{i}{'th' if 10 <= i % 100 <= 20 else {1: 'st', 2: 'nd', 3: 'rd'}.get(i % 10, 'th')}"
-
-
 def plain_sector_line(line: str) -> str:
     for pat, tpl in _SECTOR_LINE:
         m = re.search(pat, line)
@@ -180,29 +180,71 @@ def plain_sector_line(line: str) -> str:
     return line
 
 
-def plain_summary(c, sector_call=None, kelly_weight=None) -> str:
-    """One paragraph for the top of an idea page or a board row: what it is, why it is here, what argues against, price."""
+THESIS_HOOK = {   # the strongest reason → the one-line story (what kind of idea this is)
+    "rev_growth_ttm": "growth is the story", "rev_cagr_3y": "a multi-year compounder", "rev_accel": "growth is re-accelerating",
+    "ip_pattern": "an IP business that scales without capital", "text_demand": "demand is running ahead of capacity", "text_ai_receipts": "AI demand with receipts in hand",
+    "llm_demand": "the latest call points to strengthening demand", "theme_exposure": "sits in a theme that is spreading across the market",
+    "theme_new_entrant": "a theme has just reached this company", "gross_margin": "a high-margin toll booth", "gm_trend_3y": "pricing power is showing up in margins",
+    "incremental_margin": "operating leverage is kicking in", "ai_layer_score": "holds a layer of the AI supply chain customers cannot route around",
+    "text_pricing": "price increases are sticking", "text_leadership": "management talks like the leader, and the numbers back it",
+    "llm_position": "the indispensable #1 in its niche", "llm_pricing": "pricing power confirmed in the documents", "roic_ttm": "it compounds capital at exceptional returns",
+    "ocf_ni_ratio": "profits are real cash", "fcf_margin": "it earns while it invests", "net_debt_ebitda": "a fortress balance sheet",
+    "pe_own_pctile": "a good business on sale against its own history", "peg": "growth at a reasonable price", "multiple_led_drawdown": "the price fell while the business did not",
+    "implied_growth_gap": "the market underprices its growth", "p_fcf_avg": "cheap on cash flow", "p_ocf": "cheap on cash flow", "upside_to_peak": "room to recover to the old high",
+    "net_cash_to_cap": "a cash floor under the price", "fcf_yield": "a high cash yield", "insider_net_buy_12m": "insiders are buying", "shareholder_yield": "cash is coming back to shareholders",
+    "beat_streak": "it keeps beating expectations", "text_guidance": "guidance keeps going up", "llm_guidance": "guidance is rising", "llm_tone": "management tone is confident",
+    "eps_growth_ttm": "earnings are growing fast", "fit_score": "fits the portfolio",
+}
+VERDICT = {"buy-in-stages": "Buy in stages", "watch": "Watch, not yet a buy", "pass": "Not a buy", "excluded": "Excluded by a hard rule", "insufficient_data": "Not enough data to judge"}
+
+
+def summary_parts(c, sector_call=None, kelly_weight=None) -> dict:
+    """The one-minute summary Paul asked for: main thesis, three reasons with the strongest first, the weakest in the
+    middle and the second-strongest last, then a recap with the main risk, the price and the size. For a name that is not
+    a buy the three reasons are the reasons against."""
     d = c if isinstance(c, dict) else c.model_dump()
     reasons = [r for r in d.get("reasons", []) if r.get("kind") == "factor" and r.get("contribution") is not None]
-    pos = sorted([r for r in reasons if r["contribution"] > 0], key=lambda r: -r["contribution"])[:3]
-    neg = sorted([r for r in reasons if r["contribution"] < 0], key=lambda r: r["contribution"])[:2]
-    parts = [plain_action(d.get("action", ""), d.get("action_reason"))]
-    if pos:
-        parts.append("For it: " + " ".join(plain_reason(r) for r in pos))
-    if neg:
-        parts.append("Against it: " + " ".join(plain_reason(r) for r in neg))
-    m = d.get("metrics") or {}
-    if m.get("pe_ttm"):
-        s = f"Price: {m['pe_ttm']:.0f}× earnings"
-        if m.get("pe_own_pctile") is not None:
-            s += f", at the {m['pe_own_pctile']:.0f}th percentile of its own 10-year range"
-        parts.append(s + ".")
+    pos = sorted([r for r in reasons if r["contribution"] > 0], key=lambda r: -r["contribution"])
+    neg = sorted([r for r in reasons if r["contribution"] < 0], key=lambda r: r["contribution"])
+    action = d.get("action", "")
+    verdict = VERDICT.get(action, action)
+    is_buy = action in ("buy-in-stages", "watch")
+    top3 = (pos if is_buy else neg)[:3]
+    ordered = [top3[0], top3[2], top3[1]] if len(top3) == 3 else top3      # strongest · weakest · second-strongest
+    sc = None
     if sector_call is not None:
         sc = sector_call if isinstance(sector_call, dict) else sector_call.model_dump()
-        parts.append(f"Sector: {sc.get('label')} is {sc.get('stance')}" + (f" ({(sc.get('bet') or {}).get('direction')}, {(sc.get('bet') or {}).get('active_bet_pp', 0):+.1f} pp vs market weight)." if sc.get("bet") else "."))
-    if kelly_weight is not None:
-        parts.append(f"Suggested size: {kelly_weight*100:.1f}% of the book (half Kelly, 15% cap)." if kelly_weight > 0 else "Suggested size: none — no positive edge after correlation with the other names.")
-    return " ".join(parts)
+    label = ((sc or {}).get("label") or d.get("theme_sector") or d.get("sector") or "").split(" — ")[0]
+    art = "an" if label[:1].upper() in "AEIOU" else "a"
+    hook = THESIS_HOOK.get((top3[0] or {}).get("factor_key"), "") if top3 else ""
+    strength = d.get("idea_strength")
+    if is_buy:
+        thesis = f"{d.get('symbol')} — {verdict}. {art.capitalize()} {label} name rated {strength:.0f} of 100: {hook or 'the numbers line up'}."
+    else:
+        thesis = f"{d.get('symbol')} — {verdict}. Rated {strength:.0f} of 100 in {label}: {('the case fails on ' + (hook or 'the fundamentals')) if hook else 'the case does not hold up'}."
+    m = d.get("metrics") or {}
+    recap = [f"Bottom line: {verdict.lower()}"]
+    if is_buy and kelly_weight is not None:
+        recap[0] += f", {kelly_weight*100:.1f}% of the book at half Kelly" if kelly_weight > 0 else ", but no size yet: no positive edge after correlation with the other names"
+    recap[0] += "."
+    if is_buy and neg:
+        recap.append("Main risk: " + plain_reason(neg[0]))
+    elif not is_buy and pos:
+        recap.append("In its favour: " + plain_reason(pos[0]))
+    if m.get("pe_ttm"):
+        px = f"Price: {m['pe_ttm']:.0f}× earnings"
+        if m.get("pe_own_pctile") is not None:
+            px += f", the {_ord(str(int(round(m['pe_own_pctile']))))} percentile of its own 10-year range"
+        recap.append(px + ".")
+    if sc:
+        bet = sc.get("bet") or {}
+        recap.append(f"Sector: {label} is {sc.get('stance')}" + (f", {bet.get('active_bet_pp', 0):+.1f} pp vs market weight." if bet else "."))
+    return {"thesis": thesis, "reasons": [plain_reason(r) for r in ordered], "recap": " ".join(recap), "verdict": verdict}
+
+
+def plain_summary(c, sector_call=None, kelly_weight=None) -> str:
+    p = summary_parts(c, sector_call, kelly_weight)
+    return " ".join([p["thesis"], *[f"({i + 1}) {r}" for i, r in enumerate(p["reasons"])], p["recap"]])
 
 
 GLOSSARY = [

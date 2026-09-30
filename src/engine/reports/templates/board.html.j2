@@ -14,7 +14,8 @@
   <div class="sector-head"><b>{{ s.label }}</b> <span class="badge {{ 'buy' if s.stance=='overweight' else ('excluded' if s.stance in ('avoid','underweight') else '') }}">{{ s.stance }}</span> <span class="muted small">score {{ '%.0f'|format(s.score) if s.score is not none else '–' }} · {{ s.n_members }} members · {{ s.slots }} slots</span></div>
   {% if s.bet %}<div class="small"><b>Bet:</b> <span class="{{ 'reason-pos' if s.bet.active_bet_pp > 0.5 else ('reason-neg' if s.bet.active_bet_pp < -0.5 else '') }}">{{ '%+.1f pp'|format(s.bet.active_bet_pp) }}</span> → {{ '%.1f%%'|format(s.bet.recommended_weight*100) }} vs {{ '%.1f%%'|format(s.bet.market_weight*100) }} market weight{% if s.bet.kelly_implied_weight %} · picks' Kelly {{ '%.0f%%'|format(s.bet.kelly_implied_weight*100) }}{% endif %}</div>
   {% if s.bet.cycle %}<div class="small muted">Cycle: {{ s.bet.cycle.phase }} — {{ s.bet.cycle.theme }} in {{ '%.0f%%'|format(s.bet.cycle.breadth_now) }} of calls ({{ s.bet.cycle.quarter }}), peak {{ '%.0f%%'|format(s.bet.cycle.breadth_peak) }}, {{ s.bet.cycle.trend }}{% if s.bet.cycle.cycle_started %}, since {{ s.bet.cycle.cycle_started }}{% endif %}</div>{% endif %}{% endif %}
-  <details class="small"><summary class="muted">Rationale — the numbers the call used</summary><ul style="margin:6px 0 0;padding-left:18px">{% for r in s.rationale %}<li>{{ r }}</li>{% endfor %}</ul></details>
+  <div class="small muted">{{ STANCE_WORDS.get(s.stance, s.stance) }}.</div>
+  <details class="small"><summary class="muted">Why — the numbers the call used</summary><ul style="margin:6px 0 0;padding-left:18px">{% for r in s.rationale %}<li>{{ r|plain_sector_line }} <span class="muted">— {{ r }}</span></li>{% endfor %}</ul></details>
 </div>{% endfor %}
 </div>
 <div class="small muted" style="margin:0 0 8px">Stance thresholds and weights are hypotheses (D-58 / D-27). Slots go to sectors by stance first; the best Idea Strength inside each sector fills them; no slot goes to an "avoid" sector. Bet = the sector's share of scored market cap × stance multiplier (overweight 1.5, neutral 1, underweight 0.5, avoid 0), renormalised, minus market weight. Cycle = the sector's theme in transcript breadth (live from 10% of calls; 25% off peak for two quarters is the exit signal, D-24).</div>
@@ -43,11 +44,17 @@
     <span class="stat"><b>{{ '%.0f'|format(c.metrics.pe_own_pctile) if c.metrics.pe_own_pctile is not none else '–' }}</b> <span class="muted small">own pct</span></span>
     <span class="stat"><b>{{ '%+.0f%%'|format(c.metrics.rev_growth_ttm*100) if c.metrics.rev_growth_ttm is not none else '–' }}</b> <span class="muted small">rev g</span></span>
   </div>
-  <div class="small muted">{{ c.sector }} · theme sector <b>{{ c.theme_sector }}</b> · {{ c.asset_type }}{% if c.ai_layer != "none" %} · {{ c.ai_layer }}{% endif %} · {{ c.action_reason|truncate(110) }} · coverage {{ '%.0f'|format(c.coverage*100) }}%</div>
+  <div class="small muted">{{ c.sector }} · theme sector <b>{{ sector_map.get(c.theme_sector).label if sector_map.get(c.theme_sector) else c.theme_sector }}</b> · {{ ASSET_WORDS.get(c.asset_type, c.asset_type) }}{% if c.ai_layer != "none" %} · {{ LAYER_WORDS.get(c.ai_layer, c.ai_layer) }}{% endif %}</div>
+{% set sp = summary_parts(c, sector_map.get(c.theme_sector), c.kelly_weight) %}<div class="summary"><p class="thesis">{{ sp.thesis }}</p><ol>{% for r in sp.reasons %}<li>{{ r }}</li>{% endfor %}</ol><p class="recap">{{ sp.recap }}</p></div>
+  <details class="evidence"><summary class="small muted">Show the evidence (angles, reasons with rule ids, gates)</summary>
   <div class="chips">{% for a in angle_keys %}<span class="chip" title="{{ angle_labels[a] }}">{{ angle_short[a] }} <b>{{ '%.0f'|format(c.angle_map[a]) if c.angle_map[a] is not none else '–' }}</b></span>{% endfor %}
     {% for g in c.gates if g.outcome != 'pass' %}<span class="badge gate" title="{{ g.evidence }}">{{ g.gate_id }} {{ g.outcome }}</span>{% endfor %}{% for x in c.excluded_by %}<span class="badge hard">{{ x }}</span>{% endfor %}{% for a in c.alerts %}<span class="badge alert" title="{{ a.message }}">{{ a.rule_id }}</span>{% endfor %}</div>
   <div class="idea-body">
     <div class="small reasons">{% for r in c.top_reasons %}<div><span class="{{ 'reason-pos' if r.contribution and r.contribution>0 else 'reason-neg' }}">{{ r.rule_id }}</span> {{ r.label|truncate(70) }}{% if r.value is not none %}: <b>{{ r.value_fmt }}</b>{% endif %}</div>{% endfor %}{% if c.decisions_touched %}<div class="muted">D-IDs: {{ c.decisions_touched|join(' ') }}</div>{% endif %}</div>
+    <div class="spark" hidden></div>
+  </div>
+  </details>
+  <div class="idea-body" style="grid-template-columns:1fr">
     <div class="spark">{% if c.chart_json %}<div id="{{ c.chart_id }}" class="chart" style="height:70px"></div><script type="application/json" id="spec-{{ c.chart_id }}">{{ c.chart_json|safe }}</script>{% else %}<span class="muted small">chart on idea page</span>{% endif %}</div>
   </div>
 </div>
@@ -59,6 +66,8 @@
 .idea { padding:10px 14px; margin:8px 0; min-width:0; }
 .idea-head { display:flex; flex-wrap:wrap; gap:6px 16px; align-items:baseline; } .idea-head .rank { color:var(--muted); min-width:36px; } .idea-head .name { min-width:200px; }
 .idea-head .stat { white-space:nowrap; font-variant-numeric: tabular-nums; }
+.summary { margin:6px 0 4px; font-size:15px; line-height:1.5; } .summary .thesis { margin:4px 0; font-weight:600; } .summary ol { margin:2px 0 4px; padding-left:22px; } .summary .recap { margin:2px 0; color:var(--ink2); }
+.evidence summary { cursor:pointer; margin:2px 0 6px; }
 .chips { display:flex; flex-wrap:wrap; gap:4px 6px; margin:6px 0; }
 .chip { font-size:12px; padding:1px 7px; border-radius:6px; background:var(--page); border:1px solid var(--border); white-space:nowrap; }
 .idea-body { display:grid; grid-template-columns: 1fr 260px; gap: 10px 18px; align-items:start; } .idea-body .reasons, .idea-body .spark { min-width:0; }
@@ -70,6 +79,8 @@
 {% for c in excluded %}<tr><td><a href="ideas/{{ c.symbol }}.html">{{ c.symbol }}</a> <span class="muted small">{{ c.name }}</span></td><td class="num">{{ c.rank or '–' }}</td><td>{{ c.excluded_by|join(', ') or (c.gates|selectattr('outcome','in',['veto','avoid'])|map(attribute='gate_id')|join(', ')) }}</td><td class="small">{{ c.action_reason }}</td></tr>{% endfor %}
 </tbody></table></details>
 {% endif %}
+
+<details class="card small"><summary>Glossary — the terms on this page</summary><dl style="margin:8px 0 0">{% for term, text in GLOSSARY %}<dt><b>{{ term }}</b></dt><dd class="muted" style="margin:0 0 6px">{{ text }}</dd>{% endfor %}</dl></details>
 <div class="card small muted">Methodology: universe = {{ universe_note }}. Factors are winsorized {{ winsor }}% and z-scored within region × date; each angle is the weighted mean of its factors, ranked to a 0–100 percentile; Idea Strength = preset-weighted blend of angles minus penalties. Names with factor coverage below {{ cov_min }} are not scored. Values marked <i>hypothesis</i> are stand-ins for TBD(Paul) parameters (INV-5) — see each idea page. This is decision support for Paul; nothing here is an order or a publication.</div>
 {% endblock %}
 {% block scripts %}

@@ -2,11 +2,19 @@
 {% block nav %}<a href="../board.html">← ideas board</a> · {{ c.symbol }}{% endblock %}
 {% block content %}
 <h1>{{ c.symbol }} <span class="muted" style="font-weight:400;font-size:18px">{{ c.name }}</span></h1>
-<p class="sub">{{ c.sector }} · {{ c.industry }} · theme sector: <b>{{ c.theme_sector }}</b>{% if c.ai_chain_layer %} ({{ c.ai_chain_layer }}){% endif %} · {{ c.asset_type }} · AI layer: {{ c.ai_layer }} · role: {{ c.role_hint }} · as of {{ c.as_of }} · data basis {{ c.basis }} (period end {{ c.period_end }}) · price {{ c.price_fmt }} · mkt cap {{ c.mcap_fmt }}</p>
+<p class="sub">{{ c.sector }} · {{ c.industry }} · theme sector: <b>{{ sector_call.label if sector_call else c.theme_sector }}</b> · {{ ASSET_WORDS.get(c.asset_type, c.asset_type) }} · {{ LAYER_WORDS.get(c.ai_layer, c.ai_layer) }} · role: {{ c.role_hint }} · as of {{ c.as_of }} · data basis {{ c.basis }} (period end {{ c.period_end }}) · price {{ c.price_fmt }} · mkt cap {{ c.mcap_fmt }}</p>
+
+<div class="card" style="border-left:4px solid var(--s1)">
+  <h3 style="margin-top:0">In plain English</h3>
+{% set sp = summary_parts(c, sector_call, kelly_weight) %}<div class="summary"><p class="thesis">{{ sp.thesis }}</p><ol>{% for r in sp.reasons %}<li>{{ r }}</li>{% endfor %}</ol><p class="recap">{{ sp.recap }}</p></div>
+  <style>.summary { font-size:16px; line-height:1.55 } .summary .thesis { font-weight:600; margin:4px 0 } .summary ol { margin:4px 0; padding-left:22px } .summary .recap { color:var(--ink2); margin:4px 0 }</style>
+  {% set open_gates = c.gates|rejectattr('outcome', 'equalto', 'pass')|list %}{% if open_gates %}<ul class="small" style="margin:0;padding-left:18px">{% for g in open_gates %}<li>{{ g|plain_gate }}</li>{% endfor %}</ul>{% endif %}
+  {% if c.alerts %}<div class="small muted">{% for a in c.alerts %}⚑ {{ a.message }} {% endfor %}</div>{% endif %}
+</div>
 
 <div class="grid">
   <div class="card tile"><div class="label">Idea Strength (0–100)</div><div class="value">{{ '%.0f'|format(c.idea_strength) if c.idea_strength is not none else '–' }}</div><div class="delta">rank #{{ c.rank or '–' }} of {{ n_scored }} · coverage {{ '%.0f'|format(c.coverage*100) }}%</div></div>
-  <div class="card tile"><div class="label">Proposed action</div><div class="value"><span class="badge {{ 'buy' if c.action=='buy-in-stages' else c.action }}" style="font-size:16px">{{ c.action }}</span></div><div class="delta">{{ c.action_reason }}</div></div>
+  <div class="card tile"><div class="label">Proposed action</div><div class="value"><span class="badge {{ 'buy' if c.action=='buy-in-stages' else c.action }}" style="font-size:16px">{{ c.action }}</span></div><div class="delta">{{ plain_action(c.action, c.action_reason) }}</div></div>
   <div class="card tile"><div class="label">Size tier (hypothesis bands, D-01/D-02)</div><div class="value" style="font-size:20px">{{ c.size_tier }}</div><div class="delta">{% if c.entry_plan %}{{ c.entry_plan.tranches }} tranches · {{ c.entry_plan.size_band_pct }}% of book{% if c.entry_plan.add_level_pe_band_low %} · add level ≈ {{ '%.2f'|format(c.entry_plan.add_level_pe_band_low) }} (10th-pct P/E){% endif %}{% else %}–{% endif %}</div></div>
   <div class="card tile"><div class="label">Macro at formation</div><div class="delta">{% for k, v in macro.items() %}{{ k }} <b>{{ v }}</b><br>{% endfor %}</div></div>
 </div>
@@ -18,6 +26,10 @@
 </div>
 
 <h2>Why the engine ranks it here</h2>
+<div class="card">
+  <ul style="margin:0;padding-left:18px">{% for r in c.reasons if r.kind == 'factor' and r.contribution is not none %}{% if loop.index <= 12 %}<li class="{{ 'reason-pos' if r.contribution > 0 else 'reason-neg' }}" style="margin:3px 0"><span style="color:var(--ink)">{{ r|plain_reason }}</span> <span class="muted small">({{ r.rule_id }}, {{ r.period_end or '' }})</span></li>{% endif %}{% endfor %}</ul>
+  <div class="small muted" style="margin-top:6px">The twelve reasons that moved the score most; the full table with every rule, percentile and threshold follows.</div>
+</div>
 <div class="card">
   <div class="angles">
     {% for a in c.angles %}
@@ -100,6 +112,8 @@
 </div>
 {% endif %}
 
+
+<details class="card small"><summary>Glossary — the terms on this page</summary><dl style="margin:8px 0 0">{% for term, text in GLOSSARY %}<dt><b>{{ term }}</b></dt><dd class="muted" style="margin:0 0 6px">{{ text }}</dd>{% endfor %}</dl></details>
 {% if narrative %}
 <h2>Thesis (Stage 2 — draft by the research agent, needs Paul)</h2>
 <div class="card">{{ narrative|safe }}</div>

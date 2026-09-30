@@ -130,9 +130,9 @@ def run_evaluate(symbols: list[str], thesis: str | None = None, as_of=None, regi
         rows.append({"c": c, "place": place[c.security_id], "thesis": t, "verdict_html": verdict_html, "verdict": verdict, "since": since, "ledger_entry": ent,
                      "kelly": (sizing.get("blocks") or {}).get(c.security_id), "weight": (sizing.get("weights") or {}).get(c.security_id),
                      "sector_call": calls.get(c.theme_sector), "angles": {a.key: a.score for a in c.angles},
-                     "top_reasons": [{"rule_id": r.rule_id, "label": r.label, "value": render.fmt_value(r.value, r.unit), "contribution": r.contribution} for r in scored[:5]],
-                     "against": [{"rule_id": r.rule_id, "label": r.label, "value": render.fmt_value(r.value, r.unit), "contribution": r.contribution} for r in scored if r.contribution < 0][:4],
-                     "gates": [{"gate": g.gate_id, "outcome": g.outcome, "evidence": g.evidence} for g in c.gates if g.outcome != "pass"],
+                     "top_reasons": [{**r.model_dump(), "value_fmt": render.fmt_value(r.value, r.unit)} for r in scored[:5]],
+                     "against": [{**r.model_dump(), "value_fmt": render.fmt_value(r.value, r.unit)} for r in scored if r.contribution < 0][:4],
+                     "gates": [{"gate_id": g.gate_id, "gate": g.gate_id, "outcome": g.outcome, "evidence": g.evidence} for g in c.gates if g.outcome != "pass"],
                      "alerts": [a.message for a in c.alerts]})
     ledger.append([r["ledger_entry"] for r in rows])
     from ..screen.rules import rules

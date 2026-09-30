@@ -15,17 +15,20 @@
     <span>would sourcing choose it: <b>{{ 'yes' if r.place.would_be_chosen else 'no' }}</b>{% if r.place.excluded_by %} ({{ r.place.excluded_by|join(', ') }}){% endif %}</span>
   </div>
   {% if r.since %}<div class="small" style="margin-top:6px;padding:6px 10px;border-left:3px solid var(--s1);background:var(--page)"><b>Since the last evaluation</b> ({{ r.since.prev_ts[:10] }}, as of {{ r.since.prev_as_of }}): {% if r.since.changes %}{{ r.since.changes|join(' · ') }}{% else %}no change in rank, stance, action, Kelly size or claims{% endif %}</div>{% endif %}
+{% set sp = summary_parts(r.c, r.sector_call, r.weight) %}<div class="summary"><p class="thesis">{{ sp.thesis }}</p><ol>{% for r in sp.reasons %}<li>{{ r }}</li>{% endfor %}</ol><p class="recap">{{ sp.recap }}</p></div>
+  <style>.summary { font-size:15px; line-height:1.5; margin:8px 0 } .summary .thesis { font-weight:600; margin:4px 0 } .summary ol { margin:4px 0; padding-left:22px } .summary .recap { color:var(--ink2); margin:4px 0 }</style>
   <div class="small muted" style="margin-top:4px">angles: {% for k, v in r.angles.items() %}{{ angle_labels.get(k, k) }} {{ '%.0f'|format(v) if v is not none else '–' }} · {% endfor %}</div>
 
   {% if r.sector_call %}<h3>Sector view first — {{ r.sector_call.label }}</h3>
   <p><span class="badge {{ 'buy' if r.sector_call.stance=='overweight' else ('excluded' if r.sector_call.stance in ('avoid','underweight') else '') }}">{{ r.sector_call.stance }}</span> {% if r.sector_call.bet %}<b>Recommended bet:</b> {{ r.sector_call.bet.summary }}{% endif %}</p>
-  <ul class="small">{% for x in r.sector_call.rationale[:6] %}<li>{{ x }}</li>{% endfor %}</ul>{% endif %}
+  <div class="small muted">{{ STANCE_WORDS.get(r.sector_call.stance, r.sector_call.stance) }}.</div>
+  <ul class="small">{% for x in r.sector_call.rationale[:6] %}<li>{{ x|plain_sector_line }}</li>{% endfor %}</ul>{% endif %}
 
   <h3>What the engine sees</h3>
   <div style="display:flex;flex-wrap:wrap;gap:24px">
-    <div style="flex:1;min-width:280px"><div class="small"><b>For</b></div>{% for x in r.top_reasons if x.contribution > 0 %}<div class="small"><span class="reason-pos">{{ x.rule_id }}</span> {{ x.label|truncate(80) }}: <b>{{ x.value }}</b></div>{% endfor %}</div>
-    <div style="flex:1;min-width:280px"><div class="small"><b>Against</b></div>{% for x in r.against %}<div class="small"><span class="reason-neg">{{ x.rule_id }}</span> {{ x.label|truncate(80) }}: <b>{{ x.value }}</b></div>{% else %}<div class="small muted">no negative factor in the top contributions</div>{% endfor %}
-      {% for g in r.gates %}<div class="small"><span class="badge gate">{{ g.gate }} {{ g.outcome }}</span> {{ g.evidence|truncate(90) }}</div>{% endfor %}
+    <div style="flex:1;min-width:280px"><div class="small"><b>For</b></div><ul class="small" style="margin:4px 0;padding-left:18px">{% for x in r.top_reasons if x.contribution > 0 %}<li>{{ x|plain_reason }} <span class="muted">({{ x.rule_id }})</span></li>{% endfor %}</ul></div>
+    <div style="flex:1;min-width:280px"><div class="small"><b>Against</b></div><ul class="small" style="margin:4px 0;padding-left:18px">{% for x in r.against %}<li>{{ x|plain_reason }} <span class="muted">({{ x.rule_id }})</span></li>{% else %}<li class="muted">no negative factor among the top contributions</li>{% endfor %}
+      {% for g in r.gates %}<li><span class="badge gate">{{ g.gate }}</span> {{ g|plain_gate }}</li>{% endfor %}</ul>
       {% for a in r.alerts %}<div class="small muted">⚑ {{ a }}</div>{% endfor %}</div>
   </div>
 
@@ -47,5 +50,7 @@
 <div class="card" style="overflow-x:auto"><table><thead><tr><th>Theme sector</th><th>Stance</th><th class="num">Score</th><th class="num">Market wt</th><th class="num">Recommended</th><th class="num">Bet</th><th>Cycle</th></tr></thead><tbody>
 {% for s in sector_calls %}<tr><td>{{ s.label }}</td><td>{{ s.stance }}</td><td class="num">{{ '%.0f'|format(s.score) if s.score is not none else '–' }}</td><td class="num">{{ '%.1f%%'|format(s.bet.market_weight*100) if s.bet else '–' }}</td><td class="num">{{ '%.1f%%'|format(s.bet.recommended_weight*100) if s.bet else '–' }}</td><td class="num">{{ '%+.1f pp'|format(s.bet.active_bet_pp) if s.bet else '–' }}</td><td class="small">{{ s.bet.cycle.phase if s.bet and s.bet.cycle else '–' }}</td></tr>{% endfor %}
 </tbody></table></div>
+
+<details class="card small"><summary>Glossary — the terms on this page</summary><dl style="margin:8px 0 0">{% for term, text in GLOSSARY %}<dt><b>{{ term }}</b></dt><dd class="muted" style="margin:0 0 6px">{{ text }}</dd>{% endfor %}</dl></details>
 <div class="card small muted">Unresolved decisions touched: {{ decisions|join(', ') }}. Generated {{ generated }}.</div>
 {% endblock %}
