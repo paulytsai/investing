@@ -141,7 +141,7 @@ def pull_text(symbols: list[str] | None = None, since_year: int = 2015, workers:
     print(f"[text pull] {len(uni)} names; transcripts since {since_year}={transcripts}, latest filings={filings}", flush=True)
     tr_rows: list[dict] = []
     fl_rows: list[dict] = []
-    n_tr, n_fl = [0], [0]
+    n_tr, n_fl = [len(list(parts_tr.glob("*.parquet")))], [len(list(parts_fl.glob("*.parquet")))]   # continue numbering after an interrupted run
     tot_tr = tot_fl = done = 0
 
     def one(r):
@@ -149,20 +149,23 @@ def pull_text(symbols: list[str] | None = None, since_year: int = 2015, workers:
         out_f = _pull_filings(ed, r.security_id, r.symbol, r.cik, cal) if (filings and r.cik) else []
         return out_t, out_f
 
+    rows_all = list(uni.itertuples(index=False))
     with ThreadPoolExecutor(max_workers=workers) as ex:
-        futs = [ex.submit(one, r) for r in uni.itertuples(index=False)]
-        for f in as_completed(futs):
-            t, fl = f.result()
-            tr_rows.extend(t)
-            fl_rows.extend(fl)
-            tot_tr += len(t)
-            tot_fl += len(fl)
-            done += 1
-            if done % flush_every == 0:
-                _flush_parts(parts_tr, tr_rows, n_tr, "tr")
-                _flush_parts(parts_fl, fl_rows, n_fl, "fl")
-            if done % 50 == 0 or done == len(uni):
-                print(f"[text pull] {done}/{len(uni)} names; transcripts {tot_tr}, filing items {tot_fl}", flush=True)
+        # submit in chunks: a Future keeps its result alive until it is dropped, so one list of 3,500 futures held every
+        # transcript in RAM regardless of flushing (10 GB → OOM)
+        for start in range(0, len(rows_all), flush_every):
+            chunk = rows_all[start: start + flush_every]
+            for f in as_completed([ex.submit(one, r) for r in chunk]):
+                t, fl = f.result()
+                tr_rows.extend(t)
+                fl_rows.extend(fl)
+                tot_tr += len(t)
+                tot_fl += len(fl)
+                done += 1
+                if done % 50 == 0 or done == len(uni):
+                    print(f"[text pull] {done}/{len(uni)} names; transcripts {tot_tr}, filing items {tot_fl}", flush=True)
+            _flush_parts(parts_tr, tr_rows, n_tr, "tr")
+            _flush_parts(parts_fl, fl_rows, n_fl, "fl")
     _flush_parts(parts_tr, tr_rows, n_tr, "tr")
     _flush_parts(parts_fl, fl_rows, n_fl, "fl")
     n1 = _combine(parts_tr, "transcripts", ["security_id", "fiscal_year", "quarter"]) if n_tr[0] else 0
