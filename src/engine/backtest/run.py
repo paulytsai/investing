@@ -1,6 +1,7 @@
 """`engine backtest`: cohorts → holding returns → statistics → attribution → sensitivity → HTML report."""
 from __future__ import annotations
 
+import gc
 import json
 import os
 from datetime import datetime
@@ -111,6 +112,7 @@ def run_sensitivity(dates, region, hyp, top, universe_kind, max_sector, book, ho
     out = []
     for v in variants:
         cohorts = _score_all(dates, region, hyp, v["top"], v["preset"], universe_kind, v["sector_cap"], quiet=True)
+        gc.collect()
         results = {d: evaluate_cohort(co.picks, d, hold_months, book) for d, co in cohorts.items()}
         rows = [cohort_stats(results[d], hold_months) for d in dates]
         p = pooled_stats(rows)

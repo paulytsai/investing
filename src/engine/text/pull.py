@@ -14,7 +14,7 @@ from ..config import Hypotheses
 from ..connectors.edgar import EDGAR, split_items
 from ..connectors.fmp import FMP
 from ..pit.build import next_trading_day
-from ..store import has_table, read_df, write_table
+from ..store import read_df
 
 ITEM_CAPS = {"1": 60_000, "1A": 40_000, "7": 60_000, "2": 40_000, "4": 60_000, "5": 60_000}
 
@@ -91,18 +91,58 @@ def _pull_filings(ed: EDGAR, sid: str, sym: str, cik: str, cal, n_10k: int = 1, 
     return rows
 
 
+def _flush_parts(parts_dir, rows: list[dict], n: list[int], name: str) -> None:
+    if not rows:
+        return
+    parts_dir.mkdir(parents=True, exist_ok=True)
+    pd.DataFrame(rows).to_parquet(parts_dir / f"{name}{n[0]:04d}.parquet", index=False)
+    n[0] += 1
+    rows.clear()
+
+
+def _combine(parts_dir, table: str, keys: list[str]) -> int:
+    """Parts + the existing table → the table, deduped on `keys` (latest part wins), out of core in DuckDB."""
+    import duckdb
+
+    from ..store import TABLES, table_path
+
+    out = table_path(table)
+    cols = [f.name for f in TABLES[table]]
+    tmp = out.with_suffix(".tmp.parquet")
+    con = duckdb.connect()
+    con.execute("SET memory_limit='2GB'")
+    srcs = [f"SELECT {', '.join(cols)}, 1 AS pri FROM read_parquet('{(parts_dir / '*.parquet').as_posix()}')"]
+    if out.exists():
+        srcs.append(f"SELECT {', '.join(cols)}, 0 AS pri FROM read_parquet('{out.as_posix()}')")
+    con.execute(f"""COPY (SELECT {', '.join(cols)} FROM (SELECT *, row_number() OVER (PARTITION BY {', '.join(keys)} ORDER BY pri DESC) AS rn
+                       FROM ({' UNION ALL BY NAME '.join(srcs)})) WHERE rn = 1) TO '{tmp.as_posix()}' (FORMAT PARQUET)""")
+    n = con.execute(f"SELECT count(*) FROM read_parquet('{tmp.as_posix()}')").fetchone()[0]
+    con.close()
+    tmp.replace(out)
+    for f in parts_dir.glob("*.parquet"):
+        f.unlink()
+    return int(n)
+
+
 def pull_text(symbols: list[str] | None = None, since_year: int = 2015, workers: int = 4, filings: bool = True, transcripts: bool = True,
-              min_cap_mult: float = 1.0) -> dict:
+              min_cap_mult: float = 1.0, flush_every: int = 100) -> dict:
+    """Streams: every `flush_every` names the accumulated rows go to parquet parts (99k transcripts held in RAM once
+    OOM-killed the process); parts are combined into the tables in DuckDB at the end. Names whose latest transcript is
+    already stored are skipped for transcripts (re-runs only fetch new quarters)."""
+    from ..store import table_path
+
     uni = text_universe(min_cap_mult)
     if symbols:
         uni = uni[uni["symbol"].isin([s.upper() for s in symbols])]
     cal = _cal()
     fmp, ed = FMP(), EDGAR()
-    have_tr = read_df("transcripts")[["security_id", "fiscal_year", "quarter"]] if has_table("transcripts") else pd.DataFrame(columns=["security_id", "fiscal_year", "quarter"])
+    parts_tr = table_path("transcripts").parent / "_parts_transcripts"
+    parts_fl = table_path("filings_text").parent / "_parts_filings"
     print(f"[text pull] {len(uni)} names; transcripts since {since_year}={transcripts}, latest filings={filings}", flush=True)
     tr_rows: list[dict] = []
     fl_rows: list[dict] = []
-    done = 0
+    n_tr, n_fl = [0], [0]
+    tot_tr = tot_fl = done = 0
 
     def one(r):
         out_t = _pull_transcripts(fmp, r.security_id, r.symbol, since_year, cal) if transcripts else []
@@ -115,22 +155,18 @@ def pull_text(symbols: list[str] | None = None, since_year: int = 2015, workers:
             t, fl = f.result()
             tr_rows.extend(t)
             fl_rows.extend(fl)
+            tot_tr += len(t)
+            tot_fl += len(fl)
             done += 1
+            if done % flush_every == 0:
+                _flush_parts(parts_tr, tr_rows, n_tr, "tr")
+                _flush_parts(parts_fl, fl_rows, n_fl, "fl")
             if done % 50 == 0 or done == len(uni):
-                print(f"[text pull] {done}/{len(uni)} names; transcripts {len(tr_rows)}, filing items {len(fl_rows)}", flush=True)
-    if tr_rows:
-        new = pd.DataFrame(tr_rows)
-        old = read_df("transcripts") if has_table("transcripts") else pd.DataFrame()
-        allt = pd.concat([old, new], ignore_index=True) if not old.empty else new
-        allt = allt.drop_duplicates(["security_id", "fiscal_year", "quarter"], keep="last")
-        write_table("transcripts", allt)
-    if fl_rows:
-        new = pd.DataFrame(fl_rows)
-        old = read_df("filings_text") if has_table("filings_text") else pd.DataFrame()
-        allf = pd.concat([old, new], ignore_index=True) if not old.empty else new
-        allf = allf.drop_duplicates(["security_id", "accession", "item"], keep="last")
-        write_table("filings_text", allf)
-    rep = {"names": int(len(uni)), "transcripts_new": len(tr_rows), "filing_items_new": len(fl_rows), "at": str(date.today())}
+                print(f"[text pull] {done}/{len(uni)} names; transcripts {tot_tr}, filing items {tot_fl}", flush=True)
+    _flush_parts(parts_tr, tr_rows, n_tr, "tr")
+    _flush_parts(parts_fl, fl_rows, n_fl, "fl")
+    n1 = _combine(parts_tr, "transcripts", ["security_id", "fiscal_year", "quarter"]) if n_tr[0] else 0
+    n2 = _combine(parts_fl, "filings_text", ["security_id", "accession", "item"]) if n_fl[0] else 0
+    rep = {"names": int(len(uni)), "transcripts_new": tot_tr, "filing_items_new": tot_fl, "transcripts_total": n1, "filing_items_total": n2, "at": str(date.today())}
     print(f"[text pull] done {json.dumps(rep)}", flush=True)
-    _ = have_tr
     return rep

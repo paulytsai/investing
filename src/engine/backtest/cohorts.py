@@ -70,4 +70,9 @@ def form_cohort(as_of: pd.Timestamp, region: str, hyp: Hypotheses, top_n: int, p
         return Cohort(as_of, region, [], [])
     score_universe(cands, hyp, preset)
     picks = select_top(cands, top_n, max_per_sector)
+    chosen = {c.security_id for c in picks}
+    for c in cands:                      # non-picks keep only what rank-IC and the stats need (35 dates × ~1,900 names
+        if c.security_id not in chosen:  # with 45 reasons each reached 13 GB and was OOM-killed)
+            c.reasons, c.gates, c.alerts, c.penalties, c.fit_notes = [], [], [], [], []
+            c.metrics = {}
     return Cohort(as_of, region, picks, cands)
