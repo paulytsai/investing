@@ -63,10 +63,11 @@ def _hash(system: str, messages: list[dict], schema: dict, effort: str) -> str:
 
 
 def parse_structured(system: str, messages: list[dict], schema: type[T], *, effort: str = "high", cache_key: str | None = None,
-                     max_tokens: int = 16000, use_cache: bool = True) -> T:
+                     max_tokens: int = 16000, use_cache: bool = True, model: str | None = None) -> T:
     """Call Claude with a pydantic output schema. Cached by request hash (tests use the frozen fixture cache only)."""
     js = schema.model_json_schema()
-    key = _hash(system, messages, js, effort)
+    model = model or MODEL
+    key = _hash(system, messages, js, effort if model == MODEL else f"{effort}|{model}")
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
     path = CACHE_DIR / f"{key}.json"
     if use_cache and path.exists():
@@ -78,7 +79,7 @@ def parse_structured(system: str, messages: list[dict], schema: type[T], *, effo
     sys_blocks = [{"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}]
     last_err: Exception | None = None
     for attempt in range(2):
-        resp = client.messages.parse(model=MODEL, max_tokens=max_tokens, system=sys_blocks, messages=messages,
+        resp = client.messages.parse(model=model, max_tokens=max_tokens, system=sys_blocks, messages=messages,
                                      output_config={"effort": effort}, output_format=schema)
         BUDGET.add(resp.usage)
         if resp.stop_reason == "refusal":
@@ -86,7 +87,7 @@ def parse_structured(system: str, messages: list[dict], schema: type[T], *, effo
             raise NarrativeUnavailable(f"refused ({cat})")
         parsed = getattr(resp, "parsed_output", None)
         if parsed is not None:
-            path.write_text(json.dumps({"parsed": parsed.model_dump(mode="json"), "cache_key": cache_key, "model": MODEL,
+            path.write_text(json.dumps({"parsed": parsed.model_dump(mode="json"), "cache_key": cache_key, "model": model,
                                         "usage": {"in": resp.usage.input_tokens, "out": resp.usage.output_tokens}, "ts": time.time()}, default=str), encoding="utf-8")
             return parsed
         last_err = RuntimeError(f"no parsed output (stop_reason={resp.stop_reason})")

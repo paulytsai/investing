@@ -37,6 +37,9 @@ angles:                                  # Idea Strength sub-scores; each factor
       - {key: rev_cagr_3y, id: P-24, dir: higher_better, weight: 0.3, label: "Revenue CAGR 3y"}
       - {key: rev_accel, id: R-43, dir: higher_better, weight: 0.15, label: "Revenue growth acceleration (TTM vs prior TTM)"}
       - {key: ip_pattern, id: F-106, dir: higher_better, weight: 0.15, label: "IP-asset pattern (R&D>20% + rising GM + low capex)", threshold: hypotheses:thresholds.ip_pattern_rd_pct}
+      - {key: text_demand, id: F-42/F-40, dir: higher_better, weight: 0.2, label: "Text: demand/backlog/capacity language in calls and filings (sold out, record backlog vs destocking, push-outs)"}
+      - {key: text_ai_receipts, id: F-45/F-40, dir: higher_better, weight: 0.1, label: "Text: AI receipts — committed AI spend, backlog, token/GPU demand in the documents"}
+      - {key: llm_demand, id: F-42/F-40, dir: higher_better, weight: 0.15, label: "Claude read: demand signal (−2…+2), live-only", live_only: true}
   moat:
     label: "Moat / toll booth (関所)"
     factors:
@@ -44,6 +47,10 @@ angles:                                  # Idea Strength sub-scores; each factor
       - {key: gm_trend_3y, id: F-08, dir: higher_better, weight: 0.25, label: "Gross-margin change 3y (pricing power evidence)"}
       - {key: incremental_margin, id: F-81, dir: higher_better, weight: 0.25, label: "Incremental operating margin ΔOI/ΔRev"}
       - {key: ai_layer_score, id: F-39/F-43, dir: higher_better, weight: 0.15, label: "Intelligence-supply-chain layer (toll/upstream/scarce > commodity midstream)"}
+      - {key: text_pricing, id: F-08, dir: higher_better, weight: 0.15, label: "Text: price increases sticking vs price erosion (calls, MD&A)"}
+      - {key: text_leadership, id: F-01/R-09, dir: higher_better, weight: 0.15, label: "Text: 主役 language — share gains, #1 position, sole supplier, switching costs"}
+      - {key: llm_position, id: F-01/R-09, dir: higher_better, weight: 0.15, label: "Claude read: competitive position / indispensable #1 (−2…+2), live-only", live_only: true}
+      - {key: llm_pricing, id: F-08, dir: higher_better, weight: 0.1, label: "Claude read: pricing power (−2…+2), live-only", live_only: true}
   quality:
     label: "Quality & cash (Tillinghast / Bolton)"
     factors:
@@ -51,6 +58,8 @@ angles:                                  # Idea Strength sub-scores; each factor
       - {key: ocf_ni_ratio, id: F-82, dir: higher_better, weight: 0.2, label: "OCF ÷ net income (cash reality)"}
       - {key: fcf_margin, id: F-40/F-41, dir: higher_better, weight: 0.25, label: "FCF margin (positive during capex = 投資しながら稼ぐ)"}
       - {key: net_debt_ebitda, id: R-18, dir: lower_better, weight: 0.2, label: "Net debt / EBITDA", threshold: hypotheses:thresholds.net_debt_ebitda_max}
+      - {key: text_red_flags, id: X-19/R-18, dir: lower_better, weight: 0.15, label: "Text: going concern, restatement, material weakness, covenant, investigation language"}
+      - {key: llm_red_flags, id: X-19/R-18, dir: lower_better, weight: 0.1, label: "Claude read: number of red flags found, live-only", live_only: true}
   on_sale:
     label: "On sale vs fair value"
     factors:
@@ -73,6 +82,9 @@ angles:                                  # Idea Strength sub-scores; each factor
     label: "Fundamental momentum (Danoff)"
     factors:
       - {key: beat_streak, id: F-17, dir: higher_better, weight: 0.5, label: "Consecutive EPS beats (last 8 quarters)"}
+      - {key: text_guidance, id: F-17, dir: higher_better, weight: 0.3, label: "Text: guidance raised vs cut in calls and filings"}
+      - {key: llm_guidance, id: F-17, dir: higher_better, weight: 0.15, label: "Claude read: guidance direction (−2…+2), live-only", live_only: true}
+      - {key: llm_tone, id: F-17/R-22, dir: higher_better, weight: 0.1, label: "Claude read: management tone (−2…+2), live-only", live_only: true}
       - {key: eps_growth_ttm, id: F-17/P-23, dir: higher_better, weight: 0.5, label: "EPS growth TTM YoY"}
   portfolio_fit:
     label: "Portfolio fit"

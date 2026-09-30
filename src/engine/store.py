@@ -110,6 +110,28 @@ TABLES: dict[str, pa.Schema] = {
             ("source", pa.string()),
         ]
     ),
+    "filings_text": pa.schema(          # 10-K Items 1/1A/7, 10-Q Item 2 (MD&A), 20-F Items 4/5 — dated, first-filed
+        [
+            ("security_id", pa.string()), ("symbol", pa.string()), ("form", pa.string()), ("accession", pa.string()),
+            ("filed", pa.date32()), ("report_date", pa.date32()), ("available_from", pa.date32()), ("item", pa.string()),
+            ("text", pa.string()), ("words", pa.int32()), ("source", pa.string()),
+        ]
+    ),
+    "text_signals": pa.schema(          # lexical tier: one row per (document, category)
+        [
+            ("security_id", pa.string()), ("doc_type", pa.string()), ("doc_ref", pa.string()), ("doc_date", pa.date32()),
+            ("available_from", pa.date32()), ("category", pa.string()), ("rule_id", pa.string()), ("direction", pa.int8()),
+            ("count", pa.int16()), ("words", pa.int32()), ("quote", pa.string()), ("source", pa.string()),
+        ]
+    ),
+    "text_reads": pa.schema(            # Claude tier: structured TextRead per name (live), cached by request hash
+        [
+            ("security_id", pa.string()), ("symbol", pa.string()), ("read_date", pa.date32()), ("available_from", pa.date32()),
+            ("docs", pa.string()), ("model", pa.string()), ("demand", pa.int8()), ("pricing_power", pa.int8()), ("competitive_position", pa.int8()),
+            ("is_number_one", pa.bool_()), ("guidance", pa.int8()), ("ai_receipts", pa.int8()), ("ai_utilization", pa.int8()), ("ai_pricing", pa.int8()),
+            ("red_flags_n", pa.int16()), ("tone", pa.int8()), ("payload", pa.string()), ("source", pa.string()),
+        ]
+    ),
     "x_posts": pa.schema(
         [
             ("post_id", pa.string()), ("user_id", pa.string()), ("created_at", pa.timestamp("us")), ("available_from", pa.date32()),

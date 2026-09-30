@@ -94,6 +94,14 @@ def build_candidates(as_of: pd.Timestamp, region: str, hyp: Hypotheses, symbols:
     for k in list(thr):
         hyp.get(f"thresholds.{k}")
     rf_pct = rf_on(as_of)
+    # text layer: lexical signals (point-in-time, backtestable) and Claude reads (live-only)
+    from ..text.build import signals_for, text_factors
+    from ..text.read import reads_for
+
+    tsig = signals_for(as_of, ids)
+    tsig_by = {k: g for k, g in tsig.groupby("security_id")} if not tsig.empty else {}
+    treads = reads_for(as_of, ids)
+    treads_by = treads.set_index("security_id") if not treads.empty else None
     minfo = master.set_index("security_id")
     # one pass of grouping instead of a full-frame boolean filter per name (matters at 2,500+ names per date)
     px_by = {k: g for k, g in prices.groupby("security_id", sort=False)} if not prices.empty else {}
@@ -116,6 +124,16 @@ def build_candidates(as_of: pd.Timestamp, region: str, hyp: Hypotheses, symbols:
         m = compute_metrics(Inputs(snap, px, mcap, ev, layer, at), as_of, thr)
         ipo = info["ipo_date"] if info is not None else None
         m["listing_days"] = (as_of - pd.Timestamp(ipo)).days if ipo is not None and pd.notna(ipo) else None
+        m.update(text_factors(tsig_by.get(sid)))
+        if treads_by is not None and sid in treads_by.index:
+            tr = treads_by.loc[sid]
+            m.update({"llm_demand": float(tr["demand"]), "llm_pricing": float(tr["pricing_power"]), "llm_position": float(tr["competitive_position"]),
+                      "llm_guidance": float(tr["guidance"]), "llm_tone": float(tr["tone"]), "llm_red_flags": float(tr["red_flags_n"]),
+                      "llm_is_number_one": bool(tr["is_number_one"]), "llm_one_line": str(tr["payload"])[:0] or None})
+            try:
+                m["llm_one_line"] = json.loads(tr["payload"]).get("one_line")
+            except Exception:  # noqa: BLE001
+                pass
         m["dcf"] = run_dcf(m, snap, at, rf_pct, hyp)
         if m["dcf"] and m["dcf"].get("implied_growth_gap_pp") is not None:
             m["implied_growth_gap"] = m["dcf"]["implied_growth_gap_pp"]

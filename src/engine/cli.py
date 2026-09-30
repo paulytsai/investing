@@ -9,11 +9,13 @@ pull_app = typer.Typer(no_args_is_help=True, help="Pull raw data into data/raw."
 build_app = typer.Typer(no_args_is_help=True, help="Normalize raw data into point-in-time tables.")
 inbox_app = typer.Typer(no_args_is_help=True, help="Macro insight inbox (Timmer WAAR etc.).")
 x_app = typer.Typer(no_args_is_help=True, help="X (Twitter) source: @TimmerFidelity posts and threads.")
+text_app = typer.Typer(no_args_is_help=True, help="Text layer: transcripts and filing text as idea-sourcing signals.")
 app.add_typer(config_app, name="config")
 app.add_typer(pull_app, name="pull")
 app.add_typer(build_app, name="build")
 app.add_typer(inbox_app, name="inbox")
 app.add_typer(x_app, name="x")
+app.add_typer(text_app, name="text")
 
 
 @app.command("test-keys")
@@ -221,6 +223,50 @@ def x_summary() -> None:
     from .pit.pull_x import summary
 
     typer.echo(_json.dumps(summary(), indent=1, default=str))
+
+
+@text_app.command("pull")
+def text_pull(symbols: str = typer.Option(""), since_year: int = typer.Option(2015), workers: int = typer.Option(4),
+              cap_mult: float = typer.Option(1.0, help="names whose market cap ever reached cap_mult × the cap floor")) -> None:
+    """Pull every transcript since SINCE_YEAR and the latest 10-K/10-Q items for the cohort-relevant universe."""
+    from .text.pull import pull_text
+
+    syms = [x.strip().upper() for x in symbols.split(",") if x.strip()] or None
+    pull_text(symbols=syms, since_year=since_year, workers=workers, min_cap_mult=cap_mult)
+
+
+@text_app.command("build")
+def text_build() -> None:
+    """Lexical tier: extract dated signals from every stored document → text_signals (point-in-time)."""
+    from .text.build import build_text_signals
+
+    build_text_signals()
+
+
+@text_app.command("read")
+def text_read(limit: int = typer.Option(300, help="names to read, by latest screen rank"), model: str = typer.Option("claude-sonnet-5-5"),
+              max_usd: float = typer.Option(60.0), symbols: str = typer.Option("")) -> None:
+    """Claude tier: structured TextRead per name from its latest call and filings (live-only factors)."""
+    import glob
+    import json as _json
+
+    from .config import REPORTS_DIR
+    from .store import read_df
+    from .text.read import read_names
+
+    if symbols:
+        m = read_df("security_master", "region = 'US'")
+        want = {x.strip().upper() for x in symbols.split(",") if x.strip()}
+        pairs = [(r.security_id, r.symbol) for r in m.itertuples(index=False) if r.symbol in want]
+    else:
+        runs = sorted(glob.glob(str(REPORTS_DIR / "ideas" / "*" / "candidates.json")))
+        if not runs:
+            typer.echo("no ideas run yet; pass --symbols or run `engine ideas` first")
+            raise typer.Exit(1)
+        cands = _json.load(open(runs[-1]))
+        ranked = sorted([c for c in cands if c.get("rank") and c.get("region") == "US"], key=lambda c: c["rank"])[:limit]
+        pairs = [(c["security_id"], c["symbol"]) for c in ranked]
+    read_names(pairs, model=model, max_usd=max_usd)
 
 
 @app.command("serve")

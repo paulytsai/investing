@@ -18,6 +18,9 @@ FACTOR_UNITS = {
     "pe_own_pctile": "pctile", "peg": "x", "multiple_led_drawdown": "%", "implied_growth_gap": "pp", "upside_to_peak": "%",
     "net_cash_to_cap": "%", "fcf_yield": "%", "insider_net_buy_12m": "% of cap", "shareholder_yield": "%", "beat_streak": "qtrs",
     "eps_growth_ttm": "%", "fit_score": "score",
+    "text_demand": "per 10k words", "text_pricing": "per 10k words", "text_guidance": "per 10k words", "text_leadership": "per 10k words",
+    "text_red_flags": "per 10k words", "text_ai_receipts": "per 10k words", "llm_demand": "score", "llm_pricing": "score", "llm_position": "score",
+    "llm_guidance": "score", "llm_tone": "score", "llm_red_flags": "n",
 }
 PCT_FACTORS = {"rev_growth_ttm", "rev_cagr_3y", "gross_margin", "roic_ttm", "fcf_margin", "multiple_led_drawdown", "upside_to_peak",
                "net_cash_to_cap", "fcf_yield", "insider_net_buy_12m", "shareholder_yield", "eps_growth_ttm", "rev_accel", "gm_trend_3y"}
@@ -193,11 +196,15 @@ def score_universe(cands: list[IdeaCandidate], hyp: Hypotheses, preset_name: str
     angle_cov = pd.DataFrame(index=df.index)
     for ak, a in r["angles"].items():
         w = pd.Series({f["key"]: f["weight"] for f in a["factors"]})
+        # a factor with no data anywhere in this universe/date (e.g. live-only Claude reads inside the backtest) is not
+        # "missing coverage" for anyone: it drops out of the denominator for this date
+        present = pd.Series({k: bool(zs[k].notna().any()) for k in w.index})
+        w = w[present[present].index]
         zz = zs[w.index]
         avail = zz.notna().astype(float)
         wsum = (avail * w).sum(axis=1)
         angle_z[ak] = (zz.fillna(0) * w).sum(axis=1) / wsum.replace(0, np.nan)
-        angle_cov[ak] = wsum / w.sum()
+        angle_cov[ak] = wsum / w.sum() if len(w) and w.sum() > 0 else 0.0
     angle_pct = angle_z.rank(pct=True) * 100
 
     for c in cands:
