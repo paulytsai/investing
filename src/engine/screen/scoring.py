@@ -293,7 +293,7 @@ def _assign_actions(cands: list[IdeaCandidate], hyp: Hypotheses) -> None:
         band = (nc_band if c.size_tier == "non_core" else ([0, spec_max] if c.size_tier == "speculative" else core_band))
         if c.idea_strength >= buy_min and (on_sale or 0) >= sale_min:
             c.action = "buy-in-stages"
-            c.action_reason = f"Idea Strength {c.idea_strength:.0f} ≥ {buy_min:.0f} and on-sale angle {on_sale:.0f} ≥ {sale_min:.0f}; no avoid gate"
+            c.action_reason = f"Idea Strength {c.idea_strength:.0f} ≥ {buy_min:.0f} and on-sale angle {(on_sale or 0):.0f} ≥ {sale_min:.0f}; no avoid gate"
             lo = c.metrics.get("pe_band_low")
             eps = c.metrics.get("eps_ttm")
             level = (lo * eps) if (lo and eps and eps > 0) else None
@@ -303,7 +303,7 @@ def _assign_actions(cands: list[IdeaCandidate], hyp: Hypotheses) -> None:
             c.action = "watch"
             why = []
             if (on_sale or 0) < sale_min:
-                why.append(f"not on sale (angle {on_sale:.0f} < {sale_min:.0f}; R-31 don't chase)")
+                why.append(f"not on sale (angle {(on_sale or 0):.0f} < {sale_min:.0f}; R-31 don't chase)")
             if any(o == "checkpoint" for o in gate_out.values()):
                 why.append("open gate checkpoint")
             if c.idea_strength < buy_min:
