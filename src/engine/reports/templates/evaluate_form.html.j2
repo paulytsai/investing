@@ -1,0 +1,86 @@
+{% extends "base.html.j2" %}
+{% block nav %}<a href="/reports/index.html">runs</a> · evaluate{% endblock %}
+{% block content %}
+<h1>Evaluate my ideas</h1>
+<p class="sub">Your names and your thesis, judged by the same engine that sources ideas: placement in the full scored universe, sector view and bet, what the engine sees for and against, Kelly size, and (with the verdict) a claim-by-claim test of your thesis against the filings and calls. {% if latest %}Universe for placement: latest full screen as of <b>{{ latest }}</b>.{% else %}<b>No full screen yet</b> — run <code>engine ideas --top 20</code> first, or the page will score the whole universe (slow).{% endif %}</p>
+<form id="f" method="post" action="/evaluate/run" enctype="multipart/form-data">
+<div class="eval-grid">
+  <div class="card">
+    <h3>1. Names</h3>
+    <label class="small">Tickers (any separator; 4-digit codes are Japanese)</label>
+    <input name="symbols" id="symbols" placeholder="NVDA ORCL 7203" style="width:100%">
+    <label class="small" style="margin-top:8px;display:block">…or a CSV / TXT / XLSX of codes (symbol / ticker / code column, else the first column)</label>
+    <input type="file" name="csv" accept=".csv,.tsv,.txt,.xlsx">
+    <h3>2. Thesis</h3>
+    <div class="small muted">One section per name; the headers are added for you when you type tickers above. Leave a section blank to skip the verdict for that name.</div>
+    <textarea name="thesis" id="thesis" rows="14" style="width:100%;font:13px/1.5 ui-monospace,Menlo,monospace"></textarea>
+    <h3>3. Your scenarios (optional)</h3>
+    <div class="small muted">Total return over the cycle and probability per scenario. Left blank, the engine builds them from growth and the own-history P/E band.</div>
+    <div id="scen"></div>
+    <h3>4. Run</h3>
+    <label><input type="checkbox" name="narrate" value="1" checked> Claude verdict on the thesis + narrative pages (≈ $1 per name, cached)</label><br>
+    <label class="small">As of <input name="as_of" placeholder="{{ latest or 'YYYY-MM-DD' }}" style="width:130px"></label>
+    <div style="margin-top:12px"><button type="submit" style="font-size:16px;padding:8px 18px">Evaluate</button> <span id="status" class="muted small"></span></div>
+  </div>
+  <div class="card">
+    <h3>Thesis ledger</h3>
+    <div class="small muted">Every evaluation is kept, so the next one tells you what moved.</div>
+    {% if ledger %}<table style="margin-top:8px"><thead><tr><th>When</th><th>Name</th><th class="num">Strength</th><th class="num">Rank</th><th>Action</th><th>Stance</th><th class="num">Kelly</th><th>Verdict</th><th></th></tr></thead><tbody>
+    {% for r in ledger %}<tr><td class="small">{{ r.ts[:16] }}</td><td><b>{{ r.symbol }}</b></td><td class="num">{{ '%.0f'|format(r.strength) if r.strength is not none else '–' }}</td><td class="num">{{ r.rank or '–' }}</td><td>{{ r.action }}</td><td>{{ r.stance or '–' }}</td><td class="num">{{ '%.1f%%'|format(r.kelly_weight*100) if r.kelly_weight is not none else '–' }}</td><td>{{ r.verdict or '–' }}</td><td class="small"><a href="/reports/evaluate/{{ r.run_id }}/index.html">open</a></td></tr>{% endfor %}
+    </tbody></table>{% else %}<div class="small muted" style="margin-top:8px">No evaluations yet.</div>{% endif %}
+  </div>
+</div>
+</form>
+<style>
+.eval-grid { display:grid; grid-template-columns: 1fr 1fr; gap:12px; } .eval-grid .card { margin:0; min-width:0; }
+input, textarea, select, button { font: inherit; color: var(--ink); background: var(--surface); border:1px solid var(--border); border-radius:6px; padding:6px 8px; }
+button { background: var(--s1); color:#fff; border:0; cursor:pointer; }
+.scen-row { display:grid; grid-template-columns: 70px repeat(3, 1fr); gap:6px; align-items:center; margin:4px 0; font-size:13px; }
+.scen-row input { width:100%; padding:3px 6px; font-size:13px; }
+@media (max-width: 860px) { .eval-grid { grid-template-columns: 1fr; } .scen-row { grid-template-columns: 60px 1fr; } }
+</style>
+{% endblock %}
+{% block scripts %}
+<script>
+(function(){
+  const sym = document.getElementById('symbols'), th = document.getElementById('thesis'), scen = document.getElementById('scen');
+  function tickers(){ return Array.from(new Set(sym.value.toUpperCase().split(/[\s,;]+/).filter(x => /^[A-Z0-9][A-Z0-9.\-]{0,9}$/.test(x)))); }
+  function syncThesis(){
+    const t = tickers(); if (!t.length) return;
+    const have = new Set(Array.from(th.value.matchAll(/^##\s+([A-Z0-9.\-]+)/gm)).map(m => m[1]));
+    let add = ''; for (const s of t) if (!have.has(s)) add += (th.value.trim() || add ? '\n\n' : '') + '## ' + s + '\n';
+    if (add) th.value = (th.value.trimEnd() + add).replace(/^\n+/, '');
+  }
+  function syncScen(){
+    const t = tickers(); const keep = {};
+    scen.querySelectorAll('.scen-row').forEach(r => keep[r.dataset.sym] = r);
+    scen.innerHTML = '';
+    if (!t.length) return;
+    const head = document.createElement('div'); head.className = 'scen-row muted'; head.innerHTML = '<span></span><span>bull: return % / prob %</span><span>base</span><span>bear</span>'; scen.appendChild(head);
+    for (const s of t){
+      if (keep[s]) { scen.appendChild(keep[s]); continue; }
+      const r = document.createElement('div'); r.className = 'scen-row'; r.dataset.sym = s;
+      r.innerHTML = `<b>${s}</b>` + ['bull','base','bear'].map(k => `<span style="display:flex;gap:4px"><input name="scen_${s}_${k}_ret" placeholder="ret %"><input name="scen_${s}_${k}_prob" placeholder="prob %"></span>`).join('');
+      scen.appendChild(r);
+    }
+  }
+  sym.addEventListener('input', () => { syncThesis(); syncScen(); });
+  sym.addEventListener('change', () => { syncThesis(); syncScen(); });
+  document.getElementById('f').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const st = document.getElementById('status'); st.textContent = 'starting…';
+    const fd = new FormData(e.target);
+    const r = await fetch('/evaluate/run', {method:'POST', body: fd}); const j = await r.json();
+    if (!j.job) { st.textContent = j.error || 'failed'; return; }
+    const t0 = Date.now();
+    const poll = async () => {
+      const s = await (await fetch('/evaluate/job/' + j.job)).json();
+      if (s.state === 'done') { window.location = s.url; return; }
+      if (s.state === 'error') { st.textContent = 'failed: ' + s.error; return; }
+      st.textContent = (s.note || 'running') + ' · ' + Math.round((Date.now()-t0)/1000) + 's'; setTimeout(poll, 2000);
+    };
+    poll();
+  });
+})();
+</script>
+{% endblock %}

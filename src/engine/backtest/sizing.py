@@ -49,26 +49,36 @@ def scenario_returns(c, horizon_years: float, probs: dict[str, float]) -> tuple[
     return rets, mult, notes
 
 
-def scenario_block(c, ann_vol: float | None, horizon_years: float, fraction: float, cap: float, probs: dict[str, float] | None = None) -> dict | None:
+def scenario_block(c, ann_vol: float | None, horizon_years: float, fraction: float, cap: float, probs: dict[str, float] | None = None,
+                   override: dict | None = None) -> dict | None:
     """Scenario Kelly for one name. The bear return is floored at −1σ·√H from the name's own trailing volatility so a losing
     outcome always exists. Confidence scales the Kelly fraction. The DCF's probability-weighted upside is carried as a
     cross-check, never as the sizing input (its per-share value depends on the share-count and currency conventions)."""
-    probs = probs or {"bear": 0.25, "base": 0.50, "bull": 0.25}
-    sr = scenario_returns(c, horizon_years, probs)
-    if sr is None:
-        return None
-    rets, mult, notes = sr
+    probs = dict(probs or {"bear": 0.25, "base": 0.50, "bull": 0.25})
+    if override:                                   # Paul's own scenarios (probability, total return over the horizon) win
+        rets = {k: float(override[k]["return"]) for k in ("bear", "base", "bull")}
+        probs = {k: float(override[k]["prob"]) for k in ("bear", "base", "bull")}
+        tot = sum(probs.values()) or 1.0
+        probs = {k: v / tot for k, v in probs.items()}
+        mult = {k: 1.0 for k in rets}
+        notes = ["scenarios supplied by Paul (probability, total return over the horizon)"]
+    else:
+        sr = scenario_returns(c, horizon_years, probs)
+        if sr is None:
+            return None
+        rets, mult, notes = sr
     conf, conf_label = confidence_of(c)
     vol_floor = -(ann_vol * np.sqrt(max(horizon_years, 0.25))) if ann_vol is not None and np.isfinite(ann_vol) else -0.35
     vol_floor = float(max(vol_floor, -0.90))
     raw_bear = rets["bear"]
-    rets["bear"] = min(rets["bear"], vol_floor)
+    if not override:                               # Paul's own bear case is taken as given; the engine's is floored by volatility
+        rets["bear"] = min(rets["bear"], vol_floor)
     rets = {k: float(np.clip(v, -0.95, 5.0)) for k, v in rets.items()}
     k = kelly_scenarios([probs[x] for x in ("bear", "base", "bull")], [rets[x] for x in ("bear", "base", "bull")], fraction=fraction, cap=cap, confidence=conf)
     if not k:
         return None
     k["scenario_table"] = [{"name": n, "prob": probs[n], "return": rets[n], "multiple": mult[n],
-                            "source": ("growth × band, bear floored at −1σ·√H" if n == "bear" and rets[n] < raw_bear - 1e-12 else "growth path × multiple path")}
+                            "source": ("Paul's scenario" if override else ("growth × band, bear floored at −1σ·√H" if n == "bear" and rets[n] < raw_bear - 1e-12 else "growth path × multiple path"))}
                            for n in ("bear", "base", "bull")]
     k["assumptions"] = notes
     k["horizon_years"] = horizon_years
@@ -108,7 +118,7 @@ def trailing_stats(book, ids: list[str], as_of: pd.Timestamp, lookback_days: int
     return S, vols
 
 
-def kelly_weights(picks: list, as_of: pd.Timestamp, book, hyp, horizon_years: float, rf_pct: float | None) -> dict:
+def kelly_weights(picks: list, as_of: pd.Timestamp, book, hyp, horizon_years: float, rf_pct: float | None, overrides: dict | None = None) -> dict:
     """Per-name scenario Kelly blocks and the portfolio Kelly weights for one cohort. Returns
     {weights: {id: w}, cash: 1−Σw, blocks: {id: block}, rf, params}. Weights are long-only, half-Kelly by default,
     capped per name, gross ≤ 100% (no leverage); the remainder is cash."""
@@ -125,7 +135,7 @@ def kelly_weights(picks: list, as_of: pd.Timestamp, book, hyp, horizon_years: fl
     probs = {k: float(v["prob"]) for k, v in hyp._data["dcf"]["scenarios"].items()}
     blocks, mu, conf = {}, [], []
     for c in picks:
-        b = scenario_block(c, vols.get(c.security_id), horizon_years, fraction, cap, probs)
+        b = scenario_block(c, vols.get(c.security_id), horizon_years, fraction, cap, probs, (overrides or {}).get(c.symbol))
         blocks[c.security_id] = b
         if b is None:
             mu.append(rf)                      # no growth history → no edge assumed → zero Kelly weight

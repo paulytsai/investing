@@ -18,7 +18,7 @@ engine data pack / push / pull                          # share the derived data
 engine backtest --start 2016-03-31 --end 2024-09-30 --top 20 --sensitivity   # cycle-rule exits + Kelly weights; --exit-rule fixed --hold 24 for a fixed hold
 engine macro                   # macro dashboard (FRED lines, Federal Register, Timmer on X)
 engine x pull --first-page-only   # @TimmerFidelity: one page, report cost; --confirm for the rest
-engine serve                   # browse reports/
+engine serve                   # browse reports/ at http://127.0.0.1:8000; evaluator page at /evaluate
 pytest -q
 ```
 

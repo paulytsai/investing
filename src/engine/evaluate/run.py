@@ -20,7 +20,7 @@ from ..screen.models import IdeaCandidate
 from ..screen.run import _render, build_candidates, last_trading_day, size_positions
 from ..screen.scoring import score_universe, select_top
 from ..screen.sectors import evaluate_sectors, sector_bets
-from ..store import ledger
+from ..store import ledger as run_ledger
 
 
 def parse_thesis(text_or_path: str | None) -> dict[str, str]:
@@ -70,14 +70,18 @@ def placement(all_cands: list[IdeaCandidate], names: list[IdeaCandidate], top: i
         r = pos.get(c.security_id)
         sector_peers = sorted([x for x in all_cands if x.theme_sector == c.theme_sector and x.idea_strength is not None], key=lambda x: -(x.idea_strength or 0))
         spos = next((i + 1 for i, x in enumerate(sector_peers) if x.security_id == c.security_id), None)
+        why_not = list(c.excluded_by) + [f"{g.gate_id} {g.outcome}" for g in c.gates if g.outcome in ("veto", "avoid")]
         out[c.security_id] = {"rank": r, "of": len(ranked), "pct": (100.0 * (1 - (r - 1) / max(len(ranked), 1))) if r else None,
                               "sector_rank": spos, "sector_of": len(sector_peers), "would_be_chosen": c.security_id in chosen,
-                              "eligible": c.eligible, "excluded_by": list(c.excluded_by)}
+                              "eligible": c.eligible, "excluded_by": why_not or (["not in the sector-first top-N"] if not c.eligible else [])}
     return out
 
 
 def run_evaluate(symbols: list[str], thesis: str | None = None, as_of=None, region: str = "US", narrate: bool = False, universe: str = "latest",
-                 top: int = 20, out_dir=None) -> dict:
+                 top: int = 20, out_dir=None, scenarios: dict | None = None) -> dict:
+    """`scenarios` = Paul's own {SYM: {bull: {prob, return}, base: {...}, bear: {...}}} — used for Kelly instead of the engine's."""
+    from . import ledger
+
     hyp = Hypotheses.load()
     as_of = last_trading_day(as_of)
     region = region.upper()
@@ -104,7 +108,7 @@ def run_evaluate(symbols: list[str], thesis: str | None = None, as_of=None, regi
     calls = evaluate_sectors(all_cands, as_of, hyp)
     max_sector = hyp.get("screen.max_per_sector")
     place = placement(all_cands, names, top, int(max_sector) if max_sector else None, calls)
-    sizing = size_positions(names, as_of, hyp)          # Kelly among the evaluated names (the book Paul is asking about)
+    sizing = size_positions(names, as_of, hyp, scenarios)   # Kelly among the evaluated names (the book Paul is asking about)
     sector_bets(calls, all_cands, as_of, sizing)
     run_id = f"{as_of.date()}_{datetime.now().strftime('%H%M%S')}"
     out = out_dir or (REPORTS_DIR / "evaluate" / run_id)
@@ -121,13 +125,16 @@ def run_evaluate(symbols: list[str], thesis: str | None = None, as_of=None, regi
 
             verdict_html, verdict = _vh(c, t, None)
         scored = sorted([r for r in c.reasons if r.kind == "factor" and r.contribution is not None], key=lambda r: -abs(r.contribution))
-        rows.append({"c": c, "place": place[c.security_id], "thesis": t, "verdict_html": verdict_html, "verdict": verdict,
+        ent = ledger.entry(c.symbol, str(as_of.date()), run_id, c, place[c.security_id], calls.get(c.theme_sector), (sizing.get("weights") or {}).get(c.security_id), verdict, t)
+        since = ledger.diff(ledger.previous(c.symbol), ent)
+        rows.append({"c": c, "place": place[c.security_id], "thesis": t, "verdict_html": verdict_html, "verdict": verdict, "since": since, "ledger_entry": ent,
                      "kelly": (sizing.get("blocks") or {}).get(c.security_id), "weight": (sizing.get("weights") or {}).get(c.security_id),
                      "sector_call": calls.get(c.theme_sector), "angles": {a.key: a.score for a in c.angles},
                      "top_reasons": [{"rule_id": r.rule_id, "label": r.label, "value": render.fmt_value(r.value, r.unit), "contribution": r.contribution} for r in scored[:5]],
                      "against": [{"rule_id": r.rule_id, "label": r.label, "value": render.fmt_value(r.value, r.unit), "contribution": r.contribution} for r in scored if r.contribution < 0][:4],
                      "gates": [{"gate": g.gate_id, "outcome": g.outcome, "evidence": g.evidence} for g in c.gates if g.outcome != "pass"],
                      "alerts": [a.message for a in c.alerts]})
+    ledger.append([r["ledger_entry"] for r in rows])
     from ..screen.rules import rules
 
     angle_labels = {k: v["label"] for k, v in rules()["angles"].items()}
@@ -142,7 +149,7 @@ def run_evaluate(symbols: list[str], thesis: str | None = None, as_of=None, regi
                                                      "sector_calls": {k: v.model_dump(mode="json") for k, v in calls.items() if k in {c.theme_sector for c in names}}},
                                                     indent=1, default=str))
     (out / "run.json").write_text(json.dumps({"as_of": str(as_of.date()), "title": f"Evaluate {' '.join(symbols)}", "entry": "index.html"}))
-    con = ledger()
+    con = run_ledger()
     con.execute("INSERT OR REPLACE INTO runs VALUES (?,?,?,?,?,?)", [run_id, "evaluate", as_of.date(), datetime.now(), json.dumps({"symbols": symbols}), str(out)])
     con.close()
     render.update_index()

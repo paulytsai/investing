@@ -1,7 +1,7 @@
 {% extends "base.html.j2" %}
 {% block content %}
 <h1>Engine runs</h1>
-<p class="sub">Ideas boards, backtests, drivers pages and the macro dashboard, newest first.</p>
+<p class="sub">Ideas boards, backtests, drivers pages and the macro dashboard, newest first. <a href="/evaluate"><b>Evaluate my ideas →</b></a> (the second front-end: your names and thesis, judged by the same engine; needs <code>engine serve</code>).</p>
 <div class="card"><table><thead><tr><th>Kind</th><th>Run</th><th>As of</th><th>Title</th></tr></thead><tbody>
 {% for r in runs %}<tr><td>{{ r.kind }}</td><td><a href="{{ r.href }}">{{ r.run }}</a></td><td>{{ r.as_of }}</td><td>{{ r.title }}</td></tr>{% endfor %}
 </tbody></table></div>

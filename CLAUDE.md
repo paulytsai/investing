@@ -38,7 +38,7 @@ engine drivers NVDA
 engine evaluate NVDA ORCL --thesis thesis.md --narrate   # second front-end: Paul's own ideas, placed in the same scored universe
 engine data pack | push | pull                           # derived tables to/from $ENGINE_DATA_BUCKET (keys from env; boto3 is storage transport, not a data source)
 engine backtest --start 2016-03-31 --end 2024-09-30 --top 20   # cycle-rule exits (D-24) and Kelly weights (D-01); --exit-rule fixed --hold 24
-engine serve                     # browse reports/
+engine serve                     # browse reports/ at http://127.0.0.1:8000; evaluator page at /evaluate
 pytest -q
 ```
 

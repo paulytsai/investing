@@ -39,3 +39,30 @@ def test_pack_and_unpack_roundtrip(tmp_path, monkeypatch):
     monkeypatch.setattr(ds, "DATA_DIR", dest)
     ds.unpack(arc)
     assert (dest / "pit" / "prices.parquet").read_bytes() == b"x" * 10 and not (dest / "raw").exists()
+
+
+def test_ledger_diff_reports_moves(tmp_path, monkeypatch):
+    from engine.evaluate import ledger
+
+    monkeypatch.setattr(ledger, "PATH", tmp_path / "ev.jsonl")
+    a = {"symbol": "NVDA", "as_of": "2026-06-30", "strength": 80.0, "rank": 9, "action": "watch", "stance": "neutral", "kelly_weight": 0.05,
+         "would_be_chosen": False, "verdict": "mixed", "claims": {"toll booth": "supported", "pricing power": "mixed"}}
+    ledger.append([a])
+    b = {**a, "as_of": "2026-09-25", "strength": 85.0, "rank": 4, "action": "buy-in-stages", "kelly_weight": 0.15, "would_be_chosen": True,
+         "verdict": "supported", "claims": {"toll booth": "supported", "pricing power": "supported", "sovereign demand": "unverifiable"}}
+    d = ledger.diff(ledger.previous("NVDA"), b)
+    text = " | ".join(d["changes"])
+    assert "rank: 9 → 4" in text and "Kelly weight: 5.0% → 15.0%" in text and "'pricing power': mixed → supported" in text and "new claim 'sovereign demand'" in text
+    assert ledger.diff(None, b) is None and ledger.history("NVDA")[0]["rank"] == 9
+
+
+def test_paul_scenarios_override_the_engine_scenarios():
+    from engine.backtest.sizing import scenario_block
+
+    class C:
+        symbol = "X"
+        coverage = 0.95
+        metrics = {"rev_cagr_3y": 0.30, "pe_ttm": 28.0, "pe_band_low": 32.0, "pe_band_median": 54.0, "pe_band_high": 91.0, "pe_band_n": 2400}
+    ov = {"bull": {"prob": 0.25, "return": 0.80}, "base": {"prob": 0.50, "return": 0.25}, "bear": {"prob": 0.25, "return": -0.40}}
+    b = scenario_block(C(), 0.10, 3.0, 0.5, 0.15, override=ov)
+    assert abs(b["expected_return"] - 0.225) < 1e-9 and b["scenario_table"][0]["source"] == "Paul's scenario" and "Paul" in b["assumptions"][0]

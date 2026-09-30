@@ -13,6 +13,11 @@ Built in v1 are marked ✅; proposed next steps ☐. Every item maps to the spec
   name each. Names can come from a CSV/TSV/TXT/XLSX file (a symbol/ticker/code column, else the first column; `NASDAQ:NVDA` and `7203.T`
   forms accepted; 4-digit codes route to Japan) — the same file input works for `engine ideas --symbols`, `engine pull us --symbols`
   and `engine text pull --symbols`. Answers "is my idea good, and how big?" Both programs call the same functions; a fix lands once.
+- ✅ **Evaluator page** — `engine serve` → http://127.0.0.1:8000/evaluate: tickers or a CSV upload, the thesis with one `## SYM` section per
+  name (headers pre-filled), optional bull/base/bear return and probability per name (then Kelly sizes Paul's view, taken as given, not the
+  engine's scenarios), a Claude-verdict checkbox; the run happens in the background and the page opens the result. A **thesis ledger**
+  (`data/evaluations.jsonl`) keeps one row per name per evaluation, and every result says what moved since the last time: rank, action,
+  sector stance, Kelly size, verdict, and each claim's status.
 - ✅ **Data sharing between sessions** — `engine data pack | unpack | push | pull`: one tarball of the derived tables (PIT parquet, candidate
   cache, LLM cache, text reads; raw pulls only with `--raw`) to an S3-compatible bucket named by `ENGINE_DATA_BUCKET`, credentials from the
   environment. A second Claude Code session restores the data in minutes instead of re-pulling for a day.

@@ -203,7 +203,7 @@ def run_ideas(as_of=None, top: int = 20, regions: list[str] | None = None, prese
     return {"run_id": run_id, "path": out, "chosen": chosen, "all": all_cands, "sizing": sizing}
 
 
-def size_positions(chosen: list[IdeaCandidate], as_of: pd.Timestamp, hyp: Hypotheses) -> dict:
+def size_positions(chosen: list[IdeaCandidate], as_of: pd.Timestamp, hyp: Hypotheses, overrides: dict | None = None) -> dict:
     """Kelly sizing for the chosen names (D-01 hypothesis): scenario Kelly per name from its DCF, portfolio Kelly across
     the book from the trailing covariance. Horizon = the cycle rule's expected hold."""
     if not chosen:
@@ -218,7 +218,7 @@ def size_positions(chosen: list[IdeaCandidate], as_of: pd.Timestamp, hyp: Hypoth
         print(f"[kelly] prices unavailable ({e}); no sizing")
         return {"weights": {}, "cash": 1.0, "blocks": {}, "rf": 0.0}
     horizon = (int(hyp.get("backtest.min_hold_months")) + int(hyp.get("backtest.max_hold_months"))) / 24.0
-    return kelly_weights(chosen, as_of, book, hyp, horizon, rf_on(as_of) if region == "US" else 1.0)
+    return kelly_weights(chosen, as_of, book, hyp, horizon, rf_on(as_of) if region == "US" else 1.0, overrides)
 
 
 def _view(c: IdeaCandidate) -> dict:

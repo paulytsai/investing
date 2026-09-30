@@ -1,8 +1,8 @@
 {% extends "base.html.j2" %}
-{% block nav %}<a href="../../index.html">runs</a> · evaluate{% endblock %}
+{% block nav %}<a href="../../index.html">runs</a> · <a href="/evaluate">evaluate</a> · result{% endblock %}
 {% block content %}
 <h1>Evaluate — {{ rows|map(attribute='c.symbol')|join(', ') }} <span class="muted" style="font-weight:400;font-size:18px">as of {{ as_of }}</span></h1>
-<p class="sub">Paul's names, placed inside the full scored universe of the date ({{ n_scored }} names, {{ universe_src }}): same metrics, gates, angles, sector call, text reads and Kelly as sourcing. "Would sourcing choose it" = whether the name lands in the sector-first top {{ top }}. {% if not narrate %}Run with <code>--narrate</code> for the thesis verdict and the narrative pages.{% endif %} Macro: {% for k, v in macro.items() %}{{ k }} {{ v }} · {% endfor %}</p>
+<p class="sub">Paul's names, placed inside the full scored universe of the date ({{ n_scored }} names, {{ universe_src }}): same metrics, gates, angles, sector call, text reads and Kelly as sourcing. "Would sourcing choose it" = whether the name lands in the sector-first top {{ top }}. {% if not narrate %}For the thesis verdict and the narrative pages tick "Claude verdict" on the Evaluate page (or pass <code>--narrate</code>).{% endif %} Macro: {% for k, v in macro.items() %}{{ k }} {{ v }} · {% endfor %}</p>
 
 {% for r in rows %}
 <div class="card">
@@ -12,8 +12,9 @@
     <span>Idea Strength <b>{{ '%.0f'|format(r.c.idea_strength) if r.c.idea_strength is not none else '–' }}</b></span>
     <span>rank <b>{{ r.place.rank or '–' }}</b> / {{ r.place.of }}{% if r.place.pct %} (top {{ '%.0f%%'|format(100 - r.place.pct) }}){% endif %}</span>
     <span>in its sector #{{ r.place.sector_rank or '–' }} / {{ r.place.sector_of }}</span>
-    <span>would sourcing choose it: <b>{{ 'yes' if r.place.would_be_chosen else 'no' }}</b>{% if not r.place.eligible %} (ineligible: {{ r.place.excluded_by|join(', ') }}){% endif %}</span>
+    <span>would sourcing choose it: <b>{{ 'yes' if r.place.would_be_chosen else 'no' }}</b>{% if r.place.excluded_by %} ({{ r.place.excluded_by|join(', ') }}){% endif %}</span>
   </div>
+  {% if r.since %}<div class="small" style="margin-top:6px;padding:6px 10px;border-left:3px solid var(--s1);background:var(--page)"><b>Since the last evaluation</b> ({{ r.since.prev_ts[:10] }}, as of {{ r.since.prev_as_of }}): {% if r.since.changes %}{{ r.since.changes|join(' · ') }}{% else %}no change in rank, stance, action, Kelly size or claims{% endif %}</div>{% endif %}
   <div class="small muted" style="margin-top:4px">angles: {% for k, v in r.angles.items() %}{{ angle_labels.get(k, k) }} {{ '%.0f'|format(v) if v is not none else '–' }} · {% endfor %}</div>
 
   {% if r.sector_call %}<h3>Sector view first — {{ r.sector_call.label }}</h3>
@@ -35,7 +36,7 @@
 
   {% if r.thesis %}<h3>Paul's thesis, tested</h3>
   <blockquote class="small muted" style="border-left:3px solid var(--line);margin:0 0 8px;padding-left:10px;white-space:pre-wrap">{{ r.thesis }}</blockquote>
-  {% if r.verdict_html %}{{ r.verdict_html|safe }}{% else %}<div class="small muted">Verdict needs the narrative layer (<code>--narrate</code>).</div>{% endif %}{% endif %}
+  {% if r.verdict_html %}{{ r.verdict_html|safe }}{% else %}<div class="small muted">Verdict needs the narrative layer: tick "Claude verdict" on the Evaluate page (or pass <code>--narrate</code>).</div>{% endif %}{% endif %}
   <div class="small muted" style="margin-top:8px">Full page: <a href="ideas/{{ r.c.symbol }}.html">chart, every reason with rule id and period, valuation, DCF cross-check{% if narrate %}, thesis record, lenses, checkpoints{% endif %}</a>.</div>
 </div>
 {% endfor %}
