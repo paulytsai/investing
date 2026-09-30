@@ -110,7 +110,11 @@ def _combine(parts_dir, table: str, keys: list[str]) -> int:
     cols = [f.name for f in TABLES[table]]
     tmp = out.with_suffix(".tmp.parquet")
     con = duckdb.connect()
-    con.execute("SET memory_limit='2GB'")
+    con.execute("SET memory_limit='5GB'")               # ~100k transcripts ≈ 5 GB of text: the dedupe window spills to disk
+    con.execute("SET threads=2")
+    tmpdir = out.parent / "_duckdb_tmp"
+    tmpdir.mkdir(parents=True, exist_ok=True)
+    con.execute(f"SET temp_directory='{tmpdir.as_posix()}'")
     srcs = [f"SELECT {', '.join(cols)}, 1 AS pri FROM read_parquet('{(parts_dir / '*.parquet').as_posix()}')"]
     if out.exists():
         srcs.append(f"SELECT {', '.join(cols)}, 0 AS pri FROM read_parquet('{out.as_posix()}')")
