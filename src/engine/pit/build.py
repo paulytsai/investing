@@ -395,6 +395,9 @@ def build_us() -> None:
 def build(region: str = "us") -> None:
     if region in ("us", "all"):
         build_us()
+        from .commodity import build_commodity_cycles
+
+        build_commodity_cycles("US")
     if region in ("jp", "all"):
         from .jp_fundamentals import build_jp
 

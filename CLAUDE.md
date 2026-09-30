@@ -32,13 +32,14 @@ pip install -e ".[dev]"
 engine test-keys                 # every source authenticates
 engine config check              # unresolved TBD(Paul) decisions (D-IDs)
 engine pull us --pilot           # 60-name pilot; engine pull us for the full universe
-engine build pit                 # normalize raw → point-in-time tables
+engine build pit                 # normalize raw → point-in-time tables (includes the commodity-cycle aggregates; `engine build commodity` alone)
 engine ideas --as-of 2026-09-26 --top 20 --region us
 engine drivers NVDA
 engine evaluate NVDA ORCL --thesis thesis.md --narrate   # second front-end: Paul's own ideas, placed in the same scored universe
 engine data pack | push | pull                           # derived tables to/from $ENGINE_DATA_BUCKET (keys from env; boto3 is storage transport, not a data source)
 engine backtest --start 2016-03-31 --end 2024-09-30 --top 20   # cycle-rule exits (D-24) and Kelly weights (D-01); --exit-rule fixed --hold 24
 engine serve                     # browse reports/ at http://127.0.0.1:8000; evaluator page at /evaluate
+engine mcp                       # the engine as MCP tools for Claude Desktop / Claude Code (evaluate, ideas_latest, sector_view, size, drivers)
 pytest -q
 ```
 

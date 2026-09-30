@@ -15,8 +15,14 @@
   {% if s.bet %}<div class="small"><b>Bet:</b> <span class="{{ 'reason-pos' if s.bet.active_bet_pp > 0.5 else ('reason-neg' if s.bet.active_bet_pp < -0.5 else '') }}">{{ '%+.1f pp'|format(s.bet.active_bet_pp) }}</span> → {{ '%.1f%%'|format(s.bet.recommended_weight*100) }} vs {{ '%.1f%%'|format(s.bet.market_weight*100) }} market weight{% if s.bet.kelly_implied_weight %} · picks' Kelly {{ '%.0f%%'|format(s.bet.kelly_implied_weight*100) }}{% endif %}</div>
   {% if s.bet.cycle %}<div class="small muted">Cycle: {{ s.bet.cycle.phase }} — {{ s.bet.cycle.theme }} in {{ '%.0f%%'|format(s.bet.cycle.breadth_now) }} of calls ({{ s.bet.cycle.quarter }}), peak {{ '%.0f%%'|format(s.bet.cycle.breadth_peak) }}, {{ s.bet.cycle.trend }}{% if s.bet.cycle.cycle_started %}, since {{ s.bet.cycle.cycle_started }}{% endif %}</div>{% endif %}{% endif %}
   <div class="small muted">{{ STANCE_WORDS.get(s.stance, s.stance) }}.</div>
+  {% if s.cycle_read %}<div class="small"><b>Commodity cycle:</b> {{ s.cycle_read.verdict }}</div>{% endif %}
   <details class="small"><summary class="muted">Why — the numbers the call used</summary><ul style="margin:6px 0 0;padding-left:18px">{% for r in s.rationale %}<li>{{ r|plain_sector_line }} <span class="muted">— {{ r }}</span></li>{% endfor %}</ul></details>
 </div>{% endfor %}
+</div>
+{% set ai = sector_calls|selectattr('sector', 'in', ['ai_chips','ai_infrastructure','ai_applications','ai_models','ai_energy'])|list %}{% set en = sector_calls|selectattr('sector', 'equalto', 'energy')|list %}
+<div class="card" style="border-left:4px solid var(--s2)"><b>The barbell</b> <span class="muted small">(Paul: oil and tech are the two ends)</span>
+  <div class="small" style="margin-top:4px"><b>Tech end:</b> {% for s in ai %}{{ s.label.split(' — ')[0] }} {{ s.stance }}{% if s.bet %} ({{ '%+.1f pp'|format(s.bet.active_bet_pp) }}){% endif %}{% if not loop.last %} · {% endif %}{% endfor %}</div>
+  <div class="small" style="margin-top:2px"><b>Oil end:</b> {% for s in en %}Energy {{ s.stance }}{% if s.bet %} ({{ '%+.1f pp'|format(s.bet.active_bet_pp) }}){% endif %}{% if s.cycle_read %} — {{ s.cycle_read.verdict }}{% endif %}{% else %}no energy call{% endfor %}</div>
 </div>
 <div class="small muted" style="margin:0 0 8px">Stance thresholds and weights are hypotheses (D-58 / D-27). Slots go to sectors by stance first; the best Idea Strength inside each sector fills them; no slot goes to an "avoid" sector. Bet = the sector's share of scored market cap × stance multiplier (overweight 1.5, neutral 1, underweight 0.5, avoid 0), renormalised, minus market weight. Cycle = the sector's theme in transcript breadth (live from 10% of calls; 25% off peak for two quarters is the exit signal, D-24).</div>
 {% endif %}

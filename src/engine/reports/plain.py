@@ -239,6 +239,9 @@ def summary_parts(c, sector_call=None, kelly_weight=None) -> dict:
     if sc:
         bet = sc.get("bet") or {}
         recap.append(f"Sector: {label} is {sc.get('stance')}" + (f", {bet.get('active_bet_pp', 0):+.1f} pp vs market weight." if bet else "."))
+    cc = m.get("commodity_cycle") or {}
+    if cc.get("verdict"):
+        recap.append("Commodity cycle: " + cc["verdict"])
     return {"thesis": thesis, "reasons": [plain_reason(r) for r in ordered], "recap": " ".join(recap), "verdict": verdict}
 
 

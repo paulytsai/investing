@@ -186,6 +186,14 @@ def score_universe(cands: list[IdeaCandidate], hyp: Hypotheses, preset_name: str
         if c.metrics.get("currency_mismatch"):
             c.alerts.append(Alert(rule_id="R-14", message=f"valuation not computed: {c.metrics['currency_mismatch']} (ADR reporting currency); growth and quality ratios only"))
 
+    from .commodity import cycle_read, group_for
+
+    for c in cands:                                   # commodity-group members carry their group's cycle read (plain English + penalty rule)
+        g = group_for(c.industry, c.symbol)
+        if g:
+            rd = cycle_read(g, c.as_of)
+            if rd:
+                c.metrics["commodity_cycle"] = rd
     # factor matrix
     keys = [f["key"] for a in r["angles"].values() for f in a["factors"]]
     df = pd.DataFrame({k: [c.metrics.get(k) for c in cands] for k in keys}, index=[c.security_id for c in cands]).astype(float)
@@ -268,9 +276,12 @@ def score_universe(cands: list[IdeaCandidate], hyp: Hypotheses, preset_name: str
                     c.penalties.append(ReasonComponent(rule_id=p["id"], factor_key=p["key"], label=p["label"], kind="penalty",
                                                        value=None, unit="", note=f"domicile {c.country}", contribution=-p["points"], status="scored"))
                 if p["key"] == "cyclical_high_margin_penalty" and c.asset_type in ("commodity_cyclical", "miner_resource") and (c.metrics.get("op_margin_pctile") or 0) >= 75:
-                    base -= p["points"]
+                    cr = c.metrics.get("commodity_cycle") or {}
+                    pts = p["points"] / 2 if cr.get("disciplined") else p["points"]     # capex discipline dampens the cycle: half the peak-margin penalty (D-04)
+                    base -= pts
                     c.penalties.append(ReasonComponent(rule_id=p["id"], factor_key=p["key"], label=p["label"], kind="penalty",
-                                                       value=c.metrics["op_margin_pctile"], unit="pctile", contribution=-p["points"], status="scored"))
+                                                       value=c.metrics["op_margin_pctile"], unit="pctile", contribution=-pts, status="scored",
+                                                       note=("halved: the group's capex discipline is high" if cr.get("disciplined") else None)))
         c.idea_strength = None if base is None else float(max(0.0, min(100.0, base)))
         c.eligible = not c.excluded_by and c.coverage >= cov_min and not c.stale
         if any(g.outcome in ("veto", "avoid") for g in c.gates):

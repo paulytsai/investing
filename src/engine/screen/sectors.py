@@ -67,6 +67,7 @@ class SectorCall(BaseModel):
     theme: str | None = None
     diffusion: dict = Field(default_factory=dict)
     bet: dict = Field(default_factory=dict)         # the recommended sector bet: market weight, recommended weight, active bet, Kelly-implied, cycle status
+    cycle_read: dict = Field(default_factory=dict)  # commodity-cycle read for commodity sectors (phase, capex discipline, dampening, cycle length)
 
 
 AGG = {   # aggregate: (metric key, statistic, direction, group, label)
@@ -157,6 +158,12 @@ def evaluate_sectors(cands: list[IdeaCandidate], as_of: pd.Timestamp, hyp=None) 
     wsum[avail] += float(groups_w.get("diffusion", 0))
     score_z = score_z / wsum.replace(0, np.nan)
     pct = score_z.rank(pct=True) * 100
+    from .commodity import reads_for_sectors
+
+    creads = reads_for_sectors(as_of)                # commodity cycle: disciplined trough lifts the call, undisciplined peak lowers it (D-04)
+    for s_, r in creads.items():
+        if s_ in pct.index and not np.isnan(pct[s_]):
+            pct[s_] = float(np.clip(pct[s_] + r["score_adjust"], 0, 100))
     ranks = {agg: (z[agg].rank(ascending=False)) for agg in AGG}
     ow, uw = float(k["scoring"]["stance"]["overweight_min"]), float(k["scoring"]["stance"]["underweight_max"])
     calls: dict[str, SectorCall] = {}
@@ -186,12 +193,15 @@ def evaluate_sectors(cands: list[IdeaCandidate], as_of: pd.Timestamp, hyp=None) 
         d = diff.get(s) or {}
         if d.get("ratio"):
             why.append(f"theme '{d['theme']}' in {d['breadth_now']:.0f}% of calls ({d['quarter']}), {d['ratio']:.1f}× four quarters earlier, {d['new_entrants']} new mentioners")
+        cr = creads.get(s) or {}
+        if cr:
+            why.append(f"commodity cycle: {cr['verdict']} Score {cr['score_adjust']:+.0f} points for the cycle position.")
         head = {"overweight": "Overweight", "neutral": "Neutral", "underweight": "Underweight", "avoid": "Avoid (members losing money and shrinking earnings)", "thin": "Thin sample — neutral"}[stance]
         calls[s] = SectorCall(sector=s, label=labels.get(s, s), as_of=str(pd.Timestamp(as_of).date()), n_members=len(members), n_eligible=len(elig),
                               score=sc, stance=stance, inputs={a: (None if v is None else float(v)) for a, v in inputs.items()},
                               ranks={a: (None if s not in ranks[a].index or np.isnan(ranks[a][s]) else int(ranks[a][s])) for a in AGG},
                               rationale=[f"{head}: sector score {sc:.0f}/100 across {n} theme sectors" if sc is not None else head] + why,
-                              theme=k["theme_for_sector"].get(s), diffusion=d)
+                              theme=k["theme_for_sector"].get(s), diffusion=d, cycle_read=creads.get(s) or {})
     return calls
 
 

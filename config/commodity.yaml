@@ -1,0 +1,24 @@
+# Commodity cycles (Paul, 2026-09-30): oil and tech are the two ends of the barbell. Oil has become less cyclical as capex
+# discipline grew; the same shift is watched for in every commodity-type group (memory chips run the same pattern on a longer
+# cycle). Each group is read point-in-time from its members' aggregate margins and capex. All thresholds are hypotheses (D-04).
+groups:
+  oil_gas:    {label: "Oil & gas", industries: ["Oil & Gas Exploration & Production", "Oil & Gas Integrated", "Oil & Gas Refining & Marketing", "Oil & Gas Drilling", "Oil & Gas Equipment & Services", "Oil & Gas Energy"], symbols: []}
+  memory:     {label: "Memory chips & storage", industries: [], symbols: [MU, SNDK, WDC, STX, PSTG, NTAP], min_members: 3}
+  copper:     {label: "Copper", industries: [Copper], symbols: [FCX, SCCO]}
+  steel:      {label: "Steel", industries: [Steel], symbols: []}
+  chemicals:  {label: "Chemicals", industries: [Chemicals, "Chemicals - Specialty"], symbols: []}
+  gold:       {label: "Gold miners", industries: [Gold], symbols: []}
+  shipping:   {label: "Marine shipping", industries: [Marine Shipping], symbols: []}
+  uranium:    {label: "Uranium", industries: [Uranium], symbols: [CCJ]}
+sector_group:            # which group speaks for a theme sector's cycle read (materials takes the broadest)
+  energy: oil_gas
+  materials: chemicals
+  ai_energy: uranium
+params:
+  min_members: 5
+  history_years: 10
+  peak_pctile: 80        # TTM aggregate operating margin at/above this percentile of its own history = peak
+  trough_pctile: 20
+  discipline_high: 60    # capex discipline score (0-100) at/above this = disciplined; halves the peak-margin penalty (R-15 stays HARD at the 90th pct)
+  dampened_ratio: 0.7    # swing amplitude (5y std of TTM margin) below this × the prior 5y = the cycle has dampened
+  score_adjust_max: 8    # sector score points added at a disciplined trough / subtracted at an undisciplined peak (D-58)

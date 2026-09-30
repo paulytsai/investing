@@ -31,6 +31,17 @@ Built in v1 are marked ✅; proposed next steps ☐. Every item maps to the spec
   diffusion, gives a stance (overweight / neutral / underweight / avoid / thin) and a written rationale with the numbers and ranks it used;
   stage 2 allocates the top-N slots to sectors by stance and picks the best Idea Strength inside each sector. The backtest reports each pick
   against its own sector (equal-weight of all eligible members) and splits the result into allocation (the sector calls) and selection (the names).
+- ✅ **Commodity cycles and the barbell (Paul, 2026-09-30)** — oil and tech are the two ends of the barbell, and oil has become less cyclical as capex
+  discipline grew; the engine watches for the same shift in every commodity-type group (memory runs the same pattern on a longer cycle). A build
+  step aggregates quarterly revenue, operating income, cash flow and capex per group (oil & gas, memory & storage, copper, steel, chemicals, gold
+  miners, marine shipping, uranium; `config/commodity.yaml`), point-in-time. At any date the read gives: cycle phase (aggregate TTM operating margin
+  vs the group's own ten-year range: trough / mid-cycle rising or falling / peak, with the turn), **capex discipline** (today's capex ÷ operating
+  cash flow against the group's whole history, 0–100), whether the swings have **dampened** (five-year amplitude vs the prior five), and the typical
+  cycle length (median gap between margin peaks). The read lifts a sector call at a disciplined trough and lowers it at an undisciplined peak
+  (±8 points, D-04), halves the peak-margin penalty for members of a disciplined group (R-15 stays hard at the 90th percentile), appears in every
+  commodity name's summary, and the board carries a barbell card: the tech end (the five AI layers' stances and bets) and the oil end (Energy's
+  stance, bet and cycle read). Example reads: oil 2022-06 "peak, capex 31% of cash flow vs a 62% norm, swings 0.5× — dampened"; memory 2026-09
+  "peak, margins at the 100th percentile, capex discipline 88/100, still fully cyclical, cycle ≈ 3 years".
 - ✅ **Idea Strength (0–100)** = preset-weighted blend of eight angles, each 0–100 within region × date: story & growth
   (P-24/R-43), moat/toll booth (F-01/F-43), quality & cash (F-07/F-82/F-40), on sale vs fair value (F-13/F-14/F-12),
   asymmetry (F-76), alignment (F-09 proxy/R-22), fundamental momentum (F-17), portfolio fit (R-40/R-77).

@@ -115,6 +115,14 @@ def build_pit(region: str = typer.Option("us", help="us|jp|all")) -> None:
     build(region)
 
 
+@build_app.command("commodity")
+def build_commodity() -> None:
+    """Rebuild the commodity-cycle aggregates (oil & gas, memory, copper, steel, chemicals, gold, shipping, uranium)."""
+    from .pit.commodity import build_commodity_cycles
+
+    build_commodity_cycles("US")
+
+
 @build_app.command("audit")
 def pit_audit(symbol: str, as_of: str) -> None:
     """Print the facts visible for SYMBOL on AS_OF (look-ahead audit)."""

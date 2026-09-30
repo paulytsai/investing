@@ -136,6 +136,8 @@ TABLES: dict[str, pa.Schema] = {
                                  ("available_from", pa.date32()), ("count", pa.int32()), ("words", pa.int32()), ("quote", pa.string()), ("doc_ref", pa.string())]),
     "theme_quarterly": pa.schema([("theme", pa.string()), ("quarter", pa.string()), ("n_docs", pa.int32()), ("n_docs_all", pa.int32()), ("breadth_pct", pa.float64()),
                                   ("n_sectors", pa.int32()), ("n_new_entrants", pa.int32()), ("top_sectors", pa.string()), ("new_entrants", pa.string()), ("mentions_per_doc", pa.float64())]),
+    "commodity_cycle_quarterly": pa.schema([("group", pa.string()), ("quarter_end", pa.date32()), ("n", pa.int32()), ("revenue", pa.float64()), ("op_income", pa.float64()),
+                                            ("ocf", pa.float64()), ("capex", pa.float64()), ("available_from", pa.date32())]),
     "theme_emerging": pa.schema([("quarter", pa.string()), ("term", pa.string()), ("n_docs", pa.int32()), ("ratio_vs_prior_year", pa.float64()), ("n_docs_all", pa.int32())]),
     "x_theme_weekly": pa.schema([("week", pa.date32()), ("bucket", pa.string()), ("n_threads", pa.int32()), ("sample_summary", pa.string())]),
     "x_posts": pa.schema(
