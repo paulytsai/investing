@@ -61,7 +61,7 @@ def test_kelly_weighted_cohort_and_curve_freeze_exited_picks():
     curve = overlapping_curve({cal[0]: [a, b]}, book, 24, weighted=True)
     ew = overlapping_curve({cal[0]: [a, b]}, book, 24, weighted=False)
     assert curve["portfolio"].iloc[-1] > ew["portfolio"].iloc[-1]            # Kelly puts more on the winner
-    # B's path is frozen after its exit: the weighted basket only moves with A afterwards
+    # after B's exit its proceeds track the benchmark (rising here), so the basket keeps rising with A and the index
     after = curve["portfolio"].loc[cal[31]:]
     assert (after.diff().dropna() > 0).all()
 

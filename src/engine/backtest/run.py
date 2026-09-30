@@ -186,9 +186,11 @@ def run_backtest(start="2016-03-31", end="2024-09-30", hold_months=24, top=20, r
 def run_sensitivity(dates, region, hyp, top, universe_kind, max_sector, book, hold_months, plan: ExitPlan, preset, base_cohorts=None) -> list[dict]:
     """Variants: exit rules (fixed 24m, fixed 36m, cycle) on the default preset, then presets, name counts and sector cap
     under the run's exit rule. Every row reports the equal-weight and the Kelly-weight cohort return."""
-    variants = [{"label": "exit: fixed 24m", "preset": preset, "top": top, "sector_cap": max_sector, "rule": "fixed", "hold": 24},
-                {"label": "exit: fixed 36m", "preset": preset, "top": top, "sector_cap": max_sector, "rule": "fixed", "hold": 36},
-                {"label": f"exit: cycle (min {plan.min_m}m, max {plan.max_m}m)", "preset": preset, "top": top, "sector_cap": max_sector, "rule": "cycle", "hold": hold_months}]
+    variants = [{"label": f"exit: cycle (min {plan.min_m}m, max {plan.max_m}m)", "preset": preset, "top": top, "sector_cap": max_sector, "rule": "cycle", "hold": hold_months},
+                {"label": "exit: fixed 24m", "preset": preset, "top": top, "sector_cap": max_sector, "rule": "fixed", "hold": 24},
+                {"label": "exit: fixed 36m", "preset": preset, "top": top, "sector_cap": max_sector, "rule": "fixed", "hold": 36}]
+    if plan.rule != "cycle":
+        variants = variants[1:] + variants[:1]
     for p in hyp._data["screen"]["presets"].keys():
         if p != preset:
             variants.append({"label": f"preset {p}", "preset": p, "top": top, "sector_cap": max_sector, "rule": plan.rule, "hold": hold_months})
@@ -196,6 +198,7 @@ def run_sensitivity(dates, region, hyp, top, universe_kind, max_sector, book, ho
         variants.append({"label": f"top {tn}", "preset": preset, "top": tn, "sector_cap": max_sector, "rule": plan.rule, "hold": hold_months})
     variants.append({"label": "no sector cap", "preset": preset, "top": top, "sector_cap": None, "rule": plan.rule, "hold": hold_months})
     out = []
+    common: set | None = None      # formation dates closed under the run's own exit rule: the like-for-like set for exit-rule variants
     for v in variants:
         same = base_cohorts is not None and (v["preset"], v["top"], v["sector_cap"]) == (preset, top, max_sector)
         cohorts = base_cohorts if same else _score_all(dates, region, hyp, v["top"], v["preset"], universe_kind, v["sector_cap"], quiet=True)
@@ -203,9 +206,16 @@ def run_sensitivity(dates, region, hyp, top, universe_kind, max_sector, book, ho
         vplan = ExitPlan(v["rule"], v["hold"], hyp, plan.eval_dates, plan.stances, plan.themes) if (v["rule"], v["hold"]) != (plan.rule, plan.hold_months) else plan
         results, _, sizing = _size_and_evaluate(cohorts, dates, book, vplan, hyp, region)
         rows = [cohort_stats(results[d], v["hold"], rf=sizing[d]["rf"]) for d in dates]
+        for d, row in zip(dates, rows):
+            row["formation"] = d.date()
         p = pooled_stats(rows)
+        if vplan is plan and common is None:
+            common = {r["formation"] for r in rows if r.get("n") and not r.get("in_flight")}
+        pc = pooled_stats([r for r in rows if common and r.get("formation") in common]) if common else {}
         out.append({**{k: v[k] for k in ("label", "preset", "top", "sector_cap")}, "exit": vplan.label,
-                    **{k: p.get(k) for k in ("cohorts", "mean_cohort_ret", "mean_excess", "share_cohorts_beating", "mean_batting_beat", "mean_cohort_ret_kelly", "mean_excess_kelly", "mean_hold_years")}})
+                    **{k: p.get(k) for k in ("cohorts", "mean_cohort_ret", "mean_excess", "share_cohorts_beating", "mean_batting_beat", "mean_cohort_ret_kelly", "mean_excess_kelly", "mean_hold_years")},
+                    "common_cohorts": pc.get("cohorts"), "mean_cohort_ret_common": pc.get("mean_cohort_ret"), "mean_excess_common": pc.get("mean_excess"),
+                    "mean_excess_kelly_common": pc.get("mean_excess_kelly")})
         del results
         if not same:
             del cohorts

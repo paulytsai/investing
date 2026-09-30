@@ -130,9 +130,10 @@ def evaluate_cohort(picks, formation: pd.Timestamp, hold_months: int, book: Pric
 
 def overlapping_curve(cohorts: dict[pd.Timestamp, list[PickResult]], book: PriceBook, hold_months: int, cadence_months: int = 3, weighted: bool = False) -> pd.DataFrame:
     """Portfolio of overlapping cohorts. Each cohort is a buy-and-hold basket (equal weight, or the Kelly weights with the
-    remainder in cash) whose picks may exit on different dates (cycle rule): a pick's path is frozen at its exit (cash).
-    Capital is split equally across the cohorts live on each day, so the portfolio's daily return is the mean of the live
-    baskets' daily returns — for a fixed hold this is the classic hold/cadence sleeve structure."""
+    remainder in cash) whose picks may exit on different dates (cycle rule): after a pick's exit its proceeds track the
+    benchmark until the cohort's last exit (the same convention as an acquired name), so an early exit is a switch into
+    the index, not years of idle cash. Capital is split equally across the cohorts live on each day, so the portfolio's
+    daily return is the mean of the live baskets' daily returns — for a fixed hold this is the classic sleeve structure."""
     forms = sorted(cohorts)
     daily = pd.DataFrame(index=book.cal)
     basket_rets = []
@@ -143,12 +144,16 @@ def overlapping_curve(cohorts: dict[pd.Timestamp, list[PickResult]], book: Price
         entry = min(p.entry_date for p in picks)
         last_exit = max(p.exit_date for p in picks)
         idx = daily.index[(daily.index >= entry) & (daily.index <= last_exit)]
+        bench = book.bench.reindex(idx).ffill()
         paths, ws = [], []
         for p in picks:
             s = book.path(p.security_id, entry, p.exit_date)
             if s.empty:
                 continue
-            s = s.reindex(idx).ffill()          # frozen at its exit value afterwards (cash)
+            s = s.reindex(idx).ffill()
+            after = idx > p.exit_date
+            if after.any() and p.exit_date in bench.index and bench.loc[p.exit_date] > 0:
+                s[after] = float(s.loc[p.exit_date]) * bench[after] / float(bench.loc[p.exit_date])   # proceeds track the benchmark
             paths.append(s)
             ws.append(float(p.weight) if (weighted and p.weight is not None) else 1.0)
         if not paths:
