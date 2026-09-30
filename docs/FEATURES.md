@@ -26,6 +26,17 @@ Built in v1 are marked ✅; proposed next steps ☐. Every item maps to the spec
 - ✅ Japan pilot (Core30 + Large70) screened and backtested from 2017-12-31 on J-Quants 決算短信 point-in-time data (DiscDate), split-restated per-share figures, 簡易FCF / ROIC proxies labelled.
 - ☐ Japan-specific yardsticks (総還元 vs JGB; R-38 FX-sensitivity check) and EDINET governance parsing for G1/G2.
 
+## Backtest evidence so far (US, 2016-03-31 → 2024-09-30, top 20, 24-month hold, cap-floor universe with delisted and acquired names)
+- Numeric factors only (text layer not yet in the cache): 34 complete cohorts, mean 2-year cohort return **+30.4%** vs SPY total return +32.4%
+  (excess −2.0 pp; 47% of cohorts beat) and vs the **equal-weight S&P (RSP) +25.0%** (excess **+5.4 pp**; 62% of cohorts beat) — the fair
+  comparison for an equal-weight 20-name book. Overlapping 8-sleeve portfolio 2018→2026: CAGR 11.0% vs SPY 14.4%; beta 0.98; max drawdown 36% vs 34%.
+- Which angles predicted 2-year returns (Spearman rank-IC over ~1,200 eligible names per date, Newey–West t): **quality IC 0.09 (t 3.6)**,
+  **fundamental momentum 0.05 (t 2.1)**, Idea Strength 0.05 (t 2.9); moat, on-sale and story ≈ 0; asymmetry and portfolio-fit negative.
+  The `evidence_tilt` preset built from this (quality 35%, momentum 20%) lifts the mean cohort to +32.2% (53% of cohorts beat SPY) — a D-27
+  sensitivity variant, not a replacement for Paul's weights.
+- Lesson consistent with the philosophy: cheapness on its own (own-band P/E, PEG) did not predict; quality of earnings and the direction of
+  fundamentals did. The text layer (calls and filings) is the next signal added to the cache.
+
 ## Evidence and auditability
 - ✅ Every reason carries rule id, metric, value, period, source, threshold and **threshold status** (stated / hypothesis / TBD).
 - ✅ **Unresolved decisions** panel (D-IDs) on every page; the backtest sensitivity grid is the evidence for D-27/D-08/D-25.
