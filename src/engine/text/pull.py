@@ -101,27 +101,45 @@ def _flush_parts(parts_dir, rows: list[dict], n: list[int], name: str) -> None:
 
 
 def _combine(parts_dir, table: str, keys: list[str]) -> int:
-    """Parts + the existing table → the table, deduped on `keys` (latest part wins), out of core in DuckDB."""
-    import duckdb
+    """Parts + the existing table → the table, deduped on `keys` (latest part wins), one part in memory at a time
+    (pyarrow; DuckDB's window over ~5 GB of transcript text could not be kept inside the memory limit)."""
+    import pyarrow as pa
+    import pyarrow.parquet as pq
 
     from ..store import TABLES, table_path
 
     out = table_path(table)
-    cols = [f.name for f in TABLES[table]]
-    tmp = out.with_suffix(".tmp.parquet")
-    con = duckdb.connect()
-    con.execute("SET memory_limit='5GB'")               # ~100k transcripts ≈ 5 GB of text: the dedupe window spills to disk
-    con.execute("SET threads=2")
-    tmpdir = out.parent / "_duckdb_tmp"
-    tmpdir.mkdir(parents=True, exist_ok=True)
-    con.execute(f"SET temp_directory='{tmpdir.as_posix()}'")
-    srcs = [f"SELECT {', '.join(cols)}, 1 AS pri FROM read_parquet('{(parts_dir / '*.parquet').as_posix()}')"]
+    schema = TABLES[table]
+    sources = sorted(parts_dir.glob("*.parquet"))
     if out.exists():
-        srcs.append(f"SELECT {', '.join(cols)}, 0 AS pri FROM read_parquet('{out.as_posix()}')")
-    con.execute(f"""COPY (SELECT {', '.join(cols)} FROM (SELECT *, row_number() OVER (PARTITION BY {', '.join(keys)} ORDER BY pri DESC) AS rn
-                       FROM ({' UNION ALL BY NAME '.join(srcs)})) WHERE rn = 1) TO '{tmp.as_posix()}' (FORMAT PARQUET)""")
-    n = con.execute(f"SELECT count(*) FROM read_parquet('{tmp.as_posix()}')").fetchone()[0]
-    con.close()
+        sources = [out] + sources            # earliest = lowest priority; later parts override
+    # pass 1: keys only → which (source, row) survives
+    winner: dict[tuple, tuple[int, int]] = {}
+    for si, src in enumerate(sources):
+        t = pq.read_table(src, columns=keys)
+        cols = [t.column(k).to_pylist() for k in keys]
+        for ri, key in enumerate(zip(*cols)):
+            winner[key] = (si, ri)
+    keep_rows: dict[int, set[int]] = {}
+    for si, ri in winner.values():
+        keep_rows.setdefault(si, set()).add(ri)
+    # pass 2: stream surviving rows into the final file
+    tmp = out.with_suffix(".tmp.parquet")
+    n = 0
+    with pq.ParquetWriter(tmp, schema) as w:
+        for si, src in enumerate(sources):
+            rows = keep_rows.get(si)
+            if not rows:
+                continue
+            t = pq.read_table(src)
+            mask = pa.array([i in rows for i in range(t.num_rows)], type=pa.bool_())
+            t = t.filter(mask)
+            df = t.to_pandas()
+            for f in schema:
+                if pa.types.is_date32(f.type):
+                    df[f.name] = pd.to_datetime(df[f.name], errors="coerce").dt.date
+            w.write_table(pa.Table.from_pandas(df[[f.name for f in schema]], schema=schema, preserve_index=False))
+            n += t.num_rows
     tmp.replace(out)
     for f in parts_dir.glob("*.parquet"):
         f.unlink()
