@@ -110,8 +110,8 @@ asset_type_map:                          # R-04 (HARD tag) by FMP industry keywo
 oil_majors: [XOM, CVX, COP, SHEL, BP, TTE, OXY]     # R-04 exception: barbell_insurance, not commodity_cyclical for exit logic
 
 ai_layer_map:                            # R-23 / F-39 tagging (D-58 TBD → hypothesis mapping by industry + overrides)
-  upstream: [Uranium, Oil & Gas Integrated, Oil & Gas Midstream, Utilities - Independent Power Producers, Utilities - Regulated Electric]
-  midstream_receipts: [Semiconductors, Semiconductor Equipment & Materials, Electronic Components, Computer Hardware]
+  upstream: [Uranium, Oil & Gas Integrated, Oil & Gas Midstream, Independent Power Producers, Regulated Electric, Renewable Utilities]
+  midstream_receipts: [Semiconductors, "Hardware, Equipment & Parts", Computer Hardware, Communication Equipment]
   midstream_reseller: []                 # neoclouds by override
   downstream_tollbooth: [Software - Application, Software - Infrastructure, Internet Content & Information, Entertainment, Advertising Agencies]
   overrides: {NVDA: midstream_receipts, TSM: midstream_receipts, ASML: midstream_receipts, MU: commodity_midstream, CRWV: midstream_reseller, NBIS: midstream_reseller,

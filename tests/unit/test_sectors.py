@@ -20,9 +20,11 @@ def _c(sym, sector, industry, ai=0.0, **m):
 
 
 def test_classify_ai_layers_and_point_in_time_membership():
-    assert classify(_c("NVDA", "Technology", "Semiconductors"))[0] == "ai_upstream"                       # core industry: in from the start
-    assert classify(_c("VST", "Utilities", "Utilities - Independent Power Producers", ai=0.0))[0] == "utilities"   # not yet talking AI
-    assert classify(_c("VST", "Utilities", "Utilities - Independent Power Producers", ai=5.0))[0] == "ai_infrastructure"  # joined when its calls did
+    assert classify(_c("NVDA", "Technology", "Semiconductors"))[0] == "ai_chips"                          # core industry: in from the start
+    assert classify(_c("XEL", "Utilities", "Regulated Electric", ai=0.0))[0] == "utilities"     # not yet talking AI/data-center power
+    assert classify(_c("XEL", "Utilities", "Regulated Electric", ai=5.0))[0] == "ai_energy"     # joined the energy layer when its calls did
+    assert classify(_c("MSFT", "Technology", "Software - Infrastructure"))[0] == "ai_infrastructure"       # hyperscaler = AI factory
+    assert classify(_c("GOOGL", "Communication Services", "Internet Content & Information"))[0] == "ai_models"
     assert classify(_c("DUOL", "Technology", "Software - Application", ai=0.5))[0] == "tech_other"
     assert classify(_c("DUOL", "Technology", "Software - Application", ai=4.0))[0] == "ai_applications"
     assert classify(_c("XOM", "Energy", "Oil & Gas Integrated"))[0] == "energy"
@@ -37,10 +39,10 @@ def test_sector_calls_then_slots_then_selection():
         cands.append(_c(f"H{i}", "Healthcare", "Biotechnology", rev_growth_ttm=0.1, eps_growth_ttm=0.05, roic_ttm=0.1, pe_own_pctile=50 + i))
     score_universe(cands, hyp)
     calls = evaluate_sectors(cands, pd.Timestamp("2026-09-26"), hyp)
-    assert calls["ai_upstream"].stance == "overweight" and calls["energy"].stance == "avoid"
-    assert any("median revenue growth" in r for r in calls["ai_upstream"].rationale) and calls["ai_upstream"].inputs["rev_growth_med"] > 0.4
+    assert calls["ai_chips"].stance == "overweight" and calls["energy"].stance == "avoid"
+    assert any("median revenue growth" in r for r in calls["ai_chips"].rationale) and calls["ai_chips"].inputs["rev_growth_med"] > 0.4
     slots = allocate_slots(calls, 10, 6)
-    assert slots["energy"] == 0 and slots["ai_upstream"] >= 1
+    assert slots["energy"] == 0 and slots["ai_chips"] >= 1
     picks = select_top(cands, 10, 6, calls)
-    assert picks and all(p.theme_sector != "energy" for p in picks) and sum(p.theme_sector == "ai_upstream" for p in picks) >= 1
-    assert isinstance(calls["ai_upstream"], SectorCall) and calls["ai_upstream"].slots == slots["ai_upstream"]
+    assert picks and all(p.theme_sector != "energy" for p in picks) and sum(p.theme_sector == "ai_chips" for p in picks) >= 1
+    assert isinstance(calls["ai_chips"], SectorCall) and calls["ai_chips"].slots == slots["ai_chips"]

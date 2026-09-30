@@ -33,15 +33,18 @@ def classify(c: IdeaCandidate, cfg_: dict | None = None) -> tuple[str, str | Non
     ind, sec, sym = _norm(c.industry), _norm(c.sector), (c.symbol or "").upper()
     thr = float(k["ai_theme_min_per_10k"]["value"])
     inten = float(c.metrics.get("ai_theme_intensity") or 0.0)
+    for layer, spec in k["ai_layers"].items():          # named members first (a hyperscaler is infrastructure whatever its industry code)
+        if sym in set(spec.get("symbols", [])):
+            return layer, layer
     for layer, spec in k["ai_layers"].items():
         inds = {_norm(x) for x in spec.get("industries", [])}
         always = spec.get("always", False) or ind in {_norm(x) for x in spec.get("always_industries", [])}
-        if sym in set(spec.get("symbols", [])):
-            return layer, layer
         if ind in inds and (always or inten >= thr):
             return layer, layer
-    if inten >= 2 * thr:                      # any industry, talking about AI twice the threshold: an application layer name
-        return "ai_applications", "ai_applications"
+    if inten >= 2 * thr:                      # any other industry talking about AI at twice the threshold joins by its sector
+        fb = k.get("fallback_by_sector", {})
+        layer = fb.get(c.sector or "", fb.get("default", "ai_applications"))
+        return layer, layer
     for key, spec in k["theme_sectors"].items():
         if sec in {_norm(x) for x in spec.get("sectors", [])}:
             return key, None

@@ -3,23 +3,41 @@
 # point-in-time when its own earnings calls talk about AI at intensity (theme_mentions, ai_compute family) — the sector's
 # membership expands as the theme diffuses, from the start of the AI era in the transcript archive (2015→).
 ai_theme_min_per_10k: {value: 3.0, decision_id: D-58, note: "AI-family mentions per 10k words in the two latest calls to join an AI layer from a non-core industry"}
-ai_layers:
-  ai_upstream:
-    label: "AI upstream — semis, memory, equipment"
-    industries: [Semiconductors, Semiconductor Equipment & Materials]
-    always: true                       # core industries are in from the start
+ai_layers:                          # Jensen Huang's five-layer cake: Energy → Chips → Infrastructure → Models → Applications
+  ai_energy:                        # all five must scale together; a bottleneck in one constrains the whole system
+    label: "AI 1 · Energy — power generation, grid, cooling, power equipment, uranium"
+    industries: [Regulated Electric, Independent Power Producers, Renewable Utilities, Diversified Utilities, General Utilities, Uranium, Electrical Equipment & Parts,
+                 Industrial - Machinery, Engineering & Construction, Oil & Gas Midstream, Solar, Construction, Industrial - Pollution & Treatment Controls]
+    always_industries: [Uranium]
+    symbols: [VST, CEG, TLN, NRG, GEV, VRT, CCJ, ETN, OKLO, SMR]
+  ai_chips:
+    label: "AI 2 · Chips — accelerators, CPUs, networking silicon, memory, fabs, equipment"
+    industries: [Semiconductors]
+    always: true
+    symbols: [NVDA, AMD, AVGO, TSM, ASML, MU, MRVL, ARM, LRCX, AMAT, KLAC, SNDK, WDC, STX]
   ai_infrastructure:
-    label: "AI infrastructure — hardware, networking, data-center power, uranium"
-    industries: [Computer Hardware, Communication Equipment, Electronic Components, Electrical Equipment & Parts, Uranium, Utilities - Independent Power Producers,
-                 Utilities - Regulated Electric, REIT - Specialty, Engineering & Construction, Building Products & Equipment, Specialty Industrial Machinery, Scientific & Technical Instruments]
-    always_industries: [Computer Hardware, Communication Equipment, Uranium]
-  ai_platforms:
-    label: "AI platforms — hyperscalers, cloud, foundational software"
-    industries: [Software - Infrastructure, Internet Content & Information, Information Technology Services]
-    symbols: [MSFT, GOOGL, GOOG, AMZN, META, ORCL, NVDA]
+    label: "AI 3 · Infrastructure — AI factories: hyperscale cloud, servers, networking, storage, data-center real estate, DC financing"
+    industries: [Computer Hardware, Communication Equipment, "Hardware, Equipment & Parts", Information Technology Services, Software - Infrastructure, REIT - Specialty,
+                 Real Estate - Development, Financial - Capital Markets, Technology Distributors, Consumer Electronics]
+    always_industries: [Computer Hardware, Communication Equipment]
+    symbols: [MSFT, AMZN, ORCL, CRWV, NBIS, DELL, SMCI, ANET, EQIX, DLR, OWL, IBM, IREN, APLD, CIFR, HUT, CORZ, WULF]
+  ai_models:
+    label: "AI 4 · Models — foundation and specialised models (public proxies; most model builders are private)"
+    industries: []
+    symbols: [GOOGL, GOOG, META, PLTR, RXRX, SDGR, SOUN, AI, BBAI]
   ai_applications:
-    label: "AI applications — software and services applying AI"
-    industries: [Software - Application, Internet Retail, Advertising Agencies, Entertainment, Health Information Services, Staffing & Employment Services, Consulting Services, Education & Training Services]
+    label: "AI 5 · Applications — agents, coding, healthcare, robotics, autonomy, consumer AI"
+    industries: [Software - Application, Software - Services, Internet Content & Information, Advertising Agencies, Entertainment, Electronic Gaming & Multimedia,
+                 Medical - Healthcare Information Services, Medical - Diagnostics & Research, Medical - Devices, Staffing & Employment Services, Consulting Services,
+                 Specialty Business Services, Education & Training Services, Auto - Manufacturers, Aerospace & Defense, Specialty Retail, Security & Protection Services,
+                 Internet Retail, Rental & Leasing Services]
+fallback_by_sector:                 # a name from any other industry talking about AI at ≥ 2× the threshold joins by its sector
+  Utilities: ai_energy
+  Energy: ai_energy
+  "Real Estate": ai_infrastructure
+  "Financial Services": ai_infrastructure
+  Technology: ai_infrastructure
+  default: ai_applications
 theme_sectors:                        # everything else, from the GICS-style sector (FMP profile)
   tech_other:          {label: "Technology (non-AI)",            sectors: [Technology]}
   communication:       {label: "Communication & media",          sectors: [Communication Services]}
@@ -40,9 +58,10 @@ scoring:                              # sector score = weighted z across sectors
   slots: {overweight: 3.0, neutral: 1.0, underweight: 0.25, avoid: 0.0}  # relative slot weights × eligible_members^size_power
   size_power: 0.25                    # weak size effect: the stance decides, the sector's depth only nudges
 theme_for_sector:                     # which diffusion theme speaks for each sector (breadth trend input)
-  ai_upstream: ai_compute
-  ai_infrastructure: ai_power_grid
-  ai_platforms: ai_compute
+  ai_energy: ai_power_grid
+  ai_chips: memory_hbm
+  ai_infrastructure: ai_compute
+  ai_models: ai_compute
   ai_applications: agentic_ai
   healthcare: glp1
   energy: nuclear
