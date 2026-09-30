@@ -93,7 +93,7 @@ def build_story(c, fy: pd.DataFrame | None = None, sector_call=None) -> dict:
     if m.get("operating_margin") is not None:
         earnings += f" Operating margin {_pct(m['operating_margin'])}" + (f", incremental margin {_pct(m['incremental_margin'])} on new revenue" if m.get("incremental_margin") is not None else "") + "."
     # what is driving it — management's words
-    quotes = [q for q in (m.get("text_quotes") or []) if q.get("quote")]
+    quotes = [q for q in (m.get("text_quotes") or []) if q.get("quote") and "?" not in q["quote"] and len(q["quote"]) <= 300]   # management's statements, not analysts' questions
     order = {"demand_up": 0, "ai_receipts": 1, "guidance_up": 2, "pricing_up": 3, "leadership": 4}
     quotes = sorted(quotes, key=lambda q: order.get(q.get("category"), 9))[:4]
     driving = []
