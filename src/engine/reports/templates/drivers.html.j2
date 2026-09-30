@@ -1,0 +1,19 @@
+{% extends "base.html.j2" %}
+{% block nav %}<a href="../../index.html">runs</a> · drivers · {{ symbol }}{% endblock %}
+{% block content %}
+<h1>{{ symbol }} <span class="muted" style="font-weight:400;font-size:18px">{{ name }} — drivers of past moves</span></h1>
+<p class="sub">Spec F-105: "explain every rise and fall" — phases from a ±20% zigzag on weekly closes; each move split into the EPS change and the multiple change (F-12, Δln P = Δln EPS + Δln P/E using the TTM EPS visible at each pivot); events attached from filings, earnings, insiders, Federal Register and dated macro episodes. Hindsight shock type uses later EPS and is never a signal.</p>
+<div class="card"><div id="{{ chart_id }}" class="chart" style="height:620px"></div><script type="application/json" id="spec-{{ chart_id }}">{{ chart_json|safe }}</script></div>
+<div class="card"><table><thead><tr><th>#</th><th>Phase</th><th class="num">Weeks</th><th class="num">Return</th><th class="num">Max DD within</th><th>Driver</th><th class="num">EPS share</th><th class="num">Multiple share</th><th class="num">EPS start → end</th><th class="num">SPY</th><th>Hindsight</th><th>Events</th></tr></thead><tbody>
+{% for p in phases %}<tr>
+<td>{{ p.idx }}</td><td>{{ p.start }} → {{ p.end }}{% if p.open %} <span class="badge">open</span>{% endif %}</td><td class="num">{{ p.weeks }}</td>
+<td class="num {{ 'reason-pos' if p.ret_pct>0 else 'reason-neg' }}">{{ '%+.0f%%'|format(p.ret_pct) }}</td><td class="num">{{ '%.0f%%'|format(p.max_dd_within) if p.max_dd_within is not none else '–' }}</td>
+<td>{{ p.label.replace('_',' ') }}{% if p.unexplained %} <span class="badge alert" title="no earnings change or event explains it — F-105: you don't understand the stock yet">unexplained</span>{% endif %}</td>
+<td class="num">{{ '%.0f%%'|format(p.f_eps*100) if p.f_eps is not none else '–' }}</td><td class="num">{{ '%.0f%%'|format(p.f_mult*100) if p.f_mult is not none else '–' }}</td>
+<td class="num">{{ '%.2f'|format(p.eps0) if p.eps0 is not none else '–' }} → {{ '%.2f'|format(p.eps1) if p.eps1 is not none else '–' }}</td>
+<td class="num">{{ '%+.0f%%'|format(p.bench_ret_pct) if p.bench_ret_pct is not none else '–' }}</td><td>{{ p.shock_type_hindsight or '' }}</td>
+<td class="small">{% for e in p.events %}<div>{{ e.text }}</div>{% endfor %}</td></tr>
+{% if narratives and narratives.get(p.idx) %}<tr><td></td><td colspan="11" class="small"><b>Explanation:</b> {{ narratives[p.idx].explanation }} <span class="muted">(sources: {{ narratives[p.idx].cited_sources|join(', ') }}{% if narratives[p.idx].unverified %} · {{ narratives[p.idx].unverified }} unverified{% endif %})</span></td></tr>{% endif %}
+{% endfor %}
+</tbody></table></div>
+{% endblock %}

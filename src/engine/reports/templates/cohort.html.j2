@@ -1,0 +1,19 @@
+{% extends "base.html.j2" %}
+{% block nav %}<a href="../index.html">← backtest</a> · cohort {{ formation }}{% endblock %}
+{% block content %}
+<h1>Cohort {{ formation }} <span class="muted" style="font-weight:400;font-size:18px">top {{ params.top }} · {{ params.hold_months }}-month hold</span></h1>
+<p class="sub">Mean return {{ '%+.1f%%'|format(st.ret_mean*100) if st.ret_mean is not none else '–' }} (CAGR {{ '%+.1f%%'|format(st.cagr*100) if st.cagr is not none else '–' }}, simple {{ '%+.1f%%'|format(st.simple*100) if st.simple is not none else '–' }})  vs {{ params.bench_short }} {{ '%+.1f%%'|format(st.bench_ret*100) if st.bench_ret is not none else '–' }} · batting (beat {{ params.bench_short }}) {{ '%.0f%%'|format(st.batting_beat*100) if st.batting_beat is not none else '–' }} · macro at formation: {% for k, v in st.macro.items() %}{{ k }} {{ v }} · {% endfor %}</p>
+{% for p in picks %}
+<div class="card">
+  <div style="display:flex;flex-wrap:wrap;gap:16px;align-items:flex-start">
+    <div style="flex:1;min-width:260px">
+      <div><b style="font-size:17px">{{ p.c.symbol }}</b> <span class="muted">{{ p.c.name }}</span> · {{ p.c.sector }} · <span class="badge {{ 'buy' if p.c.action=='buy-in-stages' else p.c.action }}">{{ p.c.action }}</span> strength {{ '%.0f'|format(p.c.idea_strength or 0) }}</div>
+      {% if p.r and p.r.ret is not none %}<div>entry {{ p.r.entry_date.date() }} @ {{ '%.2f'|format(p.r.entry_px) }} → exit {{ p.r.exit_date.date() }} @ {{ '%.2f'|format(p.r.exit_px) }}: <b class="{{ 'reason-pos' if p.r.ret>0 else 'reason-neg' }}">{{ '%+.1f%%'|format(p.r.ret*100) }}</b>  vs {{ params.bench_short }} {{ '%+.1f%%'|format((p.r.bench_ret or 0)*100) }}{% if p.r.status != 'ok' %} <span class="badge alert">{{ p.r.status }}</span>{% endif %}</div>{% else %}<div class="muted">no return (no prices)</div>{% endif %}
+      <div class="small muted">angles: {% for k, v in p.angles.items() %}{{ k }} {{ '%.0f'|format(v) if v is not none else '–' }} · {% endfor %}</div>
+      <div class="small">{% for x in p.reasons %}<div><span class="{{ 'reason-pos' if x.contribution>0 else 'reason-neg' }}">{{ x.rule_id }}</span> {{ x.label|truncate(70) }}: <b>{{ x.value }}</b></div>{% endfor %}</div>
+    </div>
+    <div style="flex:1;min-width:300px"><div id="{{ p.chart_id }}" class="chart" style="height:120px"></div><script type="application/json" id="spec-{{ p.chart_id }}">{{ p.chart_json|safe }}</script></div>
+  </div>
+</div>
+{% endfor %}
+{% endblock %}

@@ -1,0 +1,39 @@
+<script>
+(function(){
+  function cssVar(name){ return getComputedStyle(document.documentElement).getPropertyValue(name.replace('var(','').replace(')','')).trim(); }
+  function resolve(o){
+    if (Array.isArray(o)) return o.map(resolve);
+    if (o && typeof o === 'object') { const r = {}; for (const k in o) r[k] = resolve(o[k]); return r; }
+    if (typeof o === 'string' && o.startsWith('var(--')) return cssVar(o);
+    return o;
+  }
+  window.renderChart = function(id){
+    const el = document.getElementById('spec-' + id); if (!el || !window.Plotly) return;
+    const spec = resolve(JSON.parse(el.textContent));
+    if (spec.empty) return;
+    const panels = spec.panels; const total = panels.reduce((a,p)=>a+p.height,0);
+    const layout = { paper_bgcolor: cssVar('--surface'), plot_bgcolor: cssVar('--surface'), margin: {l:56, r:16, t:spec.compact?8:28, b:40},
+      font: {family:'system-ui,-apple-system,"Segoe UI",sans-serif', size:12, color: cssVar('--ink2')}, showlegend: !spec.compact,
+      legend: {orientation:'h', y:1.06, x:0, font:{size:11}}, hovermode:'x unified', shapes: [], annotations: [], height: spec.height || 620 };
+    let y = 1.0; const axisOf = {}; let i = 0;
+    for (const p of panels){ i++; const h = p.height/total; const key = i===1?'yaxis':'yaxis'+i; axisOf[p.id] = i===1?'y':'y'+i;
+      layout[key] = { domain: [Math.max(0,y-h+0.03), y], title: {text: p.title, font:{size:11}}, type: p.log?'log':'linear', gridcolor: cssVar('--grid'), zeroline:false, linecolor: cssVar('--axis'), tickfont:{size:11}, fixedrange: spec.compact };
+      if (p.range) layout[key].range = p.range;
+      if (p.log) { layout[key].dtick = 'D2'; layout[key].tickformat = '.3~g'; }
+      y -= h; }
+    layout.xaxis = { gridcolor: cssVar('--grid'), linecolor: cssVar('--axis'), showspikes: !spec.compact, spikemode:'across', spikethickness:1, spikecolor: cssVar('--axis'), tickfont:{size:11}, fixedrange: spec.compact };
+    const traces = spec.traces.map(t => { const tt = Object.assign({}, t); tt.yaxis = axisOf[t.panel]; tt.xaxis='x'; delete tt.panel; delete tt.overlay; return tt; });
+    for (const s of spec.shapes){ const ss = Object.assign({}, s); if (!ss.absolute_y) ss.yref = 'paper'; delete ss.panel; layout.shapes.push(ss); }
+    for (const a of spec.annotations){ const aa = Object.assign({}, a); delete aa.panel; aa.yref='paper'; layout.annotations.push(aa); }
+    // per-panel paper coords for shapes/annotations: price panel is the top one
+    const top = layout.yaxis.domain; const scale = v => top[0] + v*(top[1]-top[0]);
+    layout.shapes.forEach(s=>{ if (s.absolute_y){ delete s.absolute_y; return; } s.y0 = scale(s.y0); s.y1 = scale(s.y1); });
+    layout.annotations.forEach(a=>{ a.y = scale(a.y); });
+    Plotly.newPlot(id, traces, layout, {displayModeBar: false, responsive: true, staticPlot: spec.compact});
+  };
+  window.renderAllCharts = function(){ document.querySelectorAll('script[id^="spec-"]').forEach(el => window.renderChart(el.id.slice(5))); };
+  function ready(){ if (window.Plotly) window.renderAllCharts(); else setTimeout(ready, 150); }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', ready); else ready();
+  const mq = window.matchMedia('(prefers-color-scheme: dark)'); if (mq.addEventListener) mq.addEventListener('change', ()=>window.renderAllCharts());
+})();
+</script>

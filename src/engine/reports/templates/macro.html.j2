@@ -1,0 +1,39 @@
+{% extends "base.html.j2" %}
+{% block nav %}<a href="../../index.html">runs</a> · macro dashboard{% endblock %}
+{% block content %}
+<h1>Macro dashboard</h1>
+<p class="sub">Benchmark numbers first (10-year Treasury, inflation, real rates), spec §6.2 indicator lines, then relay-weight context (Timmer on X, inbox notes, Federal Register). ALERT-only: nothing here changes a score (R-96, R-106, INF-12 ⚑).</p>
+<div class="card strip">{% for k, v in strip.items() %}<span>{{ k }}: <b>{{ v }}</b></span>{% endfor %}</div>
+{% for cid, ctitle, cjson in charts %}
+<div class="card"><h3 style="margin-top:0">{{ ctitle }}</h3><div id="{{ cid }}" class="chart" style="height:260px"></div><script type="application/json" id="spec-{{ cid }}">{{ cjson|safe }}</script></div>
+{% endfor %}
+
+<h2>Jurrien Timmer on X (@TimmerFidelity) — threads, newest first</h2>
+{% if not xrows %}<div class="card muted">No X threads stored yet (`engine x pull`).</div>{% endif %}
+{% for t in xrows %}
+<div class="card">
+  <div class="small muted">{{ t.date }} · {{ t.n_posts }} post(s) · {{ t.n_media }} image(s) · <a href="{{ t.url }}">open on X</a> ·
+    {% if t.status == 'done' %}<span class="badge {{ 'gate' if t.market_relevant else '' }}">{{ 'market relevant' if t.market_relevant else 'personal' }}</span>{% for th in t.themes %}<span class="badge">{{ th }}</span>{% endfor %}{% for tk in t.tickers %}<span class="badge">{{ tk }}</span>{% endfor %}{% else %}<span class="badge alert">analysis pending</span>{% endif %}</div>
+  {% if t.summary %}<div><b>{{ t.summary }}</b></div>{% endif %}
+  <div style="white-space:pre-wrap">{{ t.text }}</div>
+  {% if t.media %}<div class="grid" style="margin-top:8px">{% for m in t.media %}<div><img src="{{ m.url }}" alt="chart" style="max-width:100%;border-radius:6px;border:1px solid var(--border)"></div>{% endfor %}</div>{% endif %}
+  {% for c in t.charts %}<div class="small"><b>Chart {{ c.media_key }}:</b> {{ c.what_it_shows }} — series: {{ c.series|join(', ') }} — <i>{{ c.takeaway }}</i></div>{% endfor %}
+</div>
+{% endfor %}
+
+<h2>Inbox notes (WAAR and other forwarded commentary)</h2>
+{% if not notes %}<div class="card muted">No parsed notes yet (drop files in data/inbox/&lt;source&gt;/ and run `engine inbox parse`).</div>{% endif %}
+{% for n in notes %}
+<div class="card"><div class="small muted">{{ n.published_date }} · {{ n.author }} · {{ n.source }} · {% for i in n.indicators_mentioned %}<span class="badge">{{ i }}</span>{% endfor %}</div>
+<div><b>{{ n.title }}</b> — {{ n.stance_summary }}</div>
+<ul>{% for c in n.claims[:6] %}<li>{{ c.text }} <span class="muted small">({{ c.period }})</span></li>{% endfor %}</ul>
+{% for c in n.charts %}<div class="small"><b>Chart:</b> {{ c.what_it_shows }} — <i>{{ c.takeaway }}</i></div>{% endfor %}
+</div>
+{% endfor %}
+
+<h2>Federal Register — rules, proposed rules, presidential documents (policy context)</h2>
+{% if not regrows %}<div class="card muted">No regulatory documents stored yet (`engine inbox regulatory`).</div>{% endif %}
+{% if regrows %}<div class="card"><table><thead><tr><th>Date</th><th>Type</th><th>Title</th><th>Agencies</th><th>Themes</th></tr></thead><tbody>
+{% for r in regrows %}<tr><td>{{ r.date }}</td><td>{{ r.type }}{% if r.significant %} <span class="badge alert">significant</span>{% endif %}</td><td><a href="{{ r.url }}">{{ r.title }}</a></td><td class="small">{{ r.agencies }}</td><td class="small">{{ r.themes }}</td></tr>{% endfor %}
+</tbody></table></div>{% endif %}
+{% endblock %}

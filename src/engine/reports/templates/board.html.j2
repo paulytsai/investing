@@ -1,0 +1,82 @@
+{% extends "base.html.j2" %}
+{% block nav %}<a href="../../index.html">runs</a> · ideas board{% endblock %}
+{% block content %}
+<h1>Ideas board — {{ as_of }}</h1>
+<p class="sub">{{ n_scored }} names scored in {{ regions|join(", ") }} · preset <b>{{ preset }}</b> · top {{ top }} shown by Idea Strength · click a column to re-rank · every reason cites its spec rule</p>
+<div class="strip card">
+  {% for k, v in macro.items() %}<span>{{ k }}: <b>{{ v }}</b></span>{% endfor %}
+  <span class="muted">macro as of formation date (FRED, point-in-time)</span>
+</div>
+<div class="filters">
+  <label>Region <select id="f-region"><option value="">all</option>{% for r in regions %}<option>{{ r }}</option>{% endfor %}</select></label>
+  <label>Sector <select id="f-sector"><option value="">all</option>{% for s in sectors %}<option>{{ s }}</option>{% endfor %}</select></label>
+  <label>Action <select id="f-action"><option value="">all</option><option>buy-in-stages</option><option>watch</option><option>pass</option></select></label>
+  <label>Asset type <select id="f-asset"><option value="">all</option>{% for a in asset_types %}<option>{{ a }}</option>{% endfor %}</select></label>
+  <label><input type="checkbox" id="f-onsale"> on sale only (≥50)</label>
+  <label>Rows <select id="f-rows"><option>20</option><option>50</option><option selected>{{ n_scored }}</option></select></label>
+</div>
+<div class="card" style="overflow-x:auto">
+<table id="board">
+<thead><tr>
+<th data-k="rank" class="num">#</th><th data-k="symbol">Name</th><th data-k="action">Action</th><th data-k="strength" class="num">Strength</th>
+{% for a in angle_keys %}<th data-k="{{ a }}" class="num" title="{{ angle_labels[a] }}">{{ angle_short[a] }}</th>{% endfor %}
+<th data-k="mcap" class="num">Mkt cap</th><th data-k="pe" class="num">P/E TTM</th><th data-k="pe_pct" class="num">P/E own pct</th><th data-k="growth" class="num">Rev g TTM</th>
+<th style="min-width:330px">Top reasons</th><th style="min-width:170px">Gates / alerts</th><th style="min-width:190px">Chart (3y)</th>
+</tr></thead>
+<tbody>
+{% for c in ideas %}
+<tr data-region="{{ c.region }}" data-sector="{{ c.sector }}" data-action="{{ c.action }}" data-asset="{{ c.asset_type }}" data-onsale="{{ c.angle_map.on_sale or 0 }}">
+<td class="num" data-v="{{ c.rank }}">{{ c.rank }}</td>
+<td data-v="{{ c.symbol }}" style="min-width:170px"><a href="ideas/{{ c.symbol }}.html"><b>{{ c.symbol }}</b></a> <span class="small muted">{{ c.name|truncate(28) }}</span><br><span class="small muted">{{ c.sector }} · {{ c.asset_type }}{% if c.ai_layer != "none" %} · {{ c.ai_layer }}{% endif %}</span></td>
+<td data-v="{{ c.action }}" style="min-width:150px"><span class="badge {{ 'buy' if c.action=='buy-in-stages' else c.action }}">{{ c.action }}</span><br><span class="small muted">{{ c.action_reason|truncate(70) }}</span></td>
+<td class="num" data-v="{{ c.idea_strength or 0 }}"><b>{{ '%.0f'|format(c.idea_strength or 0) }}</b><div class="bar"><i style="width:{{ c.idea_strength or 0 }}%"></i></div><span class="small muted">cov {{ '%.0f'|format(c.coverage*100) }}%</span></td>
+{% for a in angle_keys %}<td class="num" data-v="{{ c.angle_map[a] or 0 }}">{{ '%.0f'|format(c.angle_map[a]) if c.angle_map[a] is not none else '–' }}</td>{% endfor %}
+<td class="num" data-v="{{ c.market_cap or 0 }}">{{ c.mcap_fmt }}</td>
+<td class="num" data-v="{{ c.metrics.pe_ttm or 0 }}">{{ '%.1f'|format(c.metrics.pe_ttm) if c.metrics.pe_ttm else '–' }}</td>
+<td class="num" data-v="{{ c.metrics.pe_own_pctile or 0 }}">{{ '%.0f'|format(c.metrics.pe_own_pctile) if c.metrics.pe_own_pctile is not none else '–' }}</td>
+<td class="num" data-v="{{ c.metrics.rev_growth_ttm or 0 }}">{{ '%+.0f%%'|format(c.metrics.rev_growth_ttm*100) if c.metrics.rev_growth_ttm is not none else '–' }}</td>
+<td class="small">{% for r in c.top_reasons %}<div><span class="{{ 'reason-pos' if r.contribution and r.contribution>0 else 'reason-neg' }}">{{ r.rule_id }}</span> {{ r.label|truncate(56) }}{% if r.value is not none %}: <b>{{ r.value_fmt }}</b>{% endif %}</div>{% endfor %}</td>
+<td class="small">{% for g in c.gates if g.outcome != 'pass' %}<span class="badge gate" title="{{ g.evidence }}">{{ g.gate_id }} {{ g.outcome }}</span>{% endfor %}{% for x in c.excluded_by %}<span class="badge hard">{{ x }}</span>{% endfor %}{% for a in c.alerts %}<span class="badge alert" title="{{ a.message }}">{{ a.rule_id }}</span>{% endfor %}{% if c.decisions_touched %}<div class="muted">D-IDs: {{ c.decisions_touched|join(' ') }}</div>{% endif %}</td>
+<td style="min-width:180px">{% if c.chart_json %}<div id="{{ c.chart_id }}" class="chart" style="height:70px"></div><script type="application/json" id="spec-{{ c.chart_id }}">{{ c.chart_json|safe }}</script>{% else %}<span class="muted small">chart on idea page</span>{% endif %}</td>
+</tr>
+{% endfor %}
+</tbody></table>
+</div>
+{% if excluded %}
+<details class="card"><summary>{{ excluded|length }} names excluded, vetoed or avoided (HARD rules / gates)</summary>
+<table><thead><tr><th>Name</th><th>Would rank</th><th>Rule</th><th>Evidence</th></tr></thead><tbody>
+{% for c in excluded %}<tr><td><a href="ideas/{{ c.symbol }}.html">{{ c.symbol }}</a> <span class="muted small">{{ c.name }}</span></td><td class="num">{{ c.rank or '–' }}</td><td>{{ c.excluded_by|join(', ') or (c.gates|selectattr('outcome','in',['veto','avoid'])|map(attribute='gate_id')|join(', ')) }}</td><td class="small">{{ c.action_reason }}</td></tr>{% endfor %}
+</tbody></table></details>
+{% endif %}
+<div class="card small muted">Methodology: universe = {{ universe_note }}. Factors are winsorized {{ winsor }}% and z-scored within region × date; each angle is the weighted mean of its factors, ranked to a 0–100 percentile; Idea Strength = preset-weighted blend of angles minus penalties. Names with factor coverage below {{ cov_min }} are not scored. Values marked <i>hypothesis</i> are stand-ins for TBD(Paul) parameters (INV-5) — see each idea page. This is decision support for Paul; nothing here is an order or a publication.</div>
+{% endblock %}
+{% block scripts %}
+<script>
+(function(){
+  const tbl = document.getElementById('board'); const tbody = tbl.tBodies[0];
+  let sortKey = 'strength', dir = -1;
+  function applyFilters(){
+    const reg = document.getElementById('f-region').value, sec = document.getElementById('f-sector').value, act = document.getElementById('f-action').value,
+          ast = document.getElementById('f-asset').value, onsale = document.getElementById('f-onsale').checked, rows = parseInt(document.getElementById('f-rows').value);
+    let shown = 0;
+    for (const tr of tbody.rows){
+      let ok = (!reg || tr.dataset.region===reg) && (!sec || tr.dataset.sector===sec) && (!act || tr.dataset.action===act) && (!ast || tr.dataset.asset===ast) && (!onsale || parseFloat(tr.dataset.onsale)>=50);
+      if (ok && shown>=rows) ok = false;
+      tr.style.display = ok ? '' : 'none'; if (ok) shown++;
+    }
+  }
+  function sortBy(k){
+    const ths = tbl.tHead.rows[0].cells; let idx = -1; for (let i=0;i<ths.length;i++){ if (ths[i].dataset.k===k) idx=i; ths[i].classList.remove('sorted-asc','sorted-desc'); }
+    if (idx<0) return; if (sortKey===k) dir = -dir; else { sortKey=k; dir = (k==='symbol'||k==='action') ? 1 : -1; }
+    ths[idx].classList.add(dir>0?'sorted-asc':'sorted-desc');
+    const rows = Array.from(tbody.rows);
+    rows.sort((a,b)=>{ const av=a.cells[idx].dataset.v, bv=b.cells[idx].dataset.v; const an=parseFloat(av), bn=parseFloat(bv);
+      if (!isNaN(an)&&!isNaN(bn)) return (an-bn)*dir; return String(av).localeCompare(String(bv))*dir; });
+    rows.forEach(r=>tbody.appendChild(r)); applyFilters();
+  }
+  for (const th of tbl.tHead.rows[0].cells) if (th.dataset.k) th.addEventListener('click', ()=>sortBy(th.dataset.k));
+  document.querySelectorAll('.filters select, .filters input').forEach(el=>el.addEventListener('change', applyFilters));
+  applyFilters();
+})();
+</script>
+{% endblock %}

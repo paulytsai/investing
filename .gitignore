@@ -1,5 +1,5 @@
-data/
-reports/
+/data/
+/reports/
 .env
 .env.*
 !.env.example

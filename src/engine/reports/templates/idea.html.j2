@@ -1,0 +1,95 @@
+{% extends "base.html.j2" %}
+{% block nav %}<a href="../board.html">← ideas board</a> · {{ c.symbol }}{% endblock %}
+{% block content %}
+<h1>{{ c.symbol }} <span class="muted" style="font-weight:400;font-size:18px">{{ c.name }}</span></h1>
+<p class="sub">{{ c.sector }} · {{ c.industry }} · {{ c.asset_type }} · AI layer: {{ c.ai_layer }} · role: {{ c.role_hint }} · as of {{ c.as_of }} · data basis {{ c.basis }} (period end {{ c.period_end }}) · price {{ c.price_fmt }} · mkt cap {{ c.mcap_fmt }}</p>
+
+<div class="grid">
+  <div class="card tile"><div class="label">Idea Strength (0–100)</div><div class="value">{{ '%.0f'|format(c.idea_strength) if c.idea_strength is not none else '–' }}</div><div class="delta">rank #{{ c.rank or '–' }} of {{ n_scored }} · coverage {{ '%.0f'|format(c.coverage*100) }}%</div></div>
+  <div class="card tile"><div class="label">Proposed action</div><div class="value"><span class="badge {{ 'buy' if c.action=='buy-in-stages' else c.action }}" style="font-size:16px">{{ c.action }}</span></div><div class="delta">{{ c.action_reason }}</div></div>
+  <div class="card tile"><div class="label">Size tier (hypothesis bands, D-01/D-02)</div><div class="value" style="font-size:20px">{{ c.size_tier }}</div><div class="delta">{% if c.entry_plan %}{{ c.entry_plan.tranches }} tranches · {{ c.entry_plan.size_band_pct }}% of book{% if c.entry_plan.add_level_pe_band_low %} · add level ≈ {{ '%.2f'|format(c.entry_plan.add_level_pe_band_low) }} (10th-pct P/E){% endif %}{% else %}–{% endif %}</div></div>
+  <div class="card tile"><div class="label">Macro at formation</div><div class="delta">{% for k, v in macro.items() %}{{ k }} <b>{{ v }}</b><br>{% endfor %}</div></div>
+</div>
+
+<div class="card">
+  <div id="{{ chart_id }}" class="chart" style="height:{{ 620 }}px"></div>
+  <script type="application/json" id="spec-{{ chart_id }}">{{ chart_json|safe }}</script>
+  <div class="small muted">Price is split-adjusted; total return available in the legend. Shaded = ≥20% below the running peak ("on sale vs own history?" only when the P/E percentile is low). Markers: earnings beats/misses, 8-K items, insider trades ≥ $1M{% if phases %}; phase labels from the drivers module{% endif %}.</div>
+</div>
+
+<h2>Why the engine ranks it here</h2>
+<div class="card">
+  <div class="angles">
+    {% for a in c.angles %}
+    <div title="{{ a.components|join(', ') }}">{{ a.label }} <span class="muted small">w {{ '%.0f'|format(a.weight*100) }}%</span></div>
+    <div class="bar"><i style="width:{{ a.score or 0 }}%"></i></div>
+    <div class="num">{{ '%.0f'|format(a.score) if a.score is not none else '–' }}</div>
+    {% endfor %}
+  </div>
+  {% if c.penalties %}<h3>Penalties</h3>{% for p in c.penalties %}<div class="small"><span class="reason-neg">{{ p.rule_id }}</span> {{ p.label }}: {{ p.value_fmt }} → {{ p.contribution }} pts</div>{% endfor %}{% endif %}
+  <h3>Reason components (rule · metric · value · period · threshold status)</h3>
+  <table><thead><tr><th>Angle</th><th>Rule</th><th>Metric</th><th class="num">Value</th><th class="num">Pct rank</th><th class="num">z</th><th class="num">Contribution</th><th>Threshold</th></tr></thead><tbody>
+  {% for r in c.reasons if r.kind == 'factor' %}
+  <tr><td class="small muted">{{ r.angle }}</td><td class="mono">{{ r.rule_id }}</td><td>{{ r.label }}</td><td class="num">{{ r.value_fmt }}</td><td class="num">{{ '%.0f'|format(r.rank_pct) if r.rank_pct is not none else '–' }}</td><td class="num">{{ '%.2f'|format(r.z) if r.z is not none else '–' }}</td>
+  <td class="num {{ 'reason-pos' if r.contribution and r.contribution>0 else ('reason-neg' if r.contribution and r.contribution<0 else '') }}">{{ '%+.2f'|format(r.contribution) if r.contribution is not none else '–' }}</td>
+  <td class="small">{% if r.threshold is not none %}{{ r.threshold }} <span class="badge {{ 'alert' if r.threshold_status=='hypothesis' else '' }}">{{ r.threshold_status }}{% if r.decision_id %} {{ r.decision_id }}{% endif %}</span>{% else %}<span class="muted">–</span>{% endif %}</td></tr>
+  {% endfor %}
+  </tbody></table>
+</div>
+
+<h2>Gates (spec §4.1 Stage 5)</h2>
+<div class="card"><table><thead><tr><th>Gate</th><th>Rule</th><th>Outcome</th><th>Evidence</th></tr></thead><tbody>
+{% for g in c.gates %}<tr><td><b>{{ g.gate_id }}</b> {{ g.name }}{% if g.proxy %} <span class="badge">proxy</span>{% endif %}</td><td class="mono">{{ g.rule_id }}</td><td><span class="badge {{ 'hard' if g.outcome in ['veto','avoid'] else ('gate' if g.outcome!='pass' else '') }}">{{ g.outcome }}</span></td><td class="small">{{ g.evidence }}</td></tr>{% endfor %}
+</tbody></table>
+{% if c.excluded_by %}<p><b>HARD exclusions:</b> {% for r in c.reasons if r.kind=='exclusion' %}<span class="badge hard">{{ r.rule_id }}</span> {{ r.label }}{% if r.note %} ({{ r.note }}){% endif %}<br>{% endfor %}</p>{% endif %}
+</div>
+
+<h2>Valuation &amp; what's priced in (Stage 6)</h2>
+<div class="card grid">
+  <div><div class="label muted small">TTM P/E · own 10-yr band (F-13)</div><div><b>{{ '%.1f'|format(m.pe_ttm) if m.pe_ttm else '–' }}</b> · percentile {{ '%.0f'|format(m.pe_own_pctile) if m.pe_own_pctile is not none else '–' }} · band {{ '%.0f'|format(m.pe_band_low) if m.pe_band_low else '–' }} / {{ '%.0f'|format(m.pe_band_median) if m.pe_band_median else '–' }} / {{ '%.0f'|format(m.pe_band_high) if m.pe_band_high else '–' }} ({{ m.pe_band_n or 0 }} days)</div></div>
+  <div><div class="label muted small">Cash-flow yardsticks (F-19 / R-14) · normalized P/E</div><div>P/OCF <b>{{ '%.1f'|format(m.p_ocf) if m.p_ocf else '–' }}</b> · P/avg-FCF (3y) <b>{{ '%.1f'|format(m.p_fcf_avg) if m.p_fcf_avg else '–' }}</b>{% if m.fcf_yield_avg %} (yield {{ '%.1f%%'|format(m.fcf_yield_avg*100) }}){% endif %} · normalized P/E {{ '%.1f'|format(m.pe_normalized) if m.pe_normalized else '–' }}{% if m.pe_basis and m.pe_basis != 'ttm' %} <span class="badge">band on {{ m.pe_basis }}</span>{% endif %}{% if m.pe_band_note %} <span class="muted small">{{ m.pe_band_note }}</span>{% endif %}</div></div>
+  <div><div class="label muted small">PEG (F-14) · EPS CAGR 3y</div><div><b>{{ '%.2f'|format(m.peg) if m.peg else '–' }}</b> · {{ '%+.0f%%'|format(m.eps_cagr_3y*100) if m.eps_cagr_3y is not none else '–' }}</div></div>
+  <div><div class="label muted small">Move from 3-yr peak (F-12 decomposition)</div><div><b>{{ '%+.0f%%'|format(m.drawdown_3y*100) if m.drawdown_3y is not none else '–' }}</b>{% if m.move_decomp and m.move_decomp.basis=='pe' and m.move_decomp.f_eps is not none %} · EPS {{ '%+.0f%%'|format(m.move_decomp.f_eps*100) }} / multiple {{ '%+.0f%%'|format(m.move_decomp.f_mult*100) }} of the move{% endif %}{% if m.multiple_led_drawdown %} · <b>multiple-led: on sale {{ '%.0f%%'|format(m.multiple_led_drawdown*100) }}</b>{% endif %}</div></div>
+  <div><div class="label muted small">Asymmetry (F-76)</div><div>upside to 3-yr peak <b>{{ '%+.0f%%'|format(m.upside_to_peak*100) if m.upside_to_peak is not none else '–' }}</b> · net cash/cap {{ '%+.1f%%'|format(m.net_cash_to_cap*100) if m.net_cash_to_cap is not none else '–' }} · FCF yield {{ '%.1f%%'|format(m.fcf_yield*100) if m.fcf_yield is not none else '–' }}</div></div>
+  <div><div class="label muted small">Quality (F-07 / F-82 / F-40)</div><div>ROIC <b>{{ '%.0f%%'|format(m.roic_ttm*100) if m.roic_ttm is not none else '–' }}</b> · OCF/NI {{ '%.2f'|format(m.ocf_ni_ratio) if m.ocf_ni_ratio is not none else '–' }} · FCF margin {{ '%.0f%%'|format(m.fcf_margin*100) if m.fcf_margin is not none else '–' }} · net debt/EBITDA {{ '%.1f'|format(m.net_debt_ebitda) if m.net_debt_ebitda is not none else '–' }}</div></div>
+  <div><div class="label muted small">Growth &amp; leverage (P-24 / F-81)</div><div>revenue TTM {{ '%+.0f%%'|format(m.rev_growth_ttm*100) if m.rev_growth_ttm is not none else '–' }} · 3y CAGR {{ '%+.0f%%'|format(m.rev_cagr_3y*100) if m.rev_cagr_3y is not none else '–' }} · incremental margin {{ '%.2f'|format(m.incremental_margin) if m.incremental_margin is not none else '–' }} · ±1% rev → {{ '%.1f%%'|format(m.eps_impact_per_1pct_rev) if m.eps_impact_per_1pct_rev is not none else '–' }} EPS</div></div>
+  <div><div class="label muted small">Alignment &amp; momentum (F-09 proxy / F-17)</div><div>insider buys ${{ '%.1f'|format((m.insider_buy_usd_12m or 0)/1e6) }}M / sells ${{ '%.1f'|format((m.insider_sell_usd_12m or 0)/1e6) }}M (12m) · shareholder yield {{ '%.1f%%'|format(m.shareholder_yield*100) if m.shareholder_yield is not none else '–' }} · beat streak {{ m.beat_streak|int if m.beat_streak is not none else '–' }} qtrs</div></div>
+  <div><div class="label muted small">Hurdle (F-18 / R-17)</div><div>{% if dcf and dcf.hurdle and dcf.hurdle.passes is not none %}expected return <b>{{ '%.1f%%'|format(dcf.expected_return_pct) }}</b>/yr (5-yr path to base value) vs hurdle {{ '%.1f%%'|format(dcf.hurdle.hurdle_pct) }} (10Y {{ '%.2f%%'|format(dcf.inputs.rf_pct) }} + margin) → <b>{{ 'pass' if dcf.hurdle.passes else 'fail' }}</b> <span class="badge alert">hypothesis D-47</span>{% else %}–{% endif %}</div></div>
+</div>
+
+{% if dcf %}
+<h2>DCF — expected value and range (F-77), what's priced in (F-16)</h2>
+<div class="card">
+  <p>{{ dcf.summary }}</p>
+  {% if dcf.scenarios %}
+  <table><thead><tr><th>Scenario</th><th class="num">Start growth</th><th class="num">Value / share</th><th class="num">vs price</th><th class="num">Prob</th></tr></thead><tbody>
+  {% for k, s in dcf.scenarios.items() %}<tr><td>{{ k }}</td><td class="num">{{ '%.1f%%'|format(s.growth_start_pct) }}</td><td class="num">{{ '%.0f'|format(s.per_share) }}</td><td class="num">{{ '%+.0f%%'|format(s.upside_pct) }}</td><td class="num">{{ s.prob }}</td></tr>{% endfor %}
+  </tbody></table>
+  <h3>Sensitivity (discount rate × terminal growth) — value per share</h3>
+  <table><thead><tr><th>Discount</th>{% for g in [dcf.terminal_growth_pct-1, dcf.terminal_growth_pct, dcf.terminal_growth_pct+1] %}<th class="num">g {{ '%.1f%%'|format(g) }}</th>{% endfor %}</tr></thead><tbody>
+  {% for dr in [dcf.discount_rate_pct-1, dcf.discount_rate_pct, dcf.discount_rate_pct+1] %}<tr><td>{{ '%.1f%%'|format(dr) }}</td>{% for g in [dcf.terminal_growth_pct-1, dcf.terminal_growth_pct, dcf.terminal_growth_pct+1] %}<td class="num">{% for cell in dcf.sensitivity if (cell.discount_pct - dr)|abs < 0.01 and (cell.terminal_g_pct - g)|abs < 0.01 %}{{ '%.0f'|format(cell.per_share) }} <span class="muted">({{ '%+.0f%%'|format(cell.upside_pct) }})</span>{% endfor %}</td>{% endfor %}</tr>{% endfor %}
+  </tbody></table>
+  {% endif %}
+  <p class="small muted">Inputs: FCF TTM {{ '%.2f'|format(dcf.inputs.fcf_ttm/1e9) }}B ({{ dcf.basis }}), shares {{ '%.0f'|format(dcf.inputs.shares/1e6) }}M, net debt {{ '%.1f'|format(dcf.inputs.net_debt/1e9) }}B, trailing revenue CAGR {{ '%.1f%%'|format(dcf.inputs.trailing_growth_pct) }} (capped at the R-24 plausibility ceiling), beta {{ dcf.inputs.beta }} (hypothesis), ERP {{ dcf.inputs.erp_pct }}% (hypothesis D-25). Growth tapers linearly to terminal over {{ dcf.horizon_years }} years. {% for n in dcf.notes %}{{ n }}. {% endfor %}The reverse DCF solves for the constant FCF growth the current enterprise value implies; the gap vs trailing growth is the <i>implied_growth_gap</i> factor in the on-sale angle.</p>
+</div>
+{% endif %}
+
+{% if narrative %}
+<h2>Thesis (Stage 2 — draft by the research agent, needs Paul)</h2>
+<div class="card">{{ narrative|safe }}</div>
+{% endif %}
+
+{% if phases %}
+<h2>Drivers of past moves (F-105 / F-12)</h2>
+<div class="card"><table><thead><tr><th>Phase</th><th class="num">Return</th><th>Driver</th><th class="num">EPS share</th><th class="num">Multiple share</th><th class="num">Benchmark</th><th>Events</th></tr></thead><tbody>
+{% for p in phases %}<tr><td>{{ p.start }} → {{ p.end }}{% if p.open %} (open){% endif %}</td><td class="num">{{ '%+.0f%%'|format(p.ret_pct) }}</td><td>{{ p.label.replace('_',' ') }}{% if p.unexplained %} <span class="badge alert">unexplained (F-105)</span>{% endif %}</td><td class="num">{{ '%.0f%%'|format(p.f_eps*100) if p.f_eps is not none else '–' }}</td><td class="num">{{ '%.0f%%'|format(p.f_mult*100) if p.f_mult is not none else '–' }}</td><td class="num">{{ '%+.0f%%'|format(p.bench_ret_pct) if p.bench_ret_pct is not none else '–' }}</td><td class="small">{{ p.event_summary }}</td></tr>{% endfor %}
+</tbody></table></div>
+{% endif %}
+
+<h2>Fit notes &amp; unresolved decisions</h2>
+<div class="card">
+  {% for n in c.fit_notes %}<div>• {{ n }}</div>{% endfor %}
+  {% for a in c.alerts %}<div><span class="badge alert">{{ a.rule_id }}</span> {{ a.message }}</div>{% endfor %}
+  <p class="small muted">Hypothesis values (stand-ins for TBD(Paul), INV-5) that touched this ranking: {{ c.decisions_touched|join(', ') or 'none' }}. Resolve them in config/philosophy.yaml; the engine never substitutes a default silently.</p>
+</div>
+{% endblock %}
