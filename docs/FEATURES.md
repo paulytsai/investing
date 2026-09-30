@@ -10,7 +10,9 @@ Built in v1 are marked ✅; proposed next steps ☐. Every item maps to the spec
   would have chosen it, the sector view and bet, every reason for and against, open gates, Kelly size among the evaluated names, and — with the
   narrative layer — a claim-by-claim verdict on Paul's thesis (supported / contradicted / mixed / unverifiable, evidence cited by document and
   period, what the documents say that the thesis is silent on, checkpoints, the tension). `## SYM` sections in the thesis file address one
-  name each. Answers "is my idea good, and how big?" Both programs call the same functions; a fix lands once.
+  name each. Names can come from a CSV/TSV/TXT/XLSX file (a symbol/ticker/code column, else the first column; `NASDAQ:NVDA` and `7203.T`
+  forms accepted; 4-digit codes route to Japan) — the same file input works for `engine ideas --symbols`, `engine pull us --symbols`
+  and `engine text pull --symbols`. Answers "is my idea good, and how big?" Both programs call the same functions; a fix lands once.
 - ✅ **Data sharing between sessions** — `engine data pack | unpack | push | pull`: one tarball of the derived tables (PIT parquet, candidate
   cache, LLM cache, text reads; raw pulls only with `--raw`) to an S3-compatible bucket named by `ENGINE_DATA_BUCKET`, credentials from the
   environment. A second Claude Code session restores the data in minutes instead of re-pulling for a day.

@@ -77,14 +77,16 @@ def config_check(show: int = typer.Option(200, help="max rows to print")) -> Non
 
 @pull_app.command("us")
 def pull_us(pilot: bool = typer.Option(False, help="60-name pilot: top-50 by cap + holdings"),
-            symbols: str = typer.Option("", help="comma-separated symbols instead of the universe"),
+            symbols: str = typer.Option("", help="symbols instead of the universe: tickers, or a CSV/TXT/XLSX file of codes"),
             workers: int = typer.Option(8), bulk: bool = typer.Option(True, help="use bulk CSV endpoints"),
             refresh_bulk: bool = typer.Option(True, help="re-run the bulk CSV loop (cached files are reused)"),
             shard: str = typer.Option("", help="i/n: pull every n-th symbol from i (run n processes; set ENGINE_RPS_SCALE=1/n)")) -> None:
     """Pull US raw data (FMP + EDGAR + FRED) into data/raw."""
     from .pit.pull_us import pull_us as _pull
 
-    syms = [s.strip().upper() for s in symbols.split(",") if s.strip()] or None
+    from .symbols import read_symbols
+
+    syms = read_symbols(symbols) or None
     sh = tuple(int(x) for x in shard.split("/")) if shard else None
     _pull(pilot=pilot, symbols=syms, workers=workers, bulk=bulk, refresh_bulk=refresh_bulk, shard=sh)
 
@@ -123,11 +125,13 @@ def pit_audit(symbol: str, as_of: str) -> None:
 
 @app.command("ideas")
 def ideas(as_of: str = typer.Option(None), top: int = typer.Option(20), region: str = typer.Option("us"),
-          preset: str = typer.Option(None), narrate: bool = typer.Option(False), symbols: str = typer.Option("")) -> None:
+          preset: str = typer.Option(None), narrate: bool = typer.Option(False), symbols: str = typer.Option("", help="tickers or a CSV/TXT/XLSX file of codes")) -> None:
     """Rank ideas and write the board + idea pages under reports/ideas/<run>/."""
     from .screen.run import run_ideas
 
-    syms = [s.strip().upper() for s in symbols.split(",") if s.strip()] or None
+    from .symbols import read_symbols
+
+    syms = read_symbols(symbols) or None
     run_ideas(as_of=as_of, top=top, regions=region.split(","), preset=preset, narrate=narrate, symbols=syms)
 
 
@@ -185,15 +189,23 @@ def data_pull(key: str = typer.Option("engine-data-latest.tar.gz"), overwrite: b
 
 
 @app.command("evaluate")
-def evaluate(symbols: list[str] = typer.Argument(..., help="tickers to evaluate"), thesis: str = typer.Option(None, help="Paul's thesis: text, or a markdown file with '## SYM' sections"),
-             as_of: str = typer.Option(None), region: str = typer.Option("us"), narrate: bool = typer.Option(False, help="thesis verdict + narrative pages (Claude)"),
+def evaluate(symbols: list[str] = typer.Argument(..., help="tickers to evaluate, and/or CSV/TXT/XLSX files of codes (a symbol/ticker/code column, else the first column)"), thesis: str = typer.Option(None, help="Paul's thesis: text, or a markdown file with '## SYM' sections"),
+             as_of: str = typer.Option(None), region: str = typer.Option("auto", help="us | jp | auto (4-digit codes are Japanese)"), narrate: bool = typer.Option(False, help="thesis verdict + narrative pages (Claude)"),
              universe: str = typer.Option("latest", help="latest = reuse the last full screen of the date; full = re-score the universe"),
              top: int = typer.Option(20)) -> None:
     """Evaluate Paul's own ideas with the same engine: placement in the scored universe, sector view and bet, gates, Kelly size,
     and (with --narrate) a claim-by-claim verdict on his thesis."""
     from .evaluate.run import run_evaluate
+    from .symbols import read_symbols, split_regions
 
-    run_evaluate(symbols, thesis=thesis, as_of=as_of, region=region, narrate=narrate, universe=universe, top=top)
+    syms = read_symbols(symbols)
+    if not syms:
+        typer.echo("no symbols found (pass tickers or a file with a symbol/ticker/code column)")
+        raise typer.Exit(1)
+    by_region = split_regions(syms) if region == "auto" else {region.upper(): syms}
+    for reg, ss in by_region.items():
+        typer.echo(f"[evaluate] {len(ss)} {reg} names: {' '.join(ss[:15])}{' …' if len(ss) > 15 else ''}")
+        run_evaluate(ss, thesis=thesis, as_of=as_of, region=reg, narrate=narrate, universe=universe, top=top)
 
 
 @app.command("backtest")
@@ -279,7 +291,9 @@ def text_pull(symbols: str = typer.Option(""), since_year: int = typer.Option(20
     """Pull every transcript since SINCE_YEAR and the latest 10-K/10-Q items for the cohort-relevant universe."""
     from .text.pull import pull_text
 
-    syms = [x.strip().upper() for x in symbols.split(",") if x.strip()] or None
+    from .symbols import read_symbols
+
+    syms = read_symbols(symbols) or None
     pull_text(symbols=syms, since_year=since_year, workers=workers, min_cap_mult=cap_mult)
 
 
