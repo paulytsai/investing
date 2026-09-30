@@ -119,3 +119,26 @@ class PhaseExplanation(BaseModel):
 
 class PhaseExplanations(BaseModel):
     phases: list[PhaseExplanation]
+
+
+class ThesisClaimVerdict(BaseModel):
+    """One claim from Paul's own thesis, tested against the documents (the evaluator front-end)."""
+    claim: str
+    status: Literal["supported", "contradicted", "mixed", "unverifiable"]
+    evidence_for: list[Claim] = Field(default_factory=list)
+    evidence_against: list[Claim] = Field(default_factory=list)
+    note: str = ""
+
+
+class ThesisVerdict(BaseModel):
+    """Verdict on a thesis Paul wrote himself: claim by claim, what would break it, what the engine sees that the thesis
+    does not mention, and the one question that decides it."""
+    thesis_restated: str
+    claims: list[ThesisClaimVerdict]
+    overall: Literal["supported", "mixed", "contradicted", "unverifiable"]
+    overall_reason: str
+    breaks_when: list[str] = Field(default_factory=list)
+    not_in_thesis: list[str] = Field(default_factory=list)     # material facts in the documents the thesis is silent on
+    checkpoints: list[Checkpoint] = Field(default_factory=list)
+    the_tension: str = ""
+    unverified_count: int = 0

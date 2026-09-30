@@ -2,6 +2,19 @@
 
 Built in v1 are marked ✅; proposed next steps ☐. Every item maps to the spec.
 
+## Two programs, one engine
+- ✅ **Sourcing** — `engine ideas`: scours the whole universe. Sector call first (stance, rationale, recommended sector bet vs market weight,
+  theme cycle status), then the best names inside each sector, Idea Strength, gates, Kelly size, narratives. Answers "what should I look at?"
+- ✅ **Evaluation** — `engine evaluate NVDA ORCL --thesis thesis.md [--narrate]`: Paul's own names. Each is built fresh and placed inside the full
+  scored universe of the date (reusing the last `engine ideas` run of that date): rank and percentile, rank within its sector, whether sourcing
+  would have chosen it, the sector view and bet, every reason for and against, open gates, Kelly size among the evaluated names, and — with the
+  narrative layer — a claim-by-claim verdict on Paul's thesis (supported / contradicted / mixed / unverifiable, evidence cited by document and
+  period, what the documents say that the thesis is silent on, checkpoints, the tension). `## SYM` sections in the thesis file address one
+  name each. Answers "is my idea good, and how big?" Both programs call the same functions; a fix lands once.
+- ✅ **Data sharing between sessions** — `engine data pack | unpack | push | pull`: one tarball of the derived tables (PIT parquet, candidate
+  cache, LLM cache, text reads; raw pulls only with `--raw`) to an S3-compatible bucket named by `ENGINE_DATA_BUCKET`, credentials from the
+  environment. A second Claude Code session restores the data in minutes instead of re-pulling for a day.
+
 ## Selection logic
 - ✅ **Sector call before stock call (two stages)** — theme sectors built from GICS-style sector/industry (`config/sectors.yaml`) with the AI
   value chain split into Jensen Huang's five layers — **Energy → Chips → Infrastructure → Models → Applications** (all five must scale together; a

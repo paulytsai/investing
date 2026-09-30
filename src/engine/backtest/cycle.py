@@ -27,6 +27,7 @@ def theme_breadth() -> dict[str, pd.Series]:
     if not has_table("theme_quarterly"):
         return {}
     t = read_df("theme_quarterly")
+    t = t[t["n_docs_all"] >= 200]          # a quarter with a handful of transcripts is not a breadth reading
     out = {}
     for th, g in t.groupby("theme"):
         idx = pd.PeriodIndex(g["quarter"], freq="Q").to_timestamp(how="end").normalize()

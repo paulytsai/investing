@@ -28,6 +28,7 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest>=8", "pytest-cov", "ruff>=0.6"]
+sync = ["boto3>=1.34"]
 
 [project.scripts]
 engine = "engine.cli:app"

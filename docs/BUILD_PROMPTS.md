@@ -109,3 +109,14 @@ workflows (W3, W4, W6, W7, M8).
 > Build `engine decisions`: the §10.15 Top-15 as a form; each answered D-ID rewrites the value in
 > `config/philosophy.yaml` (with a `ConfigVersion` record), removes it from `hypotheses.yaml`, and re-runs the
 > backtest so the share of outputs touched by hypotheses falls over time.
+
+
+## Prompt — the evaluation front-end (second session)
+> The repo has one engine and two front-ends: `engine ideas` (sourcing) and `engine evaluate` (evaluating Paul's own ideas). Work only on
+> the evaluation program in `src/engine/evaluate/` and its template `reports/templates/evaluate.html.j2`; anything the two programs share
+> (metrics, gates, angles, sector calls, text reads, Kelly, narratives) lives in the library and is changed there with tests. Start by
+> running `engine data pull` (bucket in `ENGINE_DATA_BUCKET`) and `engine evaluate NVDA ORCL --thesis thesis.md --narrate` and reading the
+> page. Then: (1) let the thesis file carry Paul's own bull/base/bear scenarios and probabilities so Kelly sizes his view, not the engine's;
+> (2) add a portfolio mode (`--holdings config/holdings.yaml`) that sizes the evaluated names alongside what he already owns (redundancy
+> R-40, Kelly across the whole book); (3) an earnings-checkpoint workflow (W3) that re-runs the verdict after each new filing and diffs the
+> claims; (4) a JP path (`--region jp`). Keep INV-2/3/5: reasons with rule ids and periods, no price-only buys, hypotheses labelled.

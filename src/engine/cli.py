@@ -150,6 +150,52 @@ def research(symbol: str, as_of: str = typer.Option(None)) -> None:
         typer.echo(f"[research] {symbol.upper()} → {r['path'] / 'ideas' / (symbol.upper() + '.html')}")
 
 
+data_app = typer.Typer(help="Share the derived data (PIT tables, caches) between sessions: pack/unpack a tarball, push/pull it to a bucket.")
+app.add_typer(data_app, name="data")
+
+
+@data_app.command("pack")
+def data_pack(out: str = typer.Option(None), raw: bool = typer.Option(False, help="include data/raw (7+ GB)")) -> None:
+    from .data_sync import pack
+
+    pack(out, include_raw=raw)
+
+
+@data_app.command("unpack")
+def data_unpack(archive: str, overwrite: bool = typer.Option(False)) -> None:
+    from .data_sync import unpack
+
+    unpack(archive, overwrite=overwrite)
+
+
+@data_app.command("push")
+def data_push(archive: str = typer.Option(None), key: str = typer.Option("engine-data-latest.tar.gz"), raw: bool = typer.Option(False)) -> None:
+    """Upload a snapshot to s3://$ENGINE_DATA_BUCKET/KEY (credentials from the environment only)."""
+    from .data_sync import push
+
+    push(archive, key=key, include_raw=raw)
+
+
+@data_app.command("pull")
+def data_pull(key: str = typer.Option("engine-data-latest.tar.gz"), overwrite: bool = typer.Option(False)) -> None:
+    """Download a snapshot from the bucket and restore it into data/."""
+    from .data_sync import pull
+
+    pull(key=key, overwrite=overwrite)
+
+
+@app.command("evaluate")
+def evaluate(symbols: list[str] = typer.Argument(..., help="tickers to evaluate"), thesis: str = typer.Option(None, help="Paul's thesis: text, or a markdown file with '## SYM' sections"),
+             as_of: str = typer.Option(None), region: str = typer.Option("us"), narrate: bool = typer.Option(False, help="thesis verdict + narrative pages (Claude)"),
+             universe: str = typer.Option("latest", help="latest = reuse the last full screen of the date; full = re-score the universe"),
+             top: int = typer.Option(20)) -> None:
+    """Evaluate Paul's own ideas with the same engine: placement in the scored universe, sector view and bet, gates, Kelly size,
+    and (with --narrate) a claim-by-claim verdict on his thesis."""
+    from .evaluate.run import run_evaluate
+
+    run_evaluate(symbols, thesis=thesis, as_of=as_of, region=region, narrate=narrate, universe=universe, top=top)
+
+
 @app.command("backtest")
 def backtest(start: str = typer.Option("2016-03-31"), end: str = typer.Option("2024-09-30"), hold: int = typer.Option(24),
              top: int = typer.Option(20), region: str = typer.Option("us"), preset: str = typer.Option(None),

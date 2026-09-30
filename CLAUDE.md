@@ -35,10 +35,17 @@ engine pull us --pilot           # 60-name pilot; engine pull us for the full un
 engine build pit                 # normalize raw → point-in-time tables
 engine ideas --as-of 2026-09-26 --top 20 --region us
 engine drivers NVDA
+engine evaluate NVDA ORCL --thesis thesis.md --narrate   # second front-end: Paul's own ideas, placed in the same scored universe
+engine data pack | push | pull                           # derived tables to/from $ENGINE_DATA_BUCKET (keys from env; boto3 is storage transport, not a data source)
 engine backtest --start 2016-03-31 --end 2024-09-30 --top 20   # cycle-rule exits (D-24) and Kelly weights (D-01); --exit-rule fixed --hold 24
 engine serve                     # browse reports/
 pytest -q
 ```
+
+## Two front-ends, one engine
+- `engine ideas` (sourcing, whole universe) and `engine evaluate` (Paul's names) share every function in `screen/`, `sectors`, `text/`,
+  `frameworks/`, `research/`, `backtest/sizing`. New logic goes in the library, never in a front-end; a front-end only decides which
+  names, which question and which page.
 
 ## Conventions
 - Python 3.11, pydantic v2 for every artifact, pure functions with tests in `engine/frameworks/`.

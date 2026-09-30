@@ -104,3 +104,66 @@ def narrative_html(c: IdeaCandidate, snap=None, phases: list[dict] | None = None
         "<p class='small muted'>Draft by the research agent from filings and transcripts in context; ⚠ = claim not traceable to a document in context. Needs Paul's judgment (R-09, INV-2).</p>",
     ]
     return "\n".join(parts)
+
+
+# ---- evaluator front-end: Paul's own thesis, tested against the same documents --------------------------------
+VERDICT_INSTR = ("Paul wrote the thesis in <doc id=\"PaulThesis\">. Produce the ThesisVerdict: restate it in one line; split it into its "
+                 "separate claims and test each against the documents (supported / contradicted / mixed / unverifiable) with cited evidence "
+                 "for and against; say when the thesis breaks; list material facts in the documents the thesis is silent on (not_in_thesis); "
+                 "3–6 dated 点検材料 with thresholds TBD(Paul); the_tension = the one question that decides it. Be direct: if the documents "
+                 "contradict him, say so.")
+
+
+def thesis_verdict(c: IdeaCandidate, paul_thesis: str, phases: list[dict] | None = None):
+    from .context import _doc
+    from .schemas import ThesisVerdict
+
+    msgs = build_context(c, phases)
+    msgs[0]["content"].append({"type": "text", "text": _doc("PaulThesis", str(c.as_of), "Paul (own thesis, relay)", paul_thesis, 8000)})
+    m = copy.deepcopy(msgs)
+    m[0]["content"].append({"type": "text", "text": PREAMBLE.format(symbol=c.symbol, as_of=c.as_of) + VERDICT_INSTR})
+    v = parse_structured(SYSTEM, m, ThesisVerdict, cache_key=f"evaluate:{c.symbol}:{c.as_of}:{hash(paul_thesis) & 0xffffffff}")
+    ids = doc_ids(msgs)
+    fr = financial_read(c)
+    unv = 0
+    for cl in v.claims:
+        for x in cl.evidence_for + cl.evidence_against:
+            verify_claim(x, ids, fr)
+            unv += 0 if x.verified else 1
+        cl.note, k = mark_free_text(cl.note)
+        unv += k
+    v.overall_reason, k = mark_free_text(v.overall_reason)
+    v.unverified_count = unv + k
+    return v
+
+
+def verdict_html(c: IdeaCandidate, paul_thesis: str, phases: list[dict] | None = None) -> tuple[str, dict | None]:
+    """HTML for the evaluator page plus the verdict as a dict (None when the narrative layer is unavailable)."""
+    try:
+        v = thesis_verdict(c, paul_thesis, phases)
+    except NarrativeUnavailable as e:
+        return f'<div class="muted">Thesis verdict not generated ({html.escape(str(e))}).</div>', None
+    except Exception as e:  # noqa: BLE001
+        return f'<div class="muted">Thesis verdict failed: {html.escape(str(e)[:160])}</div>', None
+    e = html.escape
+
+    def claims(cs):
+        return "".join(f"<li>{e(cl.text)} <span class='muted small'>({e(cl.period)}, {e(cl.source)}){'' if cl.verified else ' ⚠'}</span></li>" for cl in cs)
+
+    badge = {"supported": "buy", "mixed": "", "contradicted": "excluded", "unverifiable": "alert"}
+    rows = "".join(f"<tr><td>{e(cl.claim)}</td><td><span class='badge {badge.get(cl.status, '')}'>{cl.status}</span></td>"
+                   f"<td class='small'><ul>{claims(cl.evidence_for)}</ul></td><td class='small'><ul>{claims(cl.evidence_against)}</ul>{e(cl.note)}</td></tr>" for cl in v.claims)
+    parts = [
+        f"<p><b>Verdict: <span class='badge {badge.get(v.overall, '')}'>{v.overall}</span></b> {e(v.overall_reason)} <span class='badge alert'>{v.unverified_count} unverified</span></p>",
+        f"<p class='small muted'>Thesis as read: {e(v.thesis_restated)}</p>",
+        f"<table><thead><tr><th>Claim</th><th>Status</th><th>Evidence for</th><th>Evidence against / note</th></tr></thead><tbody>{rows}</tbody></table>",
+        f"<p><b>Breaks when:</b></p><ul>{''.join(f'<li>{e(x)}</li>' for x in v.breaks_when)}</ul>",
+        (f"<p><b>In the documents, not in the thesis:</b></p><ul>{''.join(f'<li>{e(x)}</li>' for x in v.not_in_thesis)}</ul>" if v.not_in_thesis else ""),
+        "<h3>点検材料 (checkpoints)</h3><table><thead><tr><th>Premise</th><th>KPI</th><th>Source</th><th>Next</th><th>Bull</th><th>Bear</th></tr></thead><tbody>"
+        + "".join(f"<tr><td>{e(cp.premise)}</td><td>{e(cp.kpi)}</td><td class='small'>{e(cp.source)}</td><td>{cp.next_date or '–'}</td>"
+                  f"<td>{e(cp.bull_threshold)}{(' <span class=small muted>(suggested: ' + e(cp.suggested_bull) + ')</span>') if cp.suggested_bull else ''}</td>"
+                  f"<td>{e(cp.bear_threshold)}{(' <span class=small muted>(suggested: ' + e(cp.suggested_bear) + ')</span>') if cp.suggested_bear else ''}</td></tr>" for cp in v.checkpoints)
+        + "</tbody></table>",
+        f"<p><b>The tension:</b> {e(v.the_tension)}</p>",
+    ]
+    return "".join(parts), v.model_dump(mode="json")

@@ -228,7 +228,7 @@ def cycle_status(theme: str | None, as_of: pd.Timestamp, min_breadth: float = 10
     if not theme or not has_table("theme_quarterly"):
         return {}
     tq = read_df("theme_quarterly", f"theme = '{theme}'").sort_values("quarter")
-    tq = tq[tq["quarter"] < _quarter(as_of)]
+    tq = tq[(tq["quarter"] < _quarter(as_of)) & (tq["n_docs_all"] >= 200)].reset_index(drop=True)   # thin early quarters are noise
     if len(tq) < 5:
         return {}
     b = tq["breadth_pct"].astype(float).values

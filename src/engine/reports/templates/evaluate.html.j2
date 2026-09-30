@@ -1,0 +1,50 @@
+{% extends "base.html.j2" %}
+{% block nav %}<a href="../../index.html">runs</a> · evaluate{% endblock %}
+{% block content %}
+<h1>Evaluate — {{ rows|map(attribute='c.symbol')|join(', ') }} <span class="muted" style="font-weight:400;font-size:18px">as of {{ as_of }}</span></h1>
+<p class="sub">Paul's names, placed inside the full scored universe of the date ({{ n_scored }} names, {{ universe_src }}): same metrics, gates, angles, sector call, text reads and Kelly as sourcing. "Would sourcing choose it" = whether the name lands in the sector-first top {{ top }}. {% if not narrate %}Run with <code>--narrate</code> for the thesis verdict and the narrative pages.{% endif %} Macro: {% for k, v in macro.items() %}{{ k }} {{ v }} · {% endfor %}</p>
+
+{% for r in rows %}
+<div class="card">
+  <div style="display:flex;flex-wrap:wrap;gap:16px;align-items:baseline">
+    <b style="font-size:20px"><a href="ideas/{{ r.c.symbol }}.html">{{ r.c.symbol }}</a></b> <span class="muted">{{ r.c.name }}</span>
+    <span class="badge {{ 'buy' if r.c.action=='buy-in-stages' else r.c.action }}">{{ r.c.action }}</span>
+    <span>Idea Strength <b>{{ '%.0f'|format(r.c.idea_strength) if r.c.idea_strength is not none else '–' }}</b></span>
+    <span>rank <b>{{ r.place.rank or '–' }}</b> / {{ r.place.of }}{% if r.place.pct %} (top {{ '%.0f%%'|format(100 - r.place.pct) }}){% endif %}</span>
+    <span>in its sector #{{ r.place.sector_rank or '–' }} / {{ r.place.sector_of }}</span>
+    <span>would sourcing choose it: <b>{{ 'yes' if r.place.would_be_chosen else 'no' }}</b>{% if not r.place.eligible %} (ineligible: {{ r.place.excluded_by|join(', ') }}){% endif %}</span>
+  </div>
+  <div class="small muted" style="margin-top:4px">angles: {% for k, v in r.angles.items() %}{{ angle_labels.get(k, k) }} {{ '%.0f'|format(v) if v is not none else '–' }} · {% endfor %}</div>
+
+  {% if r.sector_call %}<h3>Sector view first — {{ r.sector_call.label }}</h3>
+  <p><span class="badge {{ 'buy' if r.sector_call.stance=='overweight' else ('excluded' if r.sector_call.stance in ('avoid','underweight') else '') }}">{{ r.sector_call.stance }}</span> {% if r.sector_call.bet %}<b>Recommended bet:</b> {{ r.sector_call.bet.summary }}{% endif %}</p>
+  <ul class="small">{% for x in r.sector_call.rationale[:6] %}<li>{{ x }}</li>{% endfor %}</ul>{% endif %}
+
+  <h3>What the engine sees</h3>
+  <div style="display:flex;flex-wrap:wrap;gap:24px">
+    <div style="flex:1;min-width:280px"><div class="small"><b>For</b></div>{% for x in r.top_reasons if x.contribution > 0 %}<div class="small"><span class="reason-pos">{{ x.rule_id }}</span> {{ x.label|truncate(80) }}: <b>{{ x.value }}</b></div>{% endfor %}</div>
+    <div style="flex:1;min-width:280px"><div class="small"><b>Against</b></div>{% for x in r.against %}<div class="small"><span class="reason-neg">{{ x.rule_id }}</span> {{ x.label|truncate(80) }}: <b>{{ x.value }}</b></div>{% else %}<div class="small muted">no negative factor in the top contributions</div>{% endfor %}
+      {% for g in r.gates %}<div class="small"><span class="badge gate">{{ g.gate }} {{ g.outcome }}</span> {{ g.evidence|truncate(90) }}</div>{% endfor %}
+      {% for a in r.alerts %}<div class="small muted">⚑ {{ a }}</div>{% endfor %}</div>
+  </div>
+
+  {% if r.kelly %}<h3>Size — Kelly (D-01)</h3>
+  <div class="small">E[R] {{ '%+.0f%%'|format(r.kelly.expected_return*100) }} over ~{{ '%.1f'|format(r.kelly.horizon_years) }}y (≈{{ '%+.0f%%'|format(r.kelly.mu_annual*100) }}/yr), worst {{ '%+.0f%%'|format(r.kelly.worst*100) }} · full {{ '%.0f%%'|format(r.kelly.full*100) }} / half {{ '%.0f%%'|format(r.kelly.half*100) }} / quarter {{ '%.0f%%'|format(r.kelly.quarter*100) }} · practical <b>{{ '%.1f%%'|format(r.kelly.practical*100) }}</b> (cap {{ '%.0f%%'|format(r.kelly.cap*100) }}, confidence {{ r.kelly.confidence_label }}){% if r.weight is not none %} · portfolio Kelly weight among these names <b>{{ '%.1f%%'|format(r.weight*100) }}</b>{% endif %}
+  <div class="muted">scenarios: {% for sc in r.kelly.scenario_table %}{{ sc.name }} {{ '%.0f%%'|format(sc.prob*100) }} / {{ '%+.0f%%'|format(sc.return*100) }} · {% endfor %}{{ r.kelly.assumptions|join('; ') }}{% if r.kelly.note %} · {{ r.kelly.note }}{% endif %}</div></div>
+  {% elif r.weight is not none %}<div class="small muted">Kelly: no growth history → no edge assumed, weight 0%</div>{% endif %}
+
+  {% if r.thesis %}<h3>Paul's thesis, tested</h3>
+  <blockquote class="small muted" style="border-left:3px solid var(--line);margin:0 0 8px;padding-left:10px;white-space:pre-wrap">{{ r.thesis }}</blockquote>
+  {% if r.verdict_html %}{{ r.verdict_html|safe }}{% else %}<div class="small muted">Verdict needs the narrative layer (<code>--narrate</code>).</div>{% endif %}{% endif %}
+  <div class="small muted" style="margin-top:8px">Full page: <a href="ideas/{{ r.c.symbol }}.html">chart, every reason with rule id and period, valuation, DCF cross-check{% if narrate %}, thesis record, lenses, checkpoints{% endif %}</a>.</div>
+</div>
+{% endfor %}
+
+{% if sizing and sizing.weights %}<div class="card small"><b>Kelly across these names</b> (half Kelly, {{ '%.0f%%'|format((sizing.params.cap if sizing.params else 0.15)*100) }} cap, r_f {{ '%.1f%%'|format((sizing.rf or 0)*100) }}): gross {{ '%.0f%%'|format((1 - sizing.cash)*100) }} invested, cash {{ '%.0f%%'|format(sizing.cash*100) }}. Correlated names share one budget (Σ⁻¹(μ − r_f)); this sizes the book Paul asked about, not the sourcing top {{ top }}.</div>{% endif %}
+
+<h2>Every sector call of the date (context)</h2>
+<div class="card" style="overflow-x:auto"><table><thead><tr><th>Theme sector</th><th>Stance</th><th class="num">Score</th><th class="num">Market wt</th><th class="num">Recommended</th><th class="num">Bet</th><th>Cycle</th></tr></thead><tbody>
+{% for s in sector_calls %}<tr><td>{{ s.label }}</td><td>{{ s.stance }}</td><td class="num">{{ '%.0f'|format(s.score) if s.score is not none else '–' }}</td><td class="num">{{ '%.1f%%'|format(s.bet.market_weight*100) if s.bet else '–' }}</td><td class="num">{{ '%.1f%%'|format(s.bet.recommended_weight*100) if s.bet else '–' }}</td><td class="num">{{ '%+.1f pp'|format(s.bet.active_bet_pp) if s.bet else '–' }}</td><td class="small">{{ s.bet.cycle.phase if s.bet and s.bet.cycle else '–' }}</td></tr>{% endfor %}
+</tbody></table></div>
+<div class="card small muted">Unresolved decisions touched: {{ decisions|join(', ') }}. Generated {{ generated }}.</div>
+{% endblock %}
