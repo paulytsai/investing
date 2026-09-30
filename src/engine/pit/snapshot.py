@@ -27,6 +27,7 @@ class Snapshot:
     prior_ttm: dict[str, float | None] = field(default_factory=dict)
     fy_history: pd.DataFrame | None = None
     q_rows: pd.DataFrame | None = None   # visible quarterly rows (period_end, field, value, available_from)
+    currency: str | None = None          # reporting currency of the latest visible statements (ADRs may report in ARS, BRL, …)
 
     def eps_ttm_series(self) -> pd.Series:
         """TTM diluted EPS keyed by the date each quarter became visible (available_from) — for P/E history."""
@@ -54,7 +55,7 @@ def _visible(as_of: pd.Timestamp, security_ids: list[str] | None = None) -> pd.D
     WITH vis AS (SELECT * FROM fundamentals_long WHERE {where}),
     ff AS (SELECT *, row_number() OVER (PARTITION BY security_id, statement, period_type, period_end, field
                                         ORDER BY available_from, restatement_rank) AS rn FROM vis)
-    SELECT security_id, statement, period_type, period_end, field, value, available_from, lag_imputed FROM ff WHERE rn = 1
+    SELECT security_id, statement, period_type, period_end, field, value, available_from, lag_imputed, currency FROM ff WHERE rn = 1
     """
     df = con.execute(q).df()
     df["period_end"] = pd.to_datetime(df["period_end"])
@@ -137,6 +138,9 @@ def build_snapshot(security_id: str, as_of: pd.Timestamp, vis: pd.DataFrame) -> 
     if not fy.empty:
         snap.fy_history = fy.pivot_table(index="period_end", columns="field", values="value", aggfunc="first").sort_index()
     snap.q_rows = vis[(vis.security_id == security_id) & (vis.period_type == "Q")][["period_end", "field", "value", "available_from"]]
+    if "currency" in vis.columns:
+        cur = vis[(vis.security_id == security_id) & (vis.field == "revenue")].sort_values("period_end")["currency"].dropna()
+        snap.currency = str(cur.iloc[-1]).upper() if len(cur) else None
     return snap
 
 

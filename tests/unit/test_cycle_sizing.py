@@ -64,3 +64,36 @@ def test_kelly_weighted_cohort_and_curve_freeze_exited_picks():
     # B's path is frozen after its exit: the weighted basket only moves with A afterwards
     after = curve["portfolio"].loc[cal[31]:]
     assert (after.diff().dropna() > 0).all()
+
+
+def test_shares_are_not_summed_over_four_quarters():
+    from engine.pit.fields import FLOW_FIELDS
+    from engine.pit.snapshot import _ttm_from_quarters
+    q = pd.DataFrame([{"period_end": pd.Timestamp(d), "field": f, "value": v} for d in ("2025-03-31", "2025-06-30", "2025-09-30", "2025-12-31")
+                      for f, v in (("revenue", 10.0), ("shares_diluted", 24.0))])
+    ttm, _, _ = _ttm_from_quarters(q, pd.Timestamp("2026-01-31"))
+    assert ttm["revenue"] == 40.0 and ttm["shares_diluted"] == 24.0 and "shares_diluted" not in FLOW_FIELDS
+
+
+def test_currency_mismatch_voids_valuation_only():
+    from engine.screen.metrics import void_if_currency_mismatch
+
+    class S:
+        currency = "ARS"
+    out = void_if_currency_mismatch({"pe_ttm": 0.007, "rev_growth_ttm": 0.4, "p_ocf": 0.004}, S(), "USD")
+    assert out["pe_ttm"] is None and out["p_ocf"] is None and out["rev_growth_ttm"] == 0.4 and "ARS" in out["currency_mismatch"]
+    assert "currency_mismatch" not in void_if_currency_mismatch({"pe_ttm": 20.0}, S(), "ARS")
+
+
+def test_band_scenarios_reward_a_name_below_its_band():
+    from engine.backtest.sizing import scenario_block
+
+    class C:
+        coverage = 0.95
+        metrics = {"rev_cagr_3y": 0.30, "pe_ttm": 28.0, "pe_band_low": 32.0, "pe_band_median": 54.0, "pe_band_high": 91.0, "pe_band_n": 2400}
+    b = scenario_block(C(), 0.45, 3.0, 0.5, 0.15)
+    assert b["expected_return"] > 0.5 and b["worst"] <= -0.45 * np.sqrt(3.0) + 1e-9 and b["confidence_label"] == "high"
+    assert b["practical"] == 0.15 and any("R-24" in a for a in b["assumptions"])
+    C.metrics = {"rev_cagr_3y": -0.05}      # shrinking, no band: expectation negative-ish → little or no allocation
+    b2 = scenario_block(C(), 0.30, 3.0, 0.5, 0.15)
+    assert b2["practical"] < 0.05

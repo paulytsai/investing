@@ -183,6 +183,8 @@ def score_universe(cands: list[IdeaCandidate], hyp: Hypotheses, preset_name: str
         c.fit_notes = notes
         if c.stale:
             c.alerts.append(Alert(rule_id="PIT", message=f"latest visible period {c.period_end} is stale (> stale_days)"))
+        if c.metrics.get("currency_mismatch"):
+            c.alerts.append(Alert(rule_id="R-14", message=f"valuation not computed: {c.metrics['currency_mismatch']} (ADR reporting currency); growth and quality ratios only"))
 
     # factor matrix
     keys = [f["key"] for a in r["angles"].values() for f in a["factors"]]

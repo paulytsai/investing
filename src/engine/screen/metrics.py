@@ -15,7 +15,7 @@ from .rules import ai_layer_score
 TAX = 0.21
 
 
-METRICS_VERSION = "v3"     # v3: lexical text signals + theme diffusion factors in the candidate metrics     # bump when metric definitions change: the backtest candidate cache is keyed by it
+METRICS_VERSION = "v4"     # v3: lexical text signals + theme diffusion factors in the candidate metrics     # bump when metric definitions change: the backtest candidate cache is keyed by it
 PE_BAND_MAX = 150.0        # P/E above this is "EPS ≈ 0", not a valuation
 PE_BAND_MIN_DAYS = 3 * 250 # ≥ 3 years of meaningful daily P/E before the own-history percentile is scored (F-13)
 
@@ -33,6 +33,23 @@ class Inputs:
 def _v(d: dict, k: str):
     v = d.get(k)
     return None if v is None or (isinstance(v, float) and np.isnan(v)) else float(v)
+
+
+PRICE_BASED = ("pe_ttm", "pe_own_pctile", "pe_band_low", "pe_band_median", "pe_band_high", "pe_band_n", "pe_normalized", "p_ocf", "p_fcf_avg",
+               "fcf_yield", "fcf_yield_avg", "peg", "required_cagr_pct", "implied_growth_gap", "ev_ebitda", "ps_ttm", "dividend_yield", "shareholder_yield",
+               "multiple_only_drawdown", "pe_rel", "earnings_yield")
+
+
+def void_if_currency_mismatch(out: dict, snap, quote_currency: str | None) -> dict:
+    """An ADR whose statements are in another currency (TGS in ARS, TIMB in BRL) has no meaningful P/E or yield against a
+    USD price: those metrics are voided (coverage falls, never imputed) and the mismatch is recorded for an ALERT."""
+    rc = getattr(snap, "currency", None)
+    if rc and quote_currency and rc != quote_currency.upper():
+        for k in PRICE_BASED:
+            if k in out:
+                out[k] = None
+        out["currency_mismatch"] = f"statements in {rc}, quote in {quote_currency.upper()}"
+    return out
 
 
 def compute_metrics(inp: Inputs, as_of: pd.Timestamp, hyp_thresholds: dict) -> dict:

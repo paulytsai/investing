@@ -12,7 +12,7 @@ from ..pit.universe import members
 from ..reports import render
 from ..reports.charts import build_price_chart, to_json
 from ..store import has_table, ledger, read_df
-from .metrics import Inputs, compute_metrics
+from .metrics import void_if_currency_mismatch, Inputs, compute_metrics
 from .models import IdeaCandidate
 from .rules import ai_layer_for, asset_type_for, role_hint_for, rules
 from .scoring import score_universe, select_top
@@ -125,6 +125,7 @@ def build_candidates(as_of: pd.Timestamp, region: str, hyp: Hypotheses, symbols:
         ev = ev_by.get(sid, empty_ev)
         snap = snaps[sid]
         m = compute_metrics(Inputs(snap, px, mcap, ev, layer, at), as_of, thr)
+        m = void_if_currency_mismatch(m, snap, (info["currency"] if info is not None and info["currency"] else "USD"))
         ipo = info["ipo_date"] if info is not None else None
         m["listing_days"] = (as_of - pd.Timestamp(ipo)).days if ipo is not None and pd.notna(ipo) else None
         m.update(text_factors(tsig_by.get(sid)))
@@ -138,7 +139,7 @@ def build_candidates(as_of: pd.Timestamp, region: str, hyp: Hypotheses, symbols:
                 m["llm_one_line"] = json.loads(tr["payload"]).get("one_line")
             except Exception:  # noqa: BLE001
                 pass
-        m["dcf"] = run_dcf(m, snap, at, rf_pct, hyp)
+        m["dcf"] = None if m.get("currency_mismatch") else run_dcf(m, snap, at, rf_pct, hyp)
         if m["dcf"] and m["dcf"].get("implied_growth_gap_pp") is not None:
             m["implied_growth_gap"] = m["dcf"]["implied_growth_gap_pp"]
         period_end = m["period_end"].date() if m.get("period_end") is not None else None

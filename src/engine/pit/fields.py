@@ -45,6 +45,8 @@ FLOW_FIELDS = {
     *FMP_FIELDS["cashflow"].keys(),
     "cfi", "cff", "ordinary_income",   # J-Quants-only flows (決算短信)
 }
+NON_ADDITIVE = {"shares_diluted"}     # a weighted share count is a level: TTM takes the latest quarter, never a 4-quarter sum
+FLOW_FIELDS -= NON_ADDITIVE
 # per-share figures that must be restated to today's share basis when a split happens after the period end
 PER_SHARE_FIELDS = {"eps_diluted", "bps", "dps_actual", "dps_forecast", "forecast_eps"}
 STOCK_FIELDS = set(FMP_FIELDS["balance"].keys())

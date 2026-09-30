@@ -26,8 +26,9 @@ Built in v1 are marked ✅; proposed next steps ☐. Every item maps to the spec
   theme's transcript breadth sits ≥25% below its trailing peak for K quarters (a theme counts as a cycle only once it has reached real breadth);
   bounded by a 12-month floor and a 60-month ceiling (thematic cycles run 2–5 years; the AI cycle dates from Nov 2022). Fixed 24/36-month holds stay
   in the sensitivity grid as variants; positions still open are marked at the last close and flagged, never silently dropped.
-- ✅ **Kelly position sizing (D-01, hypothesis)** — per name, the scenario Kelly f* = argmax Σ pᵢ ln(1 + f rᵢ) is found numerically over the DCF
-  bear/base/bull values vs price (the bear return floored at −1σ·√H of the name's own trailing volatility so a losing outcome always exists);
+- ✅ **Kelly position sizing (D-01, hypothesis)** — per name, the scenario Kelly f* = argmax Σ pᵢ ln(1 + f rᵢ) is found numerically over bull/base/bear
+  scenarios built from the engine's own yardsticks — growth path (3-year revenue CAGR under the R-24 ceiling) × multiple path (P/E moving to the
+  own-history band, F-13) — with the DCF's weighted upside shown as a cross-check (the bear return floored at −1σ·√H of the name's own trailing volatility so a losing outcome always exists);
   long-only 0 ≤ f ≤ 1, full/half/quarter shown, the practical position = min(½ × f* × confidence, 15% cap) and never called "the Kelly fraction";
   no positive expectation → 0%. Confidence (high 1.0 / medium 0.75 / low 0.5 from factor coverage and DCF basis) scales the fraction, never the
   edge. Across the book the portfolio Kelly w* = Σ⁻¹(μ − r_f·1) on the trailing 250-day covariance (shrunk toward the diagonal) sizes names that

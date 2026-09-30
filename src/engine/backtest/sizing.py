@@ -1,5 +1,5 @@
-"""Kelly position sizing for a cohort (and for the live board): per-name scenario Kelly from the DCF scenarios plus a
-volatility-based worst case, and the portfolio Kelly w* = Σ⁻¹(μ − r_f·1) over the trailing return covariance so names
+"""Kelly position sizing for a cohort (and for the live board): per-name scenario Kelly from growth-path × multiple-path
+scenarios plus a volatility-based worst case, and the portfolio Kelly w* = Σ⁻¹(μ − r_f·1) over the trailing return covariance so names
 that share a driver (AI infrastructure, semis, oil, China, rates) are not sized as if independent. Point-in-time: only
 prices and facts dated on or before the formation date are used."""
 from __future__ import annotations
@@ -12,38 +12,71 @@ from ..frameworks.kelly import kelly_scenarios, portfolio_kelly
 
 def confidence_of(c) -> tuple[float, str]:
     """Data confidence → Kelly-fraction multiplier (Paul: high 1.0 / medium 0.75 / low 0.5), from factor coverage and
-    whether the DCF ran on reported free cash flow."""
+    whether an own-history valuation band exists."""
     cov = float(getattr(c, "coverage", 0.0) or 0.0)
-    dcf = (c.metrics or {}).get("dcf") or {}
-    if cov >= 0.9 and dcf.get("scenarios"):
+    band = (c.metrics or {}).get("pe_band_n") or 0
+    if cov >= 0.9 and band >= 750:
         return 1.0, "high"
-    if cov >= 0.75 and dcf.get("scenarios"):
+    if cov >= 0.75:
         return 0.75, "medium"
     return 0.5, "low"
 
 
-def scenario_block(c, ann_vol: float | None, horizon_years: float, fraction: float, cap: float) -> dict | None:
-    """Scenario Kelly for one name. Scenarios = the DCF bear/base/bull values vs price (return if price converges over the
-    cycle); the bear return is floored at −1σ·√H from the name's own trailing volatility so a losing outcome always exists
-    (a DCF bear case that is still above the price is not a worst outcome). Confidence scales the Kelly fraction."""
-    dcf = (c.metrics or {}).get("dcf") or {}
-    sc = dcf.get("scenarios") or {}
-    if not sc or any(k not in sc for k in ("bear", "base", "bull")):
+def scenario_returns(c, horizon_years: float, probs: dict[str, float]) -> tuple[dict[str, float], dict[str, float], list[str]] | None:
+    """Bull/base/bear total returns over the cycle horizon from the engine's own yardsticks, not from the DCF:
+    growth path = trailing 3-year revenue CAGR (TTM growth when the CAGR is missing), clipped to the R-24 plausibility ceiling;
+    multiple path = today's TTM P/E moving to the own-history band (F-13): base → band median (capped at 1.5×), bull → band
+    high (capped 2×), bear → band low (floored at 0.4×); without a meaningful band the multiple is 1.0 / 1.15 / 0.7.
+    Scenario growth multipliers come from the DCF scenario settings (bear ×0.5 −5pp, base ×1, bull ×1.3 +2pp)."""
+    m = c.metrics or {}
+    g = m.get("rev_cagr_3y")
+    if g is None:
+        g = m.get("rev_growth_ttm")
+    if g is None:
         return None
+    g = float(np.clip(float(g), -0.10, 0.25))
+    pe = m.get("pe_ttm")
+    band = (m.get("pe_band_low"), m.get("pe_band_median"), m.get("pe_band_high"))
+    notes = [f"growth {g*100:+.0f}%/yr (3y revenue CAGR, R-24 ceiling 25%)"]
+    if pe and pe > 0 and all(b is not None and b > 0 for b in band) and (m.get("pe_band_n") or 0) >= 750:
+        mult = {"bear": float(np.clip(band[0] / pe, 0.4, 1.0)), "base": float(np.clip(band[1] / pe, 0.5, 1.5)), "bull": float(np.clip(band[2] / pe, 0.6, 2.0))}
+        notes.append(f"P/E {pe:.0f}x → own band {band[0]:.0f}/{band[1]:.0f}/{band[2]:.0f}x (F-13)")
+    else:
+        mult = {"bear": 0.7, "base": 1.0, "bull": 1.15}
+        notes.append("no own-history P/E band: multiple 0.7 / 1.0 / 1.15×")
+    gs = {"bear": 0.5 * g - 0.05, "base": g, "bull": 1.3 * g + 0.02}
+    rets = {k: float((1.0 + gs[k]) ** horizon_years * mult[k] - 1.0) for k in ("bear", "base", "bull")}
+    return rets, mult, notes
+
+
+def scenario_block(c, ann_vol: float | None, horizon_years: float, fraction: float, cap: float, probs: dict[str, float] | None = None) -> dict | None:
+    """Scenario Kelly for one name. The bear return is floored at −1σ·√H from the name's own trailing volatility so a losing
+    outcome always exists. Confidence scales the Kelly fraction. The DCF's probability-weighted upside is carried as a
+    cross-check, never as the sizing input (its per-share value depends on the share-count and currency conventions)."""
+    probs = probs or {"bear": 0.25, "base": 0.50, "bull": 0.25}
+    sr = scenario_returns(c, horizon_years, probs)
+    if sr is None:
+        return None
+    rets, mult, notes = sr
     conf, conf_label = confidence_of(c)
     vol_floor = -(ann_vol * np.sqrt(max(horizon_years, 0.25))) if ann_vol is not None and np.isfinite(ann_vol) else -0.35
     vol_floor = float(max(vol_floor, -0.90))
-    rets = {"bear": min(float(sc["bear"]["upside_pct"]) / 100.0, vol_floor), "base": float(sc["base"]["upside_pct"]) / 100.0, "bull": float(sc["bull"]["upside_pct"]) / 100.0}
+    raw_bear = rets["bear"]
+    rets["bear"] = min(rets["bear"], vol_floor)
     rets = {k: float(np.clip(v, -0.95, 5.0)) for k, v in rets.items()}
-    probs = {k: float(sc[k]["prob"]) for k in ("bear", "base", "bull")}
     k = kelly_scenarios([probs[x] for x in ("bear", "base", "bull")], [rets[x] for x in ("bear", "base", "bull")], fraction=fraction, cap=cap, confidence=conf)
     if not k:
         return None
-    k["scenario_table"] = [{"name": n, "prob": probs[n], "return": rets[n], "source": ("DCF bear floored at −1σ·√H" if n == "bear" and rets[n] < float(sc["bear"]["upside_pct"]) / 100.0 - 1e-12 else "DCF scenario vs price")} for n in ("bear", "base", "bull")]
+    k["scenario_table"] = [{"name": n, "prob": probs[n], "return": rets[n], "multiple": mult[n],
+                            "source": ("growth × band, bear floored at −1σ·√H" if n == "bear" and rets[n] < raw_bear - 1e-12 else "growth path × multiple path")}
+                           for n in ("bear", "base", "bull")]
+    k["assumptions"] = notes
     k["horizon_years"] = horizon_years
     k["ann_vol"] = ann_vol
     k["confidence_label"] = conf_label
     k["mu_annual"] = float((1.0 + k["expected_return"]) ** (1.0 / max(horizon_years, 0.25)) - 1.0)
+    dcf = (c.metrics or {}).get("dcf") or {}
+    k["dcf_upside_weighted_pct"] = dcf.get("upside_weighted_pct")
     return k
 
 
@@ -89,12 +122,13 @@ def kelly_weights(picks: list, as_of: pd.Timestamp, book, hyp, horizon_years: fl
     if not ids:
         return {"weights": {}, "cash": 1.0, "blocks": {}, "rf": rf}
     S, vols = trailing_stats(book, ids, as_of, lookback, shrink)
+    probs = {k: float(v["prob"]) for k, v in hyp._data["dcf"]["scenarios"].items()}
     blocks, mu, conf = {}, [], []
     for c in picks:
-        b = scenario_block(c, vols.get(c.security_id), horizon_years, fraction, cap)
+        b = scenario_block(c, vols.get(c.security_id), horizon_years, fraction, cap, probs)
         blocks[c.security_id] = b
         if b is None:
-            mu.append(rf)                      # no DCF → no edge assumed → zero Kelly weight
+            mu.append(rf)                      # no growth history → no edge assumed → zero Kelly weight
             conf.append(0.5)
         else:
             mu.append(float(np.clip(b["mu_annual"], -0.5, mu_cap)))
