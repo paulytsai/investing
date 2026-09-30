@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import json
 import re
-from collections import Counter, defaultdict
+from collections import Counter
 from concurrent.futures import ProcessPoolExecutor
 
 import pandas as pd
@@ -42,13 +42,13 @@ def _quarter(d) -> str:
 
 
 def _scan_rowgroups(args):
-    """Worker: theme mention counts + bigram document sets for the given parquet row groups."""
+    """Worker: theme mention counts for the given parquet row groups (bigrams are counted separately, per quarter)."""
     path, groups = args
     import pyarrow.parquet as pq
 
     themes, _ = _compiled()
     pf = pq.ParquetFile(path)
-    mentions, bigram_docs = [], defaultdict(Counter)
+    mentions = []
     for g in groups:
         df = pf.read_row_group(g, columns=["security_id", "fiscal_year", "quarter", "call_date", "available_from", "content"]).to_pandas()
         for r in df.itertuples(index=False):
@@ -68,17 +68,38 @@ def _scan_rowgroups(args):
                     mentions.append({"security_id": r.security_id, "theme": key, "quarter": q, "call_date": pd.Timestamp(r.call_date).date(),
                                      "available_from": pd.Timestamp(r.available_from).date(), "count": n, "words": words, "quote": quote,
                                      "doc_ref": f"Q{r.quarter} FY{r.fiscal_year}"})
-            toks = [w.lower() for w in WORD.findall(text)]
+    return mentions
+
+
+def _bigram_doc_freq(path, sample_per_quarter: int = 400, seed: int = 7) -> dict[str, Counter]:
+    """Emerging-term input: per calendar quarter, document frequency of bigrams over a fixed-size random sample of that
+    quarter's transcripts (one quarter in memory at a time; the full cross product of bigrams × quarters is many GB)."""
+    import duckdb
+
+    con = duckdb.connect()
+    con.execute("SET memory_limit='3GB'")
+    keys = con.execute(f"SELECT security_id, fiscal_year, quarter, call_date FROM read_parquet('{path.as_posix()}')").df()
+    keys["q"] = [_quarter(d) for d in keys["call_date"]]
+    out: dict[str, Counter] = {}
+    rng = pd.Series(range(len(keys))).sample(frac=1.0, random_state=seed).index
+    keys = keys.iloc[rng]
+    for q, g in keys.groupby("q"):
+        g = g.head(sample_per_quarter)
+        ids = ",".join(f"('{a}',{b},{c})" for a, b, c in zip(g["security_id"], g["fiscal_year"], g["quarter"]))
+        docs = con.execute(f"SELECT content FROM read_parquet('{path.as_posix()}') WHERE (security_id, fiscal_year, quarter) IN ({ids})").df()["content"]
+        c: Counter = Counter()
+        for text in docs:
+            toks = [w.lower() for w in WORD.findall(text or "")]
             seen = set()
             for a, b in zip(toks, toks[1:]):
                 if a in STOP or b in STOP or a == b:
                     continue
-                bg = f"{a} {b}"
-                if bg not in seen:
-                    seen.add(bg)
-            for bg in seen:
-                bigram_docs[bg][q] += 1
-    return mentions, {k: dict(v) for k, v in bigram_docs.items() if sum(v.values()) >= 5}
+                seen.add(f"{a} {b}")
+            c.update(seen)
+        out[q] = Counter({k: v for k, v in c.items() if v >= 3})
+        out[q]["__n_docs__"] = len(docs)
+    con.close()
+    return out
 
 
 def build_themes(workers: int = 3) -> dict:
@@ -90,13 +111,10 @@ def build_themes(workers: int = 3) -> dict:
     n = pf.num_row_groups
     chunks = [list(range(i, n, workers)) for i in range(workers)]
     mentions: list[dict] = []
-    by_q: dict[str, Counter] = defaultdict(Counter)       # quarter → bigram → document count
     with ProcessPoolExecutor(max_workers=workers) as ex:
-        for m, bd in ex.map(_scan_rowgroups, [(str(path), c) for c in chunks if c]):
+        for m in ex.map(_scan_rowgroups, [(str(path), c) for c in chunks if c]):
             mentions.extend(m)
-            for bg, qc in bd.items():
-                for q, c in qc.items():
-                    by_q[q][bg] += c
+    print(f"[themes] {len(mentions)} theme mentions scanned", flush=True)
     tm = pd.DataFrame(mentions)
     write_table("theme_mentions", tm)
     # --- diffusion per theme × calendar quarter -------------------------------------------------------------
@@ -118,22 +136,25 @@ def build_themes(workers: int = 3) -> dict:
     # --- emerging bigrams: document frequency vs the prior four quarters -------------------------------------
     _, em = _compiled()
     min_docs, ratio_min, top_n = int(em.get("min_docs_per_quarter", 40)), float(em.get("min_ratio_vs_prior_year", 3.0)), int(em.get("top_n", 25))
+    by_q = _bigram_doc_freq(path)
     quarters = sorted(by_q)
     erows = []
     for i, q in enumerate(quarters):
         prior = quarters[max(0, i - 4): i]
         if not prior:
             continue
+        n_now = max(1, by_q[q].get("__n_docs__", 1))
         cand = []
         for bg, c in by_q[q].items():
-            if c < min_docs:
+            if bg == "__n_docs__" or c < max(5, int(min_docs * n_now / 2500)):   # min_docs is stated for ~2,500 calls; scale to the sample
                 continue
-            base = sum(by_q[p].get(bg, 0) for p in prior) / len(prior)
-            r = c / max(base, 2.0)
+            share = c / n_now
+            base = sum(by_q[p].get(bg, 0) / max(1, by_q[p].get("__n_docs__", 1)) for p in prior) / len(prior)
+            r = share / max(base, 1.0 / n_now)
             if r >= ratio_min:
                 cand.append((bg, c, r))
         for bg, c, r in sorted(cand, key=lambda x: -x[2])[:top_n]:
-            erows.append({"quarter": q, "term": bg, "n_docs": int(c), "ratio_vs_prior_year": float(r), "n_docs_all": int(docs_q.get(q, 0))})
+            erows.append({"quarter": q, "term": bg, "n_docs": int(c), "ratio_vs_prior_year": float(r), "n_docs_all": int(n_now)})
     write_table("theme_emerging", pd.DataFrame(erows) if erows else pd.DataFrame(columns=["quarter", "term", "n_docs", "ratio_vs_prior_year", "n_docs_all"]))
     xw = build_timmer_weekly()
     rep = {"mentions": int(len(tm)), "theme_quarters": int(len(tq)), "emerging_terms": int(len(erows)), "timmer_weeks": int(len(xw))}
