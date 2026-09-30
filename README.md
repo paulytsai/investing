@@ -14,7 +14,7 @@ engine ideas --top 20          # board + idea pages → reports/ideas/<run>/boar
 engine drivers NVDA            # drivers of past moves
 engine evaluate NVDA ORCL --thesis thesis.md --narrate   # evaluate Paul's own ideas with the same engine
 engine evaluate my_ideas.csv --thesis thesis.md          # …or a CSV/XLSX of codes (symbol/ticker/code column)
-engine data pack / push / pull                          # share the derived data with another session
+engine data check / push / pull                         # share the data through your own bucket (docs/DATA_SHARING.md)
 engine mcp                                              # the engine as tools inside Claude Desktop / Claude Code
 engine backtest --start 2016-03-31 --end 2024-09-30 --top 20 --sensitivity   # cycle-rule exits + Kelly weights; --exit-rule fixed --hold 24 for a fixed hold
 engine macro                   # macro dashboard (FRED lines, Federal Register, Timmer on X)

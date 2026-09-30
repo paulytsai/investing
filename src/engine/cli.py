@@ -180,12 +180,21 @@ def data_unpack(archive: str, overwrite: bool = typer.Option(False)) -> None:
     unpack(archive, overwrite=overwrite)
 
 
+@data_app.command("check")
+def data_check() -> None:
+    """Is the bucket configured and reachable from here, and which snapshots does it hold?"""
+    from .data_sync import check
+
+    check()
+
+
 @data_app.command("push")
-def data_push(archive: str = typer.Option(None), key: str = typer.Option("engine-data-latest.tar.gz"), raw: bool = typer.Option(False)) -> None:
+def data_push(archive: str = typer.Option(None), key: str = typer.Option("engine-data-latest.tar.gz"), raw: bool = typer.Option(False),
+              dated: bool = typer.Option(False, help="also keep a copy named by today's date")) -> None:
     """Upload a snapshot to s3://$ENGINE_DATA_BUCKET/KEY (credentials from the environment only)."""
     from .data_sync import push
 
-    push(archive, key=key, include_raw=raw)
+    push(archive, key=key, include_raw=raw, dated=dated)
 
 
 @data_app.command("pull")

@@ -89,3 +89,29 @@ def test_diff_runs_reports_entries_exits_and_stance_flips(tmp_path):
     assert d["entered"] == ["CCC"] and d["left"] == ["BBB"] and d["actions"] == ["AAA: watch → buy-in-stages"]
     assert d["stances"] == ["AI 2 · Chips: overweight → neutral"] and d["cycles"] == ["AI 2 · Chips: expanding → off its peak"]
     assert d["moves"][0].startswith("AAA 80 → 88") and not d["unchanged"]
+
+
+def test_data_check_names_missing_settings(monkeypatch, capsys):
+    import engine.data_sync as ds
+
+    for k in ("ENGINE_DATA_BUCKET", "AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_ENDPOINT_URL"):
+        monkeypatch.delenv(k, raising=False)
+    r = ds.check()
+    out = capsys.readouterr().out
+    assert not r["ok"] and "ENGINE_DATA_BUCKET" in out and "AWS_SECRET_ACCESS_KEY" in out and "AWS_ENDPOINT_URL" in out
+
+
+def test_data_check_lists_snapshots_with_a_fake_client(monkeypatch, capsys):
+    import datetime as dt
+
+    import engine.data_sync as ds
+
+    class Fake:
+        def list_objects_v2(self, Bucket, Prefix):
+            return {"Contents": [{"Key": "engine-data-latest.tar.gz", "Size": 4.2e9, "LastModified": dt.datetime(2026, 9, 30, 12, 0)}]}
+    monkeypatch.setenv("ENGINE_DATA_BUCKET", "b")
+    monkeypatch.setenv("AWS_ACCESS_KEY_ID", "x")
+    monkeypatch.setenv("AWS_SECRET_ACCESS_KEY", "y")
+    monkeypatch.setattr(ds, "_bucket", lambda: (Fake(), "b"))
+    r = ds.check()
+    assert r["ok"] and r["snapshots"] == ["engine-data-latest.tar.gz"] and "4.20 GB" in capsys.readouterr().out

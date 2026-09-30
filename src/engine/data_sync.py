@@ -40,24 +40,60 @@ def unpack(archive: Path, overwrite: bool = False) -> None:
     print(f"[data] restored {', '.join(sorted(tops))} into {DATA_DIR}")
 
 
+REQUIRED = ("ENGINE_DATA_BUCKET", "AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY")
+
+
+def missing_settings() -> list[str]:
+    return [k for k in REQUIRED if not os.environ.get(k)]
+
+
 def _bucket():
-    b = os.environ.get("ENGINE_DATA_BUCKET")
-    if not b:
-        raise SystemExit("set ENGINE_DATA_BUCKET (and AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY, optional AWS_ENDPOINT_URL) in the environment")
+    miss = missing_settings()
+    if miss:
+        raise SystemExit("missing in the environment (or .env): " + ", ".join(miss) + " — plus AWS_ENDPOINT_URL for Cloudflare R2; see docs/DATA_SHARING.md")
     try:
         import boto3  # noqa: F401
     except ImportError as e:
         raise SystemExit('boto3 not installed: pip install -e ".[sync]"') from e
     import boto3
 
-    return boto3.client("s3", endpoint_url=os.environ.get("AWS_ENDPOINT_URL") or None), b
+    endpoint = os.environ.get("AWS_ENDPOINT_URL") or None
+    region = os.environ.get("AWS_DEFAULT_REGION") or ("auto" if endpoint and "r2.cloudflarestorage.com" in endpoint else None)   # R2 wants "auto"
+    return boto3.client("s3", endpoint_url=endpoint, region_name=region), os.environ["ENGINE_DATA_BUCKET"]
 
 
-def push(archive: Path | None = None, key: str = "engine-data-latest.tar.gz", include_raw: bool = False) -> str:
+def check() -> dict:
+    """Can this machine reach the bucket, and what snapshots are there? Prints a plain report; never prints a key."""
+    miss = missing_settings()
+    if miss:
+        print("[data] not configured — missing: " + ", ".join(miss) + (" (AWS_ENDPOINT_URL is also needed for Cloudflare R2)" if not os.environ.get("AWS_ENDPOINT_URL") else ""))
+        print("       see docs/DATA_SHARING.md for the five lines to add")
+        return {"ok": False, "missing": miss}
+    try:
+        s3, bucket = _bucket()
+        resp = s3.list_objects_v2(Bucket=bucket, Prefix="engine-data")
+    except Exception as e:  # noqa: BLE001
+        print(f"[data] cannot reach bucket {os.environ.get('ENGINE_DATA_BUCKET')}: {type(e).__name__}: {str(e)[:200]}")
+        return {"ok": False, "error": str(e)[:200]}
+    objs = resp.get("Contents") or []
+    print(f"[data] bucket {bucket} reachable via {os.environ.get('AWS_ENDPOINT_URL') or 'AWS'}; {len(objs)} snapshot(s):")
+    for o in sorted(objs, key=lambda o: o["LastModified"]):
+        print(f"       {o['Key']:<40} {o['Size']/1e9:6.2f} GB  {o['LastModified']:%Y-%m-%d %H:%M}")
+    if not objs:
+        print("       none yet — seed it with `engine data push --raw` from the machine that holds the full data")
+    return {"ok": True, "snapshots": [o["Key"] for o in objs]}
+
+
+def push(archive: Path | None = None, key: str = "engine-data-latest.tar.gz", include_raw: bool = False, dated: bool = False) -> str:
+    """Upload a snapshot as KEY; with `dated`, also keep a copy named by today's date so a bad build can be rolled back."""
+    s3, bucket = _bucket()                       # fail on configuration before spending minutes packing
     archive = Path(archive) if archive else pack(include_raw=include_raw)
-    s3, bucket = _bucket()
     s3.upload_file(str(archive), bucket, key)
     print(f"[data] pushed {archive.name} → s3://{bucket}/{key}")
+    if dated:
+        dkey = f"engine-data-{time.strftime('%Y-%m-%d')}{'-raw' if include_raw else ''}.tar.gz"
+        s3.copy({"Bucket": bucket, "Key": key}, bucket, dkey)
+        print(f"[data] kept a dated copy → s3://{bucket}/{dkey}")
     return f"s3://{bucket}/{key}"
 
 
