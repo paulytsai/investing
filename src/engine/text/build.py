@@ -9,11 +9,23 @@ from ..store import has_table, read_df, write_table
 from .lexical import SIGNALS, counts, extract
 
 
+def _iter_transcripts(batch_rows: int = 2000):
+    """Stream the (2+ GB) transcripts table in row batches instead of loading it whole."""
+    import pyarrow.parquet as pq
+
+    from ..store import table_path
+
+    pf = pq.ParquetFile(table_path("transcripts"))
+    for batch in pf.iter_batches(batch_size=batch_rows):
+        df = batch.to_pandas()
+        yield from df.itertuples(index=False)
+
+
 def build_text_signals() -> int:
     rows: list[dict] = []
     if has_table("transcripts"):
-        tr = read_df("transcripts")
-        for r in tr.itertuples(index=False):
+        tr = _iter_transcripts()
+        for r in tr:
             hits = extract(r.content or "")
             words = len(re.findall(r"\w+", r.content or ""))
             c = counts(hits)
