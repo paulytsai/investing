@@ -250,7 +250,10 @@ def _render(all_cands, chosen, as_of, out, hyp, preset, regions, top, narrate, n
     bench = read_df("benchmark_daily", "benchmark_id = 'SPY_TR'")
     bench["date"] = pd.to_datetime(bench["date"])
     bench_s = bench.set_index("date")["level"].sort_index()
-    pages = ranked[: max(top * 5, 100)] if not narrate else ranked[:top]
+    # pages: the chosen names always (they are the sector-selected book, not necessarily the top-N by rank), then the
+    # ranked tail; with --narrate only the chosen names get pages (each narrative is three Claude calls)
+    chosen_ids = {c.security_id for c in chosen}
+    pages = list(chosen) if narrate else (list(chosen) + [c for c in ranked[: max(top * 5, 100)] if c.security_id not in chosen_ids])
     if narrate_symbols:   # `engine research SYM`: scored against the whole region, page + narrative for these only
         want = {x.upper() for x in narrate_symbols}
         pages = [c for c in all_cands if c.symbol.upper() in want]

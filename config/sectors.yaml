@@ -37,7 +37,8 @@ scoring:                              # sector score = weighted z across sectors
   weights: {growth: 0.25, momentum: 0.25, quality: 0.20, valuation: 0.15, diffusion: 0.15}
   stance: {overweight_min: 62, underweight_max: 40}
   min_members: 8                      # fewer members → "thin" (neutral, flagged)
-  slots: {overweight: 2.0, neutral: 1.0, underweight: 0.4, avoid: 0.0}   # relative slot weights × sqrt(eligible members)
+  slots: {overweight: 3.0, neutral: 1.0, underweight: 0.25, avoid: 0.0}  # relative slot weights × eligible_members^size_power
+  size_power: 0.25                    # weak size effect: the stance decides, the sector's depth only nudges
 theme_for_sector:                     # which diffusion theme speaks for each sector (breadth trend input)
   ai_upstream: ai_compute
   ai_infrastructure: ai_power_grid

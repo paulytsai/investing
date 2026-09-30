@@ -193,11 +193,12 @@ def evaluate_sectors(cands: list[IdeaCandidate], as_of: pd.Timestamp, hyp=None) 
 
 def allocate_slots(calls: dict[str, SectorCall], top_n: int, max_per_sector: int | None) -> dict[str, int]:
     """Slots per sector ∝ stance weight × sqrt(eligible members); overweight sectors always get ≥ 1; avoid gets 0."""
-    k = cfg()["scoring"]["slots"]
+    sc = cfg()["scoring"]
+    k, power = sc["slots"], float(sc.get("size_power", 0.25))
     raw = {}
     for s, c in calls.items():
         w = float(k.get(c.stance if c.stance != "thin" else "neutral", 0.0))
-        raw[s] = w * math.sqrt(max(c.n_eligible, 0)) if c.n_eligible else 0.0
+        raw[s] = w * (max(c.n_eligible, 0) ** power) if c.n_eligible else 0.0
     tot = sum(raw.values())
     slots = {s: 0 for s in calls}
     if tot <= 0:
