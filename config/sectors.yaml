@@ -73,3 +73,13 @@ theme_for_sector:                     # which diffusion theme speaks for each se
   materials: electrification_ev
   tech_other: cybersecurity
   communication: agentic_ai
+
+# Per-sector angle weights (override the preset inside these sectors; hypothesis D-27 / D-58). Backtest evidence (2016–2024, sector-first):
+# inside the AI layers the engine's picks lagged their own sector (chips picks +37% vs the chips sector +55%) because the on-sale angle
+# pulls toward the cheapest names, while the philosophy says own the indispensable 主役 in a theme: moat, story and momentum first.
+angle_weights_override:
+  ai_energy:         {story_growth: 0.20, moat: 0.25, quality: 0.15, on_sale: 0.10, asymmetry: 0.05, alignment: 0.05, fundamental_momentum: 0.20, portfolio_fit: 0.00}
+  ai_chips:          {story_growth: 0.20, moat: 0.25, quality: 0.15, on_sale: 0.10, asymmetry: 0.05, alignment: 0.05, fundamental_momentum: 0.20, portfolio_fit: 0.00}
+  ai_infrastructure: {story_growth: 0.20, moat: 0.25, quality: 0.15, on_sale: 0.10, asymmetry: 0.05, alignment: 0.05, fundamental_momentum: 0.20, portfolio_fit: 0.00}
+  ai_models:         {story_growth: 0.20, moat: 0.25, quality: 0.15, on_sale: 0.10, asymmetry: 0.05, alignment: 0.05, fundamental_momentum: 0.20, portfolio_fit: 0.00}
+  ai_applications:   {story_growth: 0.20, moat: 0.25, quality: 0.15, on_sale: 0.10, asymmetry: 0.05, alignment: 0.05, fundamental_momentum: 0.20, portfolio_fit: 0.00}

@@ -159,6 +159,16 @@ def score_universe(cands: list[IdeaCandidate], hyp: Hypotheses, preset_name: str
     cov_min = float(hyp.get("screen.coverage_min"))
     winsor = float(hyp.get("screen.winsor_pct"))
     as_of = cands[0].as_of if cands else date.today()
+    # stage-1 classification first (needs metrics only): the theme sector may override the angle weights below
+    from .sectors import cfg as sectors_cfg, classify
+
+    scfg = sectors_cfg()
+    overrides = scfg.get("angle_weights_override", {}) or {}
+    for c in cands:
+        ts, layer = classify(c, scfg)
+        c.theme_sector = ts
+        if layer:
+            c.ai_chain_layer = layer
 
     # exclusions + gates + fit first
     for c in cands:
@@ -212,8 +222,9 @@ def score_universe(cands: list[IdeaCandidate], hyp: Hypotheses, preset_name: str
         c.angles = []
         total_w = used_w = 0.0
         strength = 0.0
+        w_use = overrides.get(c.theme_sector) or weights
         for ak, a in r["angles"].items():
-            w = float(weights.get(ak, 0))
+            w = float(w_use.get(ak, 0))
             total_w += w
             sc = angle_pct.loc[sid, ak]
             cov = float(angle_cov.loc[sid, ak])

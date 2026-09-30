@@ -35,7 +35,12 @@ Built in v1 are marked ✅; proposed next steps ☐. Every item maps to the spec
 - ☐ Japan-specific yardsticks (総還元 vs JGB; R-38 FX-sensitivity check) and EDINET governance parsing for G1/G2.
 
 ## Backtest evidence so far (US, 2016-03-31 → 2024-09-30, top 20, 24-month hold, cap-floor universe with delisted and acquired names)
-- Numeric factors only (text layer not yet in the cache): 34 complete cohorts, mean 2-year cohort return **+30.4%** vs SPY total return +32.4%
+- **Sector-first with text and theme factors** (run 3): 34 cohorts, mean 2-year cohort return **+32.6%** vs SPY +32.4% (excess +0.2 pp; 50% of
+  cohorts beat) and vs the equal-weight S&P **+7.6 pp** (74% of cohorts beat); vs each pick's **own theme sector +5.0 pp** (47% of picks beat their
+  sector). Brinson: **allocation +2.5 pp** (the sector calls) and **selection +5.0 pp** (the names) per cohort. Idea Strength rank-IC 0.058 (t 3.6);
+  quality still the strongest angle (t 3.5). `evidence_tilt` reaches +34.5% (+2.1 pp vs SPY, 56% of cohorts). Inside the AI layers the picks lagged
+  their sector (chips +37% vs +55%): the on-sale angle pulls toward the cheapest names where the leaders won — hence per-sector angle weights.
+- Numeric factors only, no sector stage (run 2): 34 complete cohorts, mean 2-year cohort return **+30.4%** vs SPY total return +32.4%
   (excess −2.0 pp; 47% of cohorts beat) and vs the **equal-weight S&P (RSP) +25.0%** (excess **+5.4 pp**; 62% of cohorts beat) — the fair
   comparison for an equal-weight 20-name book. Overlapping 8-sleeve portfolio 2018→2026: CAGR 11.0% vs SPY 14.4%; beta 0.98; max drawdown 36% vs 34%.
 - Which angles predicted 2-year returns (Spearman rank-IC over ~1,200 eligible names per date, Newey–West t): **quality IC 0.09 (t 3.6)**,
