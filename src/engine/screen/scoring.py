@@ -20,7 +20,7 @@ FACTOR_UNITS = {
     "eps_growth_ttm": "%", "fit_score": "score",
     "text_demand": "per 10k words", "text_pricing": "per 10k words", "text_guidance": "per 10k words", "text_leadership": "per 10k words",
     "text_red_flags": "per 10k words", "text_ai_receipts": "per 10k words", "llm_demand": "score", "llm_pricing": "score", "llm_position": "score",
-    "llm_guidance": "score", "llm_tone": "score", "llm_red_flags": "n",
+    "llm_guidance": "score", "llm_tone": "score", "llm_red_flags": "n", "p_fcf_avg": "x", "p_ocf": "x",
 }
 PCT_FACTORS = {"rev_growth_ttm", "rev_cagr_3y", "gross_margin", "roic_ttm", "fcf_margin", "multiple_led_drawdown", "upside_to_peak",
                "net_cash_to_cap", "fcf_yield", "insider_net_buy_12m", "shareholder_yield", "eps_growth_ttm", "rev_accel", "gm_trend_3y"}

@@ -63,10 +63,12 @@ angles:                                  # Idea Strength sub-scores; each factor
   on_sale:
     label: "On sale vs fair value"
     factors:
-      - {key: pe_own_pctile, id: F-13, dir: lower_better, weight: 0.3, label: "TTM P/E percentile in own 10-yr band", threshold: philosophy:research.valuation.band_lookback_years}
-      - {key: peg, id: F-14, dir: lower_better, weight: 0.2, label: "PEG (TTM P/E ÷ 3y EPS growth)", threshold: hypotheses:thresholds.peg_ceiling}
-      - {key: multiple_led_drawdown, id: F-12/F-83/R-29, dir: higher_better, weight: 0.3, label: "Drawdown from 3-yr high explained by the multiple, not earnings (good company falling on good results)", threshold: hypotheses:thresholds.drawdown_research_trigger_pct}
-      - {key: implied_growth_gap, id: F-16/R-24, dir: higher_better, weight: 0.2, label: "Trailing growth minus growth implied by price (reverse DCF)"}
+      - {key: pe_own_pctile, id: F-13, dir: lower_better, weight: 0.25, label: "P/E percentile in own 10-yr band (TTM, or normalized on the prior normal state's EPS when earnings are ≤ 0)", threshold: philosophy:research.valuation.band_lookback_years}
+      - {key: peg, id: F-14, dir: lower_better, weight: 0.15, label: "PEG (TTM P/E ÷ 3y EPS growth)", threshold: hypotheses:thresholds.peg_ceiling}
+      - {key: multiple_led_drawdown, id: F-12/F-83/R-29, dir: higher_better, weight: 0.25, label: "Drawdown from 3-yr high explained by the multiple, not earnings (good company falling on good results)", threshold: hypotheses:thresholds.drawdown_research_trigger_pct}
+      - {key: implied_growth_gap, id: F-16/R-24, dir: higher_better, weight: 0.15, label: "Trailing growth minus growth implied by price (reverse DCF)"}
+      - {key: p_fcf_avg, id: F-19/R-14, dir: lower_better, weight: 0.15, label: "Price ÷ 3-year average free cash flow (cash is harder to dress up than earnings)"}
+      - {key: p_ocf, id: F-19/R-14, dir: lower_better, weight: 0.05, label: "Price ÷ operating cash flow TTM"}
   asymmetry:
     label: "Asymmetry"
     factors:

@@ -130,6 +130,42 @@ def compute_metrics(inp: Inputs, as_of: pd.Timestamp, hyp_thresholds: dict) -> d
             out["pe_band_note"] = f"own-history band needs ≥{PE_BAND_MIN_DAYS} days of meaningful P/E (have {band['n']})"
     out["pe_own_pctile"], out["pe_band_low"], out["pe_band_median"], out["pe_band_high"], out["pe_band_n"] = (
         band["percentile"], band["low"], band["median"], band["high"], band["n"])
+    # normalized P/E (F-13 / R-14): a company temporarily in the red is valued on its prior normal state — the median of
+    # the positive TTM EPS observations of the last 3 years; used for the own-band percentile when TTM EPS is ≤ 0 or ≈ 0
+    out["eps_normalized"] = out["pe_normalized"] = None
+    out["pe_basis"] = "ttm"
+    if not eps_series.empty:
+        recent = eps_series[eps_series.index >= as_of - pd.Timedelta(days=3 * 365)]
+        pos = recent[recent > 0]
+        if len(pos) >= 4:
+            eps_norm = float(pos.median())
+            out["eps_normalized"] = eps_norm
+            out["pe_normalized"] = fw.safe_div(price, eps_norm) if price else None
+            if (pe is None or pe > PE_BAND_MAX) and out["pe_normalized"] and band["n"] >= PE_BAND_MIN_DAYS:
+                nb = fw.band_percentile(pe_hist.dropna(), out["pe_normalized"], 10)
+                if nb["percentile"] is not None:
+                    out["pe_own_pctile"] = nb["percentile"]
+                    out["pe_basis"] = "normalized (median positive TTM EPS, 3y)"
+    # cash-flow yardsticks (F-19 / R-14): price ÷ operating cash flow and price ÷ 3-year average free cash flow — earnings
+    # can be depressed or flattered while cash is harder to dress up
+    out["p_ocf"] = fw.safe_div(mcap, ocf) if mcap and ocf and ocf > 0 else None
+    out["fcf_avg_3y"] = out["p_fcf_avg"] = out["fcf_yield_avg"] = None
+    if fy is not None and not fy.empty:
+        fcf_fy = None
+        if "fcf" in fy.columns and fy["fcf"].notna().sum() >= 2:
+            fcf_fy = fy["fcf"].dropna()
+        elif "ocf" in fy.columns and "capex" in fy.columns:
+            tmp = (fy["ocf"] + fy["capex"].where(fy["capex"] < 0, -fy["capex"])).dropna()
+            fcf_fy = tmp if len(tmp) >= 2 else None
+        elif "ocf" in fy.columns and "cfi" in fy.columns:          # JP 簡易FCF
+            tmp = (fy["ocf"] + fy["cfi"]).dropna()
+            fcf_fy = tmp if len(tmp) >= 2 else None
+        if fcf_fy is not None and len(fcf_fy):
+            avg = float(fcf_fy.tail(3).mean())
+            out["fcf_avg_3y"] = avg
+            if mcap and avg > 0:
+                out["p_fcf_avg"] = mcap / avg
+                out["fcf_yield_avg"] = avg / mcap
     out["peg"] = fw.peg(pe, (out["eps_cagr_3y"] or 0) * 100 if out["eps_cagr_3y"] else None)
     out["drawdown_3y"] = out["upside_to_peak"] = out["multiple_led_drawdown"] = None
     out["move_decomp"] = None
