@@ -152,5 +152,9 @@ def build_story(c, fy: pd.DataFrame | None = None, sector_call=None) -> dict:
     if m.get("implied_growth_gap") is not None:
         pay.append(("the price implies slower growth than delivered" if m["implied_growth_gap"] > 0 else "the price implies faster growth than delivered") + f" ({m['implied_growth_gap']:+.0f} pp)")
     pay_s = ("You pay " + "; ".join(pay) + "." if pay else "")
+    from ..reports.plain import why_cheap
+
+    wc = why_cheap(d, sc)
+    pay_s = (pay_s + " " + wc["sentence"]).strip()
     dan = m.get("danoff") or danoff_read(m)
     return {"what": what, "earnings": earnings, "earnings_rows": rows, "driving": driving, "quality": quality, "risks": risks, "pay": pay_s, "danoff": dan, "profile": pr}

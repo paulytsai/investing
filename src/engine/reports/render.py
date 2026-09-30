@@ -38,6 +38,7 @@ _env.filters["plain_sector_line"] = _plain.plain_sector_line
 _env.globals["plain_action"] = _plain.plain_action
 _env.globals["plain_summary"] = _plain.plain_summary
 _env.globals["summary_parts"] = _plain.summary_parts
+_env.globals["why_cheap"] = _plain.why_cheap
 _env.globals["STANCE_WORDS"] = _plain.STANCE
 _env.globals["ASSET_WORDS"] = _plain.ASSET
 _env.globals["LAYER_WORDS"] = _plain.LAYER

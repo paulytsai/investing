@@ -242,12 +242,69 @@ def summary_parts(c, sector_call=None, kelly_weight=None) -> dict:
     cc = m.get("commodity_cycle") or {}
     if cc.get("verdict"):
         recap.append("Commodity cycle: " + cc["verdict"])
+    wc = why_cheap(d, sc)
+    if wc.get("cheap"):
+        recap.append(wc["sentence"])
     return {"thesis": thesis, "reasons": [plain_reason(r) for r in ordered], "recap": " ".join(recap), "verdict": verdict}
 
 
 def plain_summary(c, sector_call=None, kelly_weight=None) -> str:
     p = summary_parts(c, sector_call, kelly_weight)
     return " ".join([p["thesis"], *[f"({i + 1}) {r}" for i, r in enumerate(p["reasons"])], p["recap"]])
+
+
+def why_cheap(c, sector_call=None, phases=None) -> dict:
+    """Is the name cheap, and why: market pessimism (the multiple fell while earnings held), a growth scare, fallen earnings, a sector out
+    of favour, a commodity peak the market expects to fade, a theme that has faded, or something the documents say — or cheap for no visible
+    reason, which is the case worth verifying (F-83: a good company falling on good results). Deterministic, from the same metrics."""
+    d = c if isinstance(c, dict) else c.model_dump()
+    m = d.get("metrics") or {}
+    sc = sector_call if (sector_call is None or isinstance(sector_call, dict)) else sector_call.model_dump()
+    pct, mld, dd = m.get("pe_own_pctile"), m.get("multiple_led_drawdown"), m.get("drawdown_3y")
+    eps, acc = m.get("eps_growth_ttm"), m.get("rev_accel")
+    cheap_signals = []
+    if pct is not None and pct <= 30:
+        cheap_signals.append(f"P/E at the {_ord(int(round(pct)))} percentile of its own 10-year range")
+    if mld is not None and mld > 0.15:
+        cheap_signals.append(f"{mld*100:.0f}% below its 3-year high with earnings intact")
+    if m.get("p_fcf_avg") is not None and 0 < m["p_fcf_avg"] < 12:
+        cheap_signals.append(f"{m['p_fcf_avg']:.0f}× three-year average free cash flow")
+    if not cheap_signals:
+        if pct is not None:
+            return {"cheap": False, "sentence": f"Not cheap: P/E at the {_ord(int(round(pct)))} percentile of its own range" + (f", {dd*100:.0f}% below its 3-year high" if dd else "") + ".", "causes": []}
+        return {"cheap": False, "sentence": "No own-history valuation band yet (less than three years of meaningful earnings), so cheapness cannot be judged against its past.", "causes": []}
+    causes = []
+    if mld is not None and mld > 0.15 and (eps is None or eps >= 0):
+        causes.append(("market pessimism", f"the multiple fell while earnings held — the price is {mld*100:.0f}% off its high" + (f" with EPS {eps*100:+.0f}%" if eps is not None else "")))
+    if eps is not None and eps < 0:
+        causes.append(("earnings fell", f"earnings per share fell {abs(eps)*100:.0f}%, so the low multiple sits on depressed earnings — cheap on P/E is not cheap if they keep falling"))
+    if acc is not None and acc < -0.1:
+        causes.append(("growth scare", f"revenue growth slowed by {abs(acc)*100:.0f} pp against the prior year — the market is paying less for a slower story"))
+    smed = ((sc or {}).get("inputs") or {}).get("pe_pctile_med")
+    if smed is not None and smed <= 35:
+        causes.append(("sector out of favour", f"its whole sector trades at the {_ord(int(round(smed)))} percentile of members' own ranges — this is a sector de-rating, not a company-specific one"))
+    cc = m.get("commodity_cycle") or {}
+    if str(cc.get("phase", "")).startswith("peak"):
+        causes.append(("cycle peak priced in", f"its commodity group is at a margin peak ({cc.get('label')}) — the market expects earnings to fall, which is why the multiple looks low"))
+    cyc = ((sc or {}).get("bet") or {}).get("cycle") or {}
+    if cyc.get("phase") in ("faded",) or str(cyc.get("phase", "")).startswith("off its peak"):
+        causes.append(("theme has faded", f"the sector's theme has {cyc.get('phase')} in earnings-call breadth"))
+    neg = [q for q in (m.get("text_quotes") or []) if q.get("category") in ("demand_down", "guidance_down", "pricing_down") and q.get("quote") and "?" not in q["quote"]]
+    if neg:
+        causes.append(("what the company said", f"“{neg[0]['quote'][:180]}” ({neg[0].get('doc')})"))
+    if (m.get("llm_red_flags") or 0) >= 3 or (m.get("text_red_flags") or 0) > 0:
+        causes.append(("red flags", "red-flag language in the documents (going concern, restatement, material weakness, covenant, investigation)"))
+    if phases:
+        last = phases[-1] if isinstance(phases, list) else None
+        if isinstance(last, dict) and (last.get("ret") or last.get("return") or 0) < -0.15:
+            lab = last.get("label") or last.get("driver") or ""
+            ev = ", ".join(str(e.get("label") or e.get("type") or e) for e in (last.get("events") or [])[:3])
+            causes.append(("the last move", f"the last price phase was {(last.get('ret') or last.get('return'))*100:.0f}%, read as {lab}" + (f" ({ev})" if ev else "")))
+    if causes:
+        sentence = "Cheap because: " + "; ".join(f"{k} — {v}" for k, v in causes) + "."
+    else:
+        sentence = ("Cheap without a visible reason in the numbers: " + "; ".join(cheap_signals) + ". That is the case worth verifying in the filings — a good company falling on good results (F-83).")
+    return {"cheap": True, "signals": cheap_signals, "causes": causes, "sentence": sentence, "kind": (causes[0][0] if causes else "no visible reason")}
 
 
 GLOSSARY = [

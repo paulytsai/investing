@@ -94,6 +94,8 @@ def danoff_read(m: dict) -> dict:
     if growth is not None:
         growth = min(growth, 0.60)                                     # no business doubles earnings every 14 months for long; 60% is the ceiling used for the test
     ytd = years_to_double(growth)
+    cc = m.get("commodity_cycle") or {}
+    at_peak = str(cc.get("phase", "")).startswith("peak")
     face, face_why = smile(m)
     bob, bob_why = best_of_breed(m)
     pe, peg = m.get("pe_ttm"), m.get("peg")
@@ -102,10 +104,15 @@ def danoff_read(m: dict) -> dict:
     if ytd is not None:
         lines.append(f"Follow earnings: at the recent {growth*100:.0f}% a year, earnings per share double in {ytd:.1f} years"
                      + (" — inside Danoff's four-to-five-year test." if ytd <= 5 else " — too slow for the four-to-five-year test."))
+    elif growth is not None and eps_ttm is not None and eps_ttm > 0.3 and eps_cagr is not None:
+        lines.append(f"Follow earnings: recovering, not compounding — EPS is {eps_cagr*100:+.0f}% a year over three years despite {eps_ttm*100:+.0f}% in the last 12 months; "
+                     "Danoff's test needs sustained growth, and a rebound to a prior level is not that.")
     elif growth is not None:
         lines.append("Follow earnings: earnings are not growing, so there is nothing for the price to follow.")
     else:
         lines.append("Follow earnings: not enough earnings history to judge.")
+    if at_peak:
+        lines.append(f"But its commodity group ({cc.get('label')}) is at a cycle peak: earnings here are cyclical, and doubling again from a peak is the exception, not the rule.")
     # 2. smile or frown
     lines.append(f"Smile or frown: {face}" + (" — " + "; ".join(face_why) + "." if face_why else "."))
     # 3. quality over price
@@ -121,13 +128,14 @@ def danoff_read(m: dict) -> dict:
         lines.append(f"The stock is up {ru*100:.0f}% in a year. Danoff: you have not missed it — the only question is whether earnings can double from here"
                      + (", and on these numbers they can." if ytd is not None and ytd <= 5 else ", and on these numbers that is not shown."))
     score = 0.0
-    score += 40 * (1.0 if ytd is not None and ytd <= 4 else (0.7 if ytd is not None and ytd <= 5 else (0.35 if ytd is not None and ytd <= 8 else 0.0)))
+    fe = 1.0 if ytd is not None and ytd <= 4 else (0.7 if ytd is not None and ytd <= 5 else (0.35 if ytd is not None and ytd <= 8 else 0.0))
+    score += 40 * (fe * 0.5 if at_peak else fe)
     score += 30 * {"smile": 1.0, "flat": 0.5, "frown": 0.0}[face]
     score += 30 * bob
     verdict = ("Danoff would own it" if score >= 70 else ("Danoff would look closer" if score >= 45 else "Danoff would pass"))
     if face == "frown":
         verdict = "Danoff would sell or swap: fundamentals are deteriorating"
-    return {"score": round(score, 1), "verdict": verdict, "face": face, "years_to_double": ytd, "growth_used": growth, "best_of_breed": bob,
+    return {"score": round(score, 1), "verdict": verdict, "face": face, "years_to_double": ytd, "growth_used": growth, "best_of_breed": bob, "at_cycle_peak": at_peak,
             "lines": lines, "rule_ids": ["F-114", "F-17", "R-31"]}
 
 

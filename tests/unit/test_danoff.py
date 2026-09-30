@@ -28,3 +28,26 @@ def test_danoff_sector_aggregates():
              danoff_read({"eps_cagr_3y": 0.02, "eps_growth_ttm": -0.2, "rev_accel": -0.1, "beat_streak": 1})]
     s = danoff_sector(reads, ["AAA", "BBB"])
     assert s["best_of_breed"] == "AAA" and abs(s["share_smiling"] - 0.5) < 1e-9 and "Danoff view" in s["verdict"]
+
+
+def test_why_cheap_explains_the_cause():
+    from engine.reports.plain import why_cheap
+
+    pess = why_cheap({"metrics": {"pe_own_pctile": 8, "multiple_led_drawdown": 0.3, "eps_growth_ttm": 0.2, "rev_accel": 0.0}})
+    assert pess["cheap"] and pess["kind"] == "market pessimism" and "multiple fell while earnings held" in pess["sentence"]
+    fell = why_cheap({"metrics": {"pe_own_pctile": 10, "eps_growth_ttm": -0.3}})
+    assert fell["kind"] == "earnings fell"
+    sector = why_cheap({"metrics": {"pe_own_pctile": 20, "eps_growth_ttm": 0.05}}, {"inputs": {"pe_pctile_med": 25}})
+    assert sector["kind"] == "sector out of favour"
+    mystery = why_cheap({"metrics": {"pe_own_pctile": 15, "eps_growth_ttm": 0.1, "rev_accel": 0.01}})
+    assert mystery["kind"] == "no visible reason" and "F-83" in mystery["sentence"]
+    assert not why_cheap({"metrics": {"pe_own_pctile": 70}})["cheap"]
+
+
+def test_cycle_peak_halves_the_follow_earnings_credit():
+    from engine.frameworks.danoff import danoff_read
+
+    base = {"eps_cagr_3y": 0.5, "eps_growth_ttm": 0.6, "rev_accel": 0.05, "beat_streak": 6, "roic_ttm": 0.3, "gross_margin": 0.5}
+    a = danoff_read(base)
+    b = danoff_read({**base, "commodity_cycle": {"phase": "peak", "label": "Memory"}})
+    assert b["score"] < a["score"] and b["at_cycle_peak"] and any("cycle peak" in x for x in b["lines"])

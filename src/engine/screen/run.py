@@ -277,8 +277,16 @@ def _render(all_cands, chosen, as_of, out, hyp, preset, regions, top, narrate, n
             excluded.append(v)
     tpl = render.env().get_template("board.html.j2")
     scalls = sorted((sector_calls or {}).values(), key=lambda c: -(c.score or 0))
+    from ..frameworks.danoff import danoff_sector
+    from ..screen.commodity import group_for
+
+    dgroups: dict[str, dict] = {}
+    for g, lab in (("oil_gas", "Oil & gas"), ("memory", "Memory & storage")):
+        reads = [(c.metrics.get("danoff"), c.symbol) for c in all_cands if c.eligible and group_for(c.industry, c.symbol) == g and c.metrics.get("danoff")]
+        if reads:
+            dgroups[lab] = danoff_sector([r for r, _ in reads], [sy for _, sy in reads])
     html = tpl.render(title=f"Ideas {as_of.date()}", as_of=as_of.date(), ideas=board_rows[: max(top, len(board_rows))], excluded=excluded, n_scored=len(all_cands),
-                      sector_calls=scalls, sector_map={k: v.model_dump() for k, v in (sector_calls or {}).items()}, changes=changes,
+                      sector_calls=scalls, sector_map={k: v.model_dump() for k, v in (sector_calls or {}).items()}, changes=changes, danoff_groups=dgroups,
                       regions=regions, preset=preset, top=top, macro=macro, angle_keys=angle_keys, angle_labels=angle_labels, angle_short=angle_short,
                       sectors=sorted({c.sector for c in all_cands if c.sector}), asset_types=sorted({c.asset_type for c in all_cands}),
                       universe_note=f"{hyp.get('universe.kind')} (cap floor ${hyp.get('universe.cap_floor_usd')/1e9:.0f}B, hypothesis D-53)",
