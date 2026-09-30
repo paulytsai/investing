@@ -68,7 +68,16 @@ Built in v1 are marked ✅; proposed next steps ☐. Every item maps to the spec
 - ✅ Japan pilot (Core30 + Large70) screened and backtested from 2017-12-31 on J-Quants 決算短信 point-in-time data (DiscDate), split-restated per-share figures, 簡易FCF / ROIC proxies labelled.
 - ☐ Japan-specific yardsticks (総還元 vs JGB; R-38 FX-sensitivity check) and EDINET governance parsing for G1/G2.
 
-## Backtest evidence so far (US, 2016-03-31 → 2024-09-30, top 20, 24-month hold, cap-floor universe with delisted and acquired names)
+## Backtest evidence so far (US, 2016-03-31 → 2024-09-30, top 20, cap-floor universe with delisted and acquired names)
+- **Cycle-rule exits + Kelly weights, five AI layers, per-sector angle weights, share-count and ADR fixes** (run 4, 2026-09-30): 22 cohorts closed
+  under the cycle rule (formations to 2021; later cohorts still hold open positions marked at the last close), mean hold 3.6 years, mean cohort
+  return **+73.4%** equal weight / **+74.2%** Kelly, **+9.9 pp vs SPY** over the same windows (59% of cohorts beat) and **+21 pp vs the
+  equal-weight S&P**. Like-for-like on the same 22 cohorts the fixed 24-month hold gives +4.9 pp and the fixed 36-month hold +4.5 pp, so the
+  cycle rule adds about 5 pp per cohort: it let 35 of 57 sector-cohorts run to the 60-month ceiling and cut the rest when the sector call reversed
+  (2020-09, 2021-06, 2022-06, 2023-03) or the theme faded (tariffs, 2025-03). Kelly vs equal weight is a wash on the mean (Kelly beats equal weight
+  in 55% of cohorts, 95% invested); its value is concentration discipline, not return. Overlapping portfolio 2017→2026 (exited proceeds tracking the
+  index until the cohort's last exit): **CAGR 14.9% vs SPY 15.1%**, beta 1.04, max drawdown 37% vs 34%, ahead in 2020 and 2023, behind in 2025.
+  Rank-IC over the cycle horizon: **quality 0.09 (t 4.4)**, Idea Strength 0.07 (t 4.0); story and moat ≈ 0.
 - **Sector-first with text and theme factors** (run 3): 34 cohorts, mean 2-year cohort return **+32.6%** vs SPY +32.4% (excess +0.2 pp; 50% of
   cohorts beat) and vs the equal-weight S&P **+7.6 pp** (74% of cohorts beat); vs each pick's **own theme sector +5.0 pp** (47% of picks beat their
   sector). Brinson: **allocation +2.5 pp** (the sector calls) and **selection +5.0 pp** (the names) per cohort. Idea Strength rank-IC 0.058 (t 3.6);
