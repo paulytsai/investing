@@ -208,12 +208,17 @@ def _render(all_cands, chosen, as_of, out, hyp, preset, regions, top, narrate, n
     events = read_df("events", f"security_id IN ({ids}) AND event_date <= DATE '{as_of.date()}'") if has_table("events") else pd.DataFrame()
     ranked = sorted([c for c in all_cands if c.idea_strength is not None], key=lambda c: -(c.idea_strength or 0))
     board_rows, excluded = [], []
-    for c in ranked:
-        px = prices[prices.security_id == c.security_id]
+    px_by = {k: g for k, g in prices.groupby("security_id", sort=False)} if not prices.empty else {}
+    spark_rows = max(top * 10, 200)          # sparklines only for the top rows: a 2,000-name board with charts is 20+ MB
+    for i, c in enumerate(ranked):
         v = _view(c)
-        spec = build_price_chart(c.security_id, c.symbol, px, start=as_of - pd.Timedelta(days=3 * 365), end=as_of, overlays={"price"}, compact=True, currency=c.currency)
-        spec["id"] = v["chart_id"]
-        v["chart_json"] = to_json(spec)
+        if i < spark_rows:
+            px = px_by.get(c.security_id, prices.iloc[0:0])
+            spec = build_price_chart(c.security_id, c.symbol, px, start=as_of - pd.Timedelta(days=3 * 365), end=as_of, overlays={"price"}, compact=True, currency=c.currency)
+            spec["id"] = v["chart_id"]
+            v["chart_json"] = to_json(spec)
+        else:
+            v["chart_json"] = None
         if c.eligible:
             board_rows.append(v)
         else:
