@@ -24,6 +24,9 @@ screen:
     value_tilt:   {story_growth: 0.10, moat: 0.10, quality: 0.15, on_sale: 0.30, asymmetry: 0.20, alignment: 0.05, fundamental_momentum: 0.05, portfolio_fit: 0.05}
     quality_tilt: {story_growth: 0.15, moat: 0.25, quality: 0.25, on_sale: 0.10, asymmetry: 0.05, alignment: 0.10, fundamental_momentum: 0.05, portfolio_fit: 0.05}
     crisis_mode:  {story_growth: 0.15, moat: 0.20, quality: 0.20, on_sale: 0.25, asymmetry: 0.15, alignment: 0.05, fundamental_momentum: 0.00, portfolio_fit: 0.00}
+    # evidence from the 2016–2024 full-universe backtest (rank-IC vs 24m returns): quality t=3.6, momentum t=2.1, on_sale ≈ 0,
+    # asymmetry and portfolio_fit negative. A sensitivity variant for D-27, not a replacement for Paul's weights.
+    evidence_tilt: {story_growth: 0.10, moat: 0.15, quality: 0.35, on_sale: 0.10, asymmetry: 0.00, alignment: 0.10, fundamental_momentum: 0.20, portfolio_fit: 0.00}
   preset: {value: paul_default, decision_id: D-27}
   action:
     buy_strength_min: {value: 70, decision_id: D-27, note: "Idea Strength ≥ this and on_sale angle ≥ on_sale_min → buy-in-stages"}
