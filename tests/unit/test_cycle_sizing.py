@@ -13,22 +13,28 @@ def _q(s):
 def test_cycle_exit_needs_two_consecutive_underweights_and_respects_min_hold():
     f = _q("2020-03-31")
     evals = [f + pd.offsets.QuarterEnd(i) for i in range(1, 21)]
-    st = {d: {"ai_chips": "overweight"} for d in evals}
+    st = {d: {"ai_chips": "overweight", "energy": "underweight"} for d in evals + [f]}
     st[evals[0]]["ai_chips"] = "underweight"           # one quarter only → not over
-    st[evals[1]]["ai_chips"] = "underweight"           # second in a row at 2020-09-30 → over, but min hold 12m binds
-    ex = exit_targets(f, evals, st, {"ai_chips": None}, {}, 12, 60, 2, 25)
+    st[evals[1]]["ai_chips"] = "underweight"           # second in a row at 2020-09-30 → call reversed, but min hold 12m binds
+    st[evals[0]]["energy"] = st[evals[1]]["energy"] = "underweight"   # formed underweight: staying underweight is not a reversal
+    ex = exit_targets(f, evals, st, {"ai_chips": None, "energy": None}, {}, 12, 60, 2, 25)
     assert ex["ai_chips"]["target"] == f + pd.DateOffset(months=12) and "cycle over at 2020-09-30" in ex["ai_chips"]["reason"]
-    st2 = {d: {"ai_chips": "overweight"} for d in evals}
+    assert ex["energy"]["target"] == f + pd.DateOffset(months=60)
+    st2 = {d: {"ai_chips": "overweight"} for d in evals + [f]}
     ex2 = exit_targets(f, evals, st2, {"ai_chips": None}, {}, 12, 60, 2, 25)
     assert ex2["ai_chips"]["target"] == f + pd.DateOffset(months=60) and "max hold" in ex2["ai_chips"]["reason"]
+    st3 = {d: {"ai_chips": "neutral"} for d in evals + [f]}
+    st3[evals[2]]["ai_chips"] = st3[evals[3]]["ai_chips"] = "avoid"
+    assert "avoid" in exit_targets(f, evals, st3, {"ai_chips": None}, {}, 12, 60, 2, 25)["ai_chips"]["reason"]
 
 
 def test_breadth_signal_uses_only_completed_quarters():
     idx = pd.to_datetime(["2023-03-31", "2023-06-30", "2023-09-30", "2023-12-31", "2024-03-31", "2024-06-30"])
-    b = {"ai_compute": pd.Series([10, 20, 30, 40, 25, 60], index=idx)}
+    b = {"ai_compute": pd.Series([10, 20, 30, 40, 25, 60], index=idx), "glp1": pd.Series([1, 2, 3, 4, 2.5, 6], index=idx)}
     assert breadth_over("ai_compute", _q("2024-06-30"), b, 25)       # last completed quarter (2024-03-31) 25 vs peak 40 → −37%
     assert not breadth_over("ai_compute", _q("2024-09-30"), b, 25)   # 2024-06-30 = 60 is the new peak
     assert not breadth_over(None, _q("2024-06-30"), b, 25)
+    assert not breadth_over("glp1", _q("2024-06-30"), b, 25)     # never reached 10% breadth: not a cycle
 
 
 class _Book:

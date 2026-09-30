@@ -22,7 +22,7 @@ Built in v1 are marked ✅; proposed next steps ☐. Every item maps to the spec
 - ✅ **Reverse DCF** "growth the price implies" as a factor; scenario DCF with expected value **and** range (F-77).
 - ✅ **Weight presets** (paul_default, growth/value/quality tilt, crisis mode) and a board that re-ranks on any angle.
 - ✅ **Cycle-aware holding period (D-24)** — the backtest no longer assumes a fixed hold. A pick is held until its theme-sector cycle is judged
-  over, point-in-time from later quarterly evaluations only: the sector's stance falls to underweight/avoid at K consecutive evaluations, or the
+  over, point-in-time from later quarterly evaluations only: the sector call has reversed (avoid, or two stance levels below the call made at formation) at K consecutive evaluations, or the
   theme's transcript breadth sits ≥25% below its trailing peak for K quarters (a theme counts as a cycle only once it has reached real breadth);
   bounded by a 12-month floor and a 60-month ceiling (thematic cycles run 2–5 years; the AI cycle dates from Nov 2022). Fixed 24/36-month holds stay
   in the sensitivity grid as variants; positions still open are marked at the last close and flagged, never silently dropped.

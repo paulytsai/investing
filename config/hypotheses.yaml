@@ -72,7 +72,7 @@ backtest:
   exit_rule: {value: cycle, decision_id: D-24, note: "cycle = hold until the name's theme-sector cycle is judged over (below); fixed = hold_months"}
   min_hold_months: {value: 12, decision_id: D-24}
   max_hold_months: {value: 60, decision_id: D-24, note: "thematic cycles run 2-5 years (Paul); the AI cycle started Nov 2022"}
-  cycle_over_consecutive: {value: 2, decision_id: D-24, note: "quarterly evaluations in a row at which the sector stance is underweight/avoid, or theme breadth is below its trailing peak by theme_breadth_drop_pct"}
+  cycle_over_consecutive: {value: 2, decision_id: D-24, note: "quarterly evaluations in a row at which the sector call has reversed (avoid, or two stance levels below the call at formation), or the theme breadth (once >= 10% of calls) is below its trailing peak by theme_breadth_drop_pct"}
   theme_breadth_drop_pct: {value: 25, decision_id: D-24}
   top_n: {value: 20, decision_id: D-08}
   cadence: {value: quarterly, decision_id: none}

@@ -159,7 +159,7 @@ def run_backtest(start="2016-03-31", end="2024-09-30", hold_months=24, top=20, r
     cstats_k = curve_stats(curve_k, n_sleeves) if not curve_k.empty else {}
     angle_keys = list(rules()["angles"].keys())
     ic = rank_ic({d: co.scored for d, co in cohorts.items()}, result_by_formation(all_results), angle_keys)
-    sens = run_sensitivity(dates, region, hyp, top, universe_kind, max_sector, book, hold_months, plan, preset) if sensitivity else []
+    sens = run_sensitivity(dates, region, hyp, top, universe_kind, max_sector, book, hold_months, plan, preset, base_cohorts=cohorts) if sensitivity else []
     run_id = f"{start}_{end}_{datetime.now().strftime('%H%M%S')}"
     out = out_dir or (REPORTS_DIR / "backtest" / run_id)
     out.mkdir(parents=True, exist_ok=True)
@@ -183,7 +183,7 @@ def run_backtest(start="2016-03-31", end="2024-09-30", hold_months=24, top=20, r
     return {"path": out, "rows": rows, "pooled": pooled, "curve": cstats, "rank_ic": ic}
 
 
-def run_sensitivity(dates, region, hyp, top, universe_kind, max_sector, book, hold_months, plan: ExitPlan, preset) -> list[dict]:
+def run_sensitivity(dates, region, hyp, top, universe_kind, max_sector, book, hold_months, plan: ExitPlan, preset, base_cohorts=None) -> list[dict]:
     """Variants: exit rules (fixed 24m, fixed 36m, cycle) on the default preset, then presets, name counts and sector cap
     under the run's exit rule. Every row reports the equal-weight and the Kelly-weight cohort return."""
     variants = [{"label": "exit: fixed 24m", "preset": preset, "top": top, "sector_cap": max_sector, "rule": "fixed", "hold": 24},
@@ -197,7 +197,8 @@ def run_sensitivity(dates, region, hyp, top, universe_kind, max_sector, book, ho
     variants.append({"label": "no sector cap", "preset": preset, "top": top, "sector_cap": None, "rule": plan.rule, "hold": hold_months})
     out = []
     for v in variants:
-        cohorts = _score_all(dates, region, hyp, v["top"], v["preset"], universe_kind, v["sector_cap"], quiet=True)
+        same = base_cohorts is not None and (v["preset"], v["top"], v["sector_cap"]) == (preset, top, max_sector)
+        cohorts = base_cohorts if same else _score_all(dates, region, hyp, v["top"], v["preset"], universe_kind, v["sector_cap"], quiet=True)
         gc.collect()
         vplan = ExitPlan(v["rule"], v["hold"], hyp, plan.eval_dates, plan.stances, plan.themes) if (v["rule"], v["hold"]) != (plan.rule, plan.hold_months) else plan
         results, _, sizing = _size_and_evaluate(cohorts, dates, book, vplan, hyp, region)
@@ -205,7 +206,9 @@ def run_sensitivity(dates, region, hyp, top, universe_kind, max_sector, book, ho
         p = pooled_stats(rows)
         out.append({**{k: v[k] for k in ("label", "preset", "top", "sector_cap")}, "exit": vplan.label,
                     **{k: p.get(k) for k in ("cohorts", "mean_cohort_ret", "mean_excess", "share_cohorts_beating", "mean_batting_beat", "mean_cohort_ret_kelly", "mean_excess_kelly", "mean_hold_years")}})
-        del cohorts, results
+        del results
+        if not same:
+            del cohorts
         gc.collect()
     return out
 

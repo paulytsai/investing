@@ -9,6 +9,17 @@ import pandas as pd
 from ..store import has_table, read_df
 
 OVER_STANCES = ("underweight", "avoid")
+LEVEL = {"overweight": 3, "neutral": 2, "underweight": 1, "avoid": 0}
+MIN_PEAK_BREADTH = 10.0     # a theme counts as a cycle only once ≥10% of calls in a quarter mention it
+
+
+def stance_reversed(at_formation: str | None, now: str | None) -> bool:
+    """The sector call has reversed: `avoid`, or two stance levels below the call at formation (overweight → underweight).
+    Stances are relative ranks among sectors, so a bare `underweight` is not a cycle signal for a sector formed underweight."""
+    if now == "avoid":
+        return True
+    a, n = LEVEL.get(at_formation or ""), LEVEL.get(now or "")
+    return a is not None and n is not None and n <= a - 2
 
 
 def theme_breadth() -> dict[str, pd.Series]:
@@ -32,7 +43,7 @@ def breadth_over(theme: str | None, at: pd.Timestamp, breadth: dict[str, pd.Seri
     if len(s) < 4:
         return False
     peak = float(s.tail(lookback_q).max())
-    return peak > 0 and float(s.iloc[-1]) <= peak * (1.0 - drop_pct / 100.0)
+    return peak >= MIN_PEAK_BREADTH and float(s.iloc[-1]) <= peak * (1.0 - drop_pct / 100.0)
 
 
 def exit_targets(formation: pd.Timestamp, eval_dates: list[pd.Timestamp], stances: dict[pd.Timestamp, dict[str, str]], themes: dict[str, str | None],
@@ -48,15 +59,17 @@ def exit_targets(formation: pd.Timestamp, eval_dates: list[pd.Timestamp], stance
     out = {}
     for s in sectors:
         run, trail, hit = 0, [], None
+        st0 = (stances.get(formation) or {}).get(s)
         for d in later:
             st = (stances.get(d) or {}).get(s)
+            s_over = stance_reversed(st0, st)
             b_over = breadth_over(themes.get(s), d, breadth, drop_pct)
-            over = (st in OVER_STANCES) or b_over
+            over = s_over or b_over
             run = run + 1 if over else 0
             trail.append({"date": str(d.date()), "stance": st, "breadth_over": b_over})
             if run >= k:
                 hit = d
-                reason = "sector stance " + str(st) if st in OVER_STANCES else "theme breadth off its peak"
+                reason = f"sector call reversed {st0} → {st}" if s_over else "theme breadth off its peak"
                 break
         if hit is not None:
             out[s] = {"target": max(hit, lo), "reason": f"cycle over at {hit.date()} ({reason}, {k} consecutive evaluations)", "evaluations": trail}
