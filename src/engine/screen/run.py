@@ -178,13 +178,23 @@ def run_ideas(as_of=None, top: int = 20, regions: list[str] | None = None, prese
     run_id = f"{as_of.date()}_{datetime.now().strftime('%H%M%S')}"
     out = out_dir or (REPORTS_DIR / "ideas" / run_id)
     out.mkdir(parents=True, exist_ok=True)
-    _render(all_cands, chosen, as_of, out, hyp, preset or hyp.get("screen.preset"), regions, top, narrate, narrate_symbols, sector_calls, sizing)
     (out / "sectors.json").write_text(json.dumps({k: v.model_dump(mode="json") for k, v in sector_calls.items()}, indent=1, default=str))
     (out / "sizing.json").write_text(json.dumps({"weights": sizing.get("weights"), "cash": sizing.get("cash"), "rf": sizing.get("rf"), "params": sizing.get("params"),
                                                  "blocks": {k: v for k, v in (sizing.get("blocks") or {}).items()}}, indent=1, default=str))
     (out / "run.json").write_text(json.dumps({"as_of": str(as_of.date()), "title": f"Top {top} ideas ({', '.join(regions)})", "entry": "board.html",
                                               "n_scored": len(all_cands), "preset": preset or hyp.get("screen.preset")}, indent=1))
     (out / "candidates.json").write_text(json.dumps([c.model_dump(mode="json") for c in all_cands], default=str))
+    changes = None
+    if not symbols and not narrate_symbols:          # a full screen: what changed since the previous full screen
+        from .diff import diff_runs, full_runs
+
+        prev = [r for r in full_runs(regions[0]) if r.resolve() != out.resolve()]
+        if prev:
+            try:
+                changes = diff_runs(prev[-1], out)
+            except Exception as e:  # noqa: BLE001
+                print(f"[ideas] diff vs previous run failed: {e}")
+    _render(all_cands, chosen, as_of, out, hyp, preset or hyp.get("screen.preset"), regions, top, narrate, narrate_symbols, sector_calls, sizing, changes)
     con = ledger()
     con.execute("INSERT OR REPLACE INTO runs VALUES (?,?,?,?,?,?)", [run_id, "ideas", as_of.date(), datetime.now(), json.dumps({"top": top, "regions": regions}), str(out)])
     con.close()
@@ -236,7 +246,7 @@ def _view(c: IdeaCandidate) -> dict:
     return d
 
 
-def _render(all_cands, chosen, as_of, out, hyp, preset, regions, top, narrate, narrate_symbols=None, sector_calls=None, sizing=None) -> None:
+def _render(all_cands, chosen, as_of, out, hyp, preset, regions, top, narrate, narrate_symbols=None, sector_calls=None, sizing=None, changes=None) -> None:
     sizing = sizing or {}
     r = rules()
     angle_keys = list(r["angles"].keys())
@@ -268,7 +278,7 @@ def _render(all_cands, chosen, as_of, out, hyp, preset, regions, top, narrate, n
     tpl = render.env().get_template("board.html.j2")
     scalls = sorted((sector_calls or {}).values(), key=lambda c: -(c.score or 0))
     html = tpl.render(title=f"Ideas {as_of.date()}", as_of=as_of.date(), ideas=board_rows[: max(top, len(board_rows))], excluded=excluded, n_scored=len(all_cands),
-                      sector_calls=scalls, sector_map={k: v.model_dump() for k, v in (sector_calls or {}).items()},
+                      sector_calls=scalls, sector_map={k: v.model_dump() for k, v in (sector_calls or {}).items()}, changes=changes,
                       regions=regions, preset=preset, top=top, macro=macro, angle_keys=angle_keys, angle_labels=angle_labels, angle_short=angle_short,
                       sectors=sorted({c.sector for c in all_cands if c.sector}), asset_types=sorted({c.asset_type for c in all_cands}),
                       universe_note=f"{hyp.get('universe.kind')} (cap floor ${hyp.get('universe.cap_floor_usd')/1e9:.0f}B, hypothesis D-53)",

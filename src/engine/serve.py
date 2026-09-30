@@ -1,8 +1,14 @@
 """`engine serve`: a tiny FastAPI app that serves reports/ (index of runs + static pages)."""
 from __future__ import annotations
 
-from fastapi import FastAPI
-from fastapi.responses import FileResponse, RedirectResponse
+import re
+import threading
+import uuid
+from datetime import datetime
+from pathlib import Path
+
+from fastapi import FastAPI, Form, Request, UploadFile
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 from .config import REPORTS_DIR
@@ -10,12 +16,84 @@ from .reports.render import update_index
 
 app = FastAPI(title="Paul Tsai investment engine — reports")
 REPORTS_DIR.mkdir(parents=True, exist_ok=True)
+JOBS: dict[str, dict] = {}
 
 
-@app.get("/")
-def root():
+@app.get("/runs")
+def runs():
     update_index()
     return RedirectResponse("/reports/index.html")
+
+
+@app.get("/", response_class=HTMLResponse)
+def home():
+    """The front door: what the engine sees now, check my idea, how well it has worked."""
+    import glob
+    import json
+    import os
+
+    from .evaluate.ledger import history
+    from .reports.plain import summary_parts
+    from .reports.render import env, now
+    from .screen.diff import full_runs, latest_diff
+
+    board = None
+    runs_ = full_runs()
+    if runs_:
+        run = runs_[-1]
+        try:
+            cands = json.loads((run / "candidates.json").read_text())
+            sizing = json.loads((run / "sizing.json").read_text())
+            sectors = json.loads((run / "sectors.json").read_text())
+            meta = json.loads((run / "run.json").read_text())
+            chosen = sorted([c for c in cands if c["security_id"] in (sizing.get("weights") or {})], key=lambda c: -(c.get("idea_strength") or 0))
+            names = [{"symbol": c["symbol"], "thesis": summary_parts(c, sectors.get(c["theme_sector"]), sizing["weights"].get(c["security_id"]))["thesis"].split(" — ", 1)[-1]} for c in chosen[:8]]
+            ai = [v for k, v in sectors.items() if k.startswith("ai_")]
+            en = sectors.get("energy")
+            barbell = ("tech end: " + ", ".join(f"{v['label'].split(' — ')[0]} {v['stance']}" for v in ai) + (f"; oil end: Energy {en['stance']}" + (f" — {en['cycle_read']['verdict']}" if en.get("cycle_read") else "") if en else ""))
+            board = {"run": run.name, "as_of": meta.get("as_of"), "n_scored": meta.get("n_scored"), "names": names, "barbell": barbell, "changes": latest_diff()}
+        except Exception as e:  # noqa: BLE001
+            board = None
+            print(f"[home] board summary failed: {e}")
+    bt = None
+    bts = sorted(glob.glob(str(REPORTS_DIR / "backtest" / "*" / "results.json")), key=os.path.getmtime)
+    if bts:
+        try:
+            r = json.loads(open(bts[-1]).read())
+            p = r.get("pooled") or {}
+            bt = {"run": Path(bts[-1]).parent.name, "title": (r.get("params") or {}).get("hold_label", "backtest"), "cohorts": p.get("cohorts"), "mean_ret": p.get("mean_cohort_ret") or 0,
+                  "hold": p.get("mean_hold_years") or 0, "excess": p.get("mean_excess") or 0, "beat": p.get("share_cohorts_beating") or 0, "kelly": p.get("mean_cohort_ret_kelly")}
+        except Exception:  # noqa: BLE001
+            bt = None
+    return env().get_template("home.html.j2").render(title="Paul's engine", board=board, bt=bt, ledger=list(reversed(history(limit=6))), generated=now(), assets="/reports/assets/")
+
+
+def _run_ideas_job(job_id: str, narrate: bool) -> None:
+    from .screen.run import run_ideas
+
+    try:
+        JOBS[job_id]["note"] = "scoring the universe, sector calls, Kelly" + (", narratives" if narrate else "")
+        r = run_ideas(top=20, narrate=narrate, quiet=True)
+        if not r:
+            raise RuntimeError("no candidates: pull and build data first")
+        JOBS[job_id].update({"state": "done", "url": f"/reports/ideas/{r['run_id']}/board.html"})
+    except Exception as e:  # noqa: BLE001
+        JOBS[job_id].update({"state": "error", "error": str(e)[:300]})
+
+
+@app.post("/ideas/generate")
+async def ideas_generate(narrate: str = Form("")):
+    if any(j.get("state") == "running" and j.get("kind") == "ideas" for j in JOBS.values()):
+        return JSONResponse({"error": "a screen is already running"}, status_code=409)
+    job_id = uuid.uuid4().hex[:10]
+    JOBS[job_id] = {"state": "running", "kind": "ideas", "note": "starting"}
+    threading.Thread(target=_run_ideas_job, args=(job_id, narrate == "1"), daemon=True).start()
+    return {"job": job_id}
+
+
+@app.get("/ideas/job/{job_id}")
+def ideas_job(job_id: str):
+    return JOBS.get(job_id) or {"state": "error", "error": "unknown job"}
 
 
 @app.get("/health")
@@ -33,15 +111,6 @@ app.mount("/reports", StaticFiles(directory=str(REPORTS_DIR), html=True), name="
 
 
 # ---- the evaluator page: Paul's names + thesis in, a result page out (runs in a background thread; the page polls) ----
-import re  # noqa: E402
-import threading  # noqa: E402
-import uuid  # noqa: E402
-from datetime import datetime  # noqa: E402
-
-from fastapi import Form, Request, UploadFile  # noqa: E402
-from fastapi.responses import HTMLResponse, JSONResponse  # noqa: E402
-
-JOBS: dict[str, dict] = {}
 
 
 def _latest_screen_date() -> str | None:

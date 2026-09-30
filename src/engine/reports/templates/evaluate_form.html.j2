@@ -1,5 +1,5 @@
 {% extends "base.html.j2" %}
-{% block nav %}<a href="/reports/index.html">runs</a> · evaluate{% endblock %}
+{% block nav %}<a href="/">home</a> · <a href="/runs">runs</a> · evaluate{% endblock %}
 {% block content %}
 <h1>Evaluate my ideas</h1>
 <p class="sub">Your names and your thesis, judged by the same engine that sources ideas: placement in the full scored universe, sector view and bet, what the engine sees for and against, Kelly size, and (with the verdict) a claim-by-claim test of your thesis against the filings and calls. {% if latest %}Universe for placement: latest full screen as of <b>{{ latest }}</b>.{% else %}<b>No full screen yet</b> — run <code>engine ideas --top 20</code> first, or the page will score the whole universe (slow).{% endif %}</p>

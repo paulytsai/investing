@@ -1,0 +1,51 @@
+{% extends "base.html.j2" %}
+{% block nav %}home{% endblock %}
+{% block content %}
+<h1>Paul's investment engine</h1>
+<p class="sub">Decision support, never orders. Two programs on one engine: the sourcing engine scans the whole market on its own; the evaluator judges the ideas you bring. The backtest is the evidence behind both.</p>
+<div class="home-grid">
+  <div class="card">
+    <h2 style="margin-top:0">What the engine sees now</h2>
+    {% if board %}
+    <div class="small muted">Latest full screen as of <b>{{ board.as_of }}</b> · {{ board.n_scored }} names scored · <a href="/reports/ideas/{{ board.run }}/board.html"><b>Open the board →</b></a></div>
+    {% if board.changes and not board.changes.unchanged %}<div class="small" style="margin:6px 0;padding:6px 10px;border-left:3px solid var(--s3);background:var(--page)"><b>Since the previous run:</b> {% if board.changes.entered %}new {{ board.changes.entered|join(', ') }}. {% endif %}{% if board.changes.left %}dropped {{ board.changes.left|join(', ') }}. {% endif %}{% if board.changes.stances %}{{ board.changes.stances|join('; ') }}.{% endif %}</div>{% endif %}
+    {% if board.barbell %}<div class="small" style="margin:6px 0"><b>Barbell:</b> {{ board.barbell }}</div>{% endif %}
+    <ol style="padding-left:20px;margin:8px 0">{% for n in board.names %}<li style="margin:4px 0"><a href="/reports/ideas/{{ board.run }}/ideas/{{ n.symbol }}.html"><b>{{ n.symbol }}</b></a> — {{ n.thesis }}</li>{% endfor %}</ol>
+    {% else %}<div class="small muted">No full screen yet. Run one below (needs <code>engine pull us</code> and <code>engine build pit</code> first; on the 60-name pilot the board only ranks those 60).</div>{% endif %}
+    <form id="gen" style="margin-top:10px"><button type="submit">Generate now</button> <label class="small"><input type="checkbox" name="narrate" value="1"> with Claude narratives (≈ $1 per name, cached)</label> <span id="gen-status" class="muted small"></span></form>
+  </div>
+  <div class="card">
+    <h2 style="margin-top:0">Check my idea</h2>
+    <p class="small">Your names and your thesis, judged by the same engine: where they rank, the sector view and bet, what argues for and against, the Kelly size, and a claim-by-claim verdict on your thesis. Every evaluation is remembered, so the next one tells you what moved.</p>
+    <a href="/evaluate"><button type="button">Open the evaluator →</button></a>
+    {% if ledger %}<div class="small muted" style="margin-top:10px">Recent: {% for r in ledger %}<a href="/reports/evaluate/{{ r.run_id }}/index.html">{{ r.symbol }}</a> ({{ r.ts[:10] }}, {{ r.action }}{% if r.verdict %}, thesis {{ r.verdict }}{% endif %}){% if not loop.last %} · {% endif %}{% endfor %}</div>{% endif %}
+  </div>
+  <div class="card">
+    <h2 style="margin-top:0">How well has it worked</h2>
+    {% if bt %}
+    <p class="small">{{ bt.title }}: {{ bt.cohorts }} closed cohorts, mean cohort return <b>{{ '%+.0f%%'|format(bt.mean_ret*100) }}</b> ({{ '%.1f'|format(bt.hold) }}-year mean hold), <b>{{ '%+.1f pp'|format(bt.excess*100) }}</b> vs the S&P over the same windows, {{ '%.0f%%'|format(bt.beat*100) }} of cohorts ahead{% if bt.kelly is not none %}; Kelly-weighted {{ '%+.0f%%'|format(bt.kelly*100) }}{% endif %}.</p>
+    <a href="/reports/backtest/{{ bt.run }}/index.html"><button type="button">Open the backtest →</button></a>
+    {% else %}<div class="small muted">No backtest yet: <code>engine backtest --start 2016-03-31 --end 2024-09-30 --top 20</code>.</div>{% endif %}
+  </div>
+</div>
+<p class="small muted" style="margin-top:14px"><a href="/runs">Every run (boards, evaluations, backtests, drivers, macro)</a> · the pages cite Paul's written rules by id; a glossary sits at the foot of each page.</p>
+<style>
+.home-grid { display:grid; grid-template-columns: 1.4fr 1fr 1fr; gap:12px; } .home-grid .card { margin:0; min-width:0; }
+button { font: inherit; background: var(--s1); color:#fff; border:0; border-radius:6px; padding:7px 14px; cursor:pointer; }
+@media (max-width: 900px) { .home-grid { grid-template-columns: 1fr; } }
+</style>
+{% endblock %}
+{% block scripts %}
+<script>
+document.getElementById('gen').addEventListener('submit', async (e) => {
+  e.preventDefault(); const st = document.getElementById('gen-status'); st.textContent = 'starting…';
+  const fd = new FormData(e.target); const r = await fetch('/ideas/generate', {method:'POST', body: fd}); const j = await r.json();
+  if (!j.job) { st.textContent = j.error || 'failed'; return; }
+  const t0 = Date.now();
+  const poll = async () => { const s = await (await fetch('/ideas/job/' + j.job)).json();
+    if (s.state === 'done') { window.location = s.url; return; } if (s.state === 'error') { st.textContent = 'failed: ' + s.error; return; }
+    st.textContent = (s.note || 'running') + ' · ' + Math.round((Date.now()-t0)/1000) + 's (a full screen takes 10–20 minutes)'; setTimeout(poll, 3000); };
+  poll();
+});
+</script>
+{% endblock %}

@@ -7,6 +7,14 @@
   {% for k, v in macro.items() %}<span>{{ k }}: <b>{{ v }}</b></span>{% endfor %}
   <span class="muted">macro as of formation date (FRED, point-in-time)</span>
 </div>
+{% if changes %}
+<div class="card" style="border-left:4px solid var(--s3)"><b>What changed since the last run</b> <span class="muted small">({{ changes.prev_as_of }} → {{ changes.cur_as_of }})</span>
+  {% if changes.unchanged %}<div class="small">Same book, same sector calls.</div>{% else %}
+  <div class="small">{% if changes.entered %}<b>New in the book:</b> {{ changes.entered|join(', ') }} · {% endif %}{% if changes.left %}<b>Dropped:</b> {{ changes.left|join(', ') }} · {% endif %}{% if changes.actions %}<b>Action changes:</b> {{ changes.actions|join('; ') }}{% endif %}</div>
+  <div class="small">{% if changes.stances %}<b>Sector stance flips:</b> {{ changes.stances|join('; ') }} · {% endif %}{% if changes.cycles %}<b>Cycle phase:</b> {{ changes.cycles|join('; ') }}{% endif %}</div>
+  <div class="small muted">{% if changes.moves %}Biggest strength moves: {{ changes.moves|join(' · ') }}{% endif %}{% if changes.kelly %} · Kelly size changes: {{ changes.kelly|join('; ') }}{% endif %}</div>{% endif %}
+</div>
+{% endif %}
 {% if sector_calls %}
 <h2 style="margin-top:14px">Stage 1 — the sector call (R-23 / F-39; theme sectors from config/sectors.yaml, AI split by value-chain layer)</h2>
 <div class="sector-grid">
