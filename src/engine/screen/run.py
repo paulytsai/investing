@@ -102,6 +102,9 @@ def build_candidates(as_of: pd.Timestamp, region: str, hyp: Hypotheses, symbols:
     tsig_by = {k: g for k, g in tsig.groupby("security_id")} if not tsig.empty else {}
     treads = reads_for(as_of, ids)
     treads_by = treads.set_index("security_id") if not treads.empty else None
+    from ..text.themes import theme_factors_for
+
+    theme_by = theme_factors_for(as_of, ids)
     minfo = master.set_index("security_id")
     # one pass of grouping instead of a full-frame boolean filter per name (matters at 2,500+ names per date)
     px_by = {k: g for k, g in prices.groupby("security_id", sort=False)} if not prices.empty else {}
@@ -125,6 +128,7 @@ def build_candidates(as_of: pd.Timestamp, region: str, hyp: Hypotheses, symbols:
         ipo = info["ipo_date"] if info is not None else None
         m["listing_days"] = (as_of - pd.Timestamp(ipo)).days if ipo is not None and pd.notna(ipo) else None
         m.update(text_factors(tsig_by.get(sid)))
+        m.update(theme_by.get(sid, {}))
         if treads_by is not None and sid in treads_by.index:
             tr = treads_by.loc[sid]
             m.update({"llm_demand": float(tr["demand"]), "llm_pricing": float(tr["pricing_power"]), "llm_position": float(tr["competitive_position"]),

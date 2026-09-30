@@ -1,0 +1,60 @@
+# Theme lexicon for the diffusion tracker (F-39 intelligence supply chain, R-23 layers, §6.4 premises). Patterns are
+# case-insensitive regexes scanned over every earnings-call transcript (dated → point-in-time). Add themes freely; the
+# tracker also proposes emerging terms it finds on its own.
+themes:
+  ai_compute:
+    label: "AI / accelerated computing"
+    origin_sectors: [Technology]
+    patterns: ["\\bgenerative AI\\b", "\\blarge language models?\\b", "\\bLLMs?\\b", "\\bGPUs?\\b", "\\baccelerated computing\\b", "\\bAI (?:workloads?|infrastructure|data ?centers?|capex|demand|servers?|clusters?|agents?|models?)\\b", "\\binference\\b", "\\btraining (?:clusters?|runs?|compute)\\b", "\\bAI[- ]driven\\b", "\\bcopilot\\b", "\\bmachine learning\\b"]
+  memory_hbm:
+    label: "Memory / HBM"
+    origin_sectors: [Technology]
+    patterns: ["\\bHBM\\b", "\\bhigh[- ]bandwidth memory\\b", "\\bDRAM\\b", "\\bNAND\\b", "\\bmemory pricing\\b", "\\bDDR5\\b"]
+  ai_power_grid:
+    label: "Data-center power / grid"
+    origin_sectors: [Utilities, Industrials]
+    patterns: ["\\bdata[- ]center (?:power|load|demand|electricity)\\b", "\\bgrid (?:interconnection|capacity|upgrades?)\\b", "\\bload growth\\b", "\\bgigawatts?\\b", "\\bpower (?:availability|constraints?)\\b", "\\btransformers? (?:shortage|lead times?)\\b", "\\bhyperscale (?:campus|campuses)\\b"]
+  nuclear:
+    label: "Nuclear / uranium"
+    origin_sectors: [Energy, Utilities]
+    patterns: ["\\bnuclear\\b", "\\buranium\\b", "\\bSMRs?\\b", "\\bsmall modular reactors?\\b", "\\benrichment\\b"]
+  glp1:
+    label: "GLP-1 / obesity"
+    origin_sectors: [Healthcare]
+    patterns: ["\\bGLP[- ]?1\\b", "\\bsemaglutide\\b", "\\btirzepatide\\b", "\\bobesity (?:drugs?|market|treatments?)\\b", "\\bweight[- ]loss drugs?\\b"]
+  reshoring:
+    label: "Reshoring / supply-chain relocation"
+    origin_sectors: [Industrials]
+    patterns: ["\\breshoring\\b", "\\bonshoring\\b", "\\bnearshoring\\b", "\\bfriend[- ]shoring\\b", "\\bCHIPS Act\\b", "\\bsupply[- ]chain (?:diversification|resilience|relocation)\\b"]
+  cybersecurity:
+    label: "Cybersecurity"
+    origin_sectors: [Technology]
+    patterns: ["\\bcybersecurity\\b", "\\bzero[- ]trust\\b", "\\bransomware\\b", "\\bendpoint (?:security|protection)\\b", "\\bSIEM\\b", "\\bidentity (?:security|protection)\\b"]
+  cloud_migration:
+    label: "Cloud migration"
+    origin_sectors: [Technology]
+    patterns: ["\\bcloud migration\\b", "\\bhyperscalers?\\b", "\\bpublic cloud\\b", "\\bmulti[- ]cloud\\b", "\\bconsumption (?:model|revenue|growth)\\b"]
+  electrification_ev:
+    label: "EV / electrification"
+    origin_sectors: [Consumer Cyclical, Industrials]
+    patterns: ["\\belectric vehicles?\\b", "\\bEVs?\\b", "\\bbattery (?:cells?|plants?|capacity|chemistry)\\b", "\\bcharging (?:network|infrastructure)\\b", "\\belectrification\\b"]
+  tariffs_trade:
+    label: "Tariffs / trade policy"
+    origin_sectors: [Industrials, Consumer Cyclical]
+    patterns: ["\\btariffs?\\b", "\\btrade (?:war|policy|tensions?)\\b", "\\bexport (?:controls?|restrictions?)\\b", "\\bSection 232\\b", "\\bSection 301\\b"]
+  crypto_digital_assets:
+    label: "Crypto / digital assets"
+    origin_sectors: [Financial Services]
+    patterns: ["\\bbitcoin\\b", "\\bcrypto(?:currency|currencies)?\\b", "\\bdigital assets?\\b", "\\bstablecoins?\\b", "\\btokeniz(?:ation|ed)\\b"]
+  rates_refinancing:
+    label: "Higher-for-longer rates / refinancing"
+    origin_sectors: [Real Estate, Financial Services]
+    patterns: ["\\bhigher[- ]for[- ]longer\\b", "\\brefinancing (?:risk|wall|costs?)\\b", "\\bmaturity wall\\b", "\\binterest expense (?:increased|rose|headwind)\\b", "\\bcap rates?\\b"]
+  agentic_ai:
+    label: "Agentic AI / AI agents in software"
+    origin_sectors: [Technology]
+    patterns: ["\\bagentic\\b", "\\bAI agents?\\b", "\\bautonomous agents?\\b", "\\bagent(?:ic)? workflows?\\b", "\\bmodel context protocol\\b"]
+emerging:
+  min_docs_per_quarter: 40          # bigram must appear in ≥ this many transcripts in a quarter to be a candidate
+  min_ratio_vs_prior_year: 3.0      # document frequency ≥ 3× its average over the prior 4 quarters
+  top_n: 25

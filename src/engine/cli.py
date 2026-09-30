@@ -243,6 +243,14 @@ def text_build() -> None:
     build_text_signals()
 
 
+@text_app.command("themes")
+def text_themes(workers: int = typer.Option(3)) -> None:
+    """Theme diffusion tracker: theme mentions per call (point-in-time), breadth by quarter, new entrants, emerging terms, Timmer's weekly themes."""
+    from .text.themes import build_themes
+
+    build_themes(workers=workers)
+
+
 @text_app.command("read")
 def text_read(limit: int = typer.Option(300, help="names to read, by latest screen rank"), model: str = typer.Option("claude-sonnet-5-5"),
               max_usd: float = typer.Option(60.0), symbols: str = typer.Option("")) -> None:

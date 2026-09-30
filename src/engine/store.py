@@ -132,6 +132,12 @@ TABLES: dict[str, pa.Schema] = {
             ("red_flags_n", pa.int16()), ("tone", pa.int8()), ("payload", pa.string()), ("source", pa.string()),
         ]
     ),
+    "theme_mentions": pa.schema([("security_id", pa.string()), ("theme", pa.string()), ("quarter", pa.string()), ("call_date", pa.date32()),
+                                 ("available_from", pa.date32()), ("count", pa.int32()), ("words", pa.int32()), ("quote", pa.string()), ("doc_ref", pa.string())]),
+    "theme_quarterly": pa.schema([("theme", pa.string()), ("quarter", pa.string()), ("n_docs", pa.int32()), ("n_docs_all", pa.int32()), ("breadth_pct", pa.float64()),
+                                  ("n_sectors", pa.int32()), ("n_new_entrants", pa.int32()), ("top_sectors", pa.string()), ("new_entrants", pa.string()), ("mentions_per_doc", pa.float64())]),
+    "theme_emerging": pa.schema([("quarter", pa.string()), ("term", pa.string()), ("n_docs", pa.int32()), ("ratio_vs_prior_year", pa.float64()), ("n_docs_all", pa.int32())]),
+    "x_theme_weekly": pa.schema([("week", pa.date32()), ("bucket", pa.string()), ("n_threads", pa.int32()), ("sample_summary", pa.string())]),
     "x_posts": pa.schema(
         [
             ("post_id", pa.string()), ("user_id", pa.string()), ("created_at", pa.timestamp("us")), ("available_from", pa.date32()),

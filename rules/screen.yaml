@@ -40,6 +40,8 @@ angles:                                  # Idea Strength sub-scores; each factor
       - {key: text_demand, id: F-42/F-40, dir: higher_better, weight: 0.2, label: "Text: demand/backlog/capacity language in calls and filings (sold out, record backlog vs destocking, push-outs)"}
       - {key: text_ai_receipts, id: F-45/F-40, dir: higher_better, weight: 0.1, label: "Text: AI receipts — committed AI spend, backlog, token/GPU demand in the documents"}
       - {key: llm_demand, id: F-42/F-40, dir: higher_better, weight: 0.15, label: "Claude read: demand signal (−2…+2), live-only", live_only: true}
+      - {key: theme_exposure, id: F-39/R-23, dir: higher_better, weight: 0.15, label: "Theme diffusion: exposure to themes whose breadth across calls is expanding (mentions per 10k words, two latest calls)"}
+      - {key: theme_new_entrant, id: F-39/R-23, dir: higher_better, weight: 0.10, label: "Theme diffusion: first-time mention of an expanding theme in the last two calls (the theme reaching this name)"}
   moat:
     label: "Moat / toll booth (関所)"
     factors:
