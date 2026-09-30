@@ -15,6 +15,10 @@ from .rules import ai_layer_score
 TAX = 0.21
 
 
+PE_BAND_MAX = 150.0        # P/E above this is "EPS ≈ 0", not a valuation
+PE_BAND_MIN_DAYS = 3 * 250 # ≥ 3 years of meaningful daily P/E before the own-history percentile is scored (F-13)
+
+
 @dataclass
 class Inputs:
     snap: Snapshot
@@ -117,8 +121,13 @@ def compute_metrics(inp: Inputs, as_of: pd.Timestamp, hyp_thresholds: dict) -> d
         daily = px.set_index(pd.to_datetime(px["date"]))["close_adj"].astype(float)
         eps_daily = eps_series.reindex(daily.index.union(eps_series.index)).ffill().reindex(daily.index)
         pe_hist = (daily / eps_daily).replace([np.inf, -np.inf], np.nan)
-        pe_hist = pe_hist[(eps_daily > 0)]
+        # a P/E only means something with real earnings: drop days where EPS was ≤ 0 or so small that P/E > 150 (a
+        # loss-to-profit transition otherwise makes today's 40x look like the 1st percentile of a 600x "band")
+        pe_hist = pe_hist[(eps_daily > 0) & (pe_hist <= PE_BAND_MAX)]
         band = fw.band_percentile(pe_hist.dropna(), pe, 10)
+        if band["n"] < PE_BAND_MIN_DAYS or (pe is not None and pe > PE_BAND_MAX):
+            band = {**band, "percentile": None}            # < 3 years of meaningful P/E history: no own-band score (coverage, not imputed)
+            out["pe_band_note"] = f"own-history band needs ≥{PE_BAND_MIN_DAYS} days of meaningful P/E (have {band['n']})"
     out["pe_own_pctile"], out["pe_band_low"], out["pe_band_median"], out["pe_band_high"], out["pe_band_n"] = (
         band["percentile"], band["low"], band["median"], band["high"], band["n"])
     out["peg"] = fw.peg(pe, (out["eps_cagr_3y"] or 0) * 100 if out["eps_cagr_3y"] else None)
