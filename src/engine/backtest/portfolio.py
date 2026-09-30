@@ -62,6 +62,8 @@ class PriceBook:
             return None, None, None, "no_prices"
         p0 = float(s_in.iloc[0])
         s_win = s[(s.index >= entry) & (s.index <= exit_)]
+        if s_win.empty:                       # first price only after the hold window: no return can be measured
+            return None, None, None, "no_prices"
         p1 = float(s_win.iloc[-1])
         status = "ok"
         if s_win.index[-1] < exit_ - pd.Timedelta(days=10):
