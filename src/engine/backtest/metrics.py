@@ -27,6 +27,9 @@ def cohort_stats(results, hold_months: int) -> dict:
         "excess": (R - b) if b is not None else None, "batting_pos": float((rets > 0).mean()),
         "batting_beat": float(np.mean([r.ret > r.bench_ret for r in ok if r.bench_ret is not None])) if bench else None,
         "best": max(ok, key=lambda r: r.ret).symbol, "worst": min(ok, key=lambda r: r.ret).symbol,
+        "bench2_ret": (float(np.mean([r.bench2_ret for r in ok if r.bench2_ret is not None])) if any(r.bench2_ret is not None for r in ok) else None),
+        "excess_ew": ((R - float(np.mean([r.bench2_ret for r in ok if r.bench2_ret is not None]))) if any(r.bench2_ret is not None for r in ok) else None),
+        "batting_beat_ew": (float(np.mean([r.ret > r.bench2_ret for r in ok if r.bench2_ret is not None])) if any(r.bench2_ret is not None for r in ok) else None),
     }
 
 
@@ -42,6 +45,9 @@ def pooled_stats(cohort_rows: list[dict]) -> dict:
         "mean_batting_pos": float(np.mean([c["batting_pos"] for c in done])),
         "mean_batting_beat": float(np.mean([c["batting_beat"] for c in done if c.get("batting_beat") is not None])),
         "rolling_hit_rate": [float(x) for x in pd.Series([c["batting_beat"] for c in done]).rolling(4).mean().dropna()],
+        "mean_excess_ew": (float(np.mean([c["excess_ew"] for c in done if c.get("excess_ew") is not None])) if any(c.get("excess_ew") is not None for c in done) else None),
+        "share_cohorts_beating_ew": (float(np.mean([c["excess_ew"] > 0 for c in done if c.get("excess_ew") is not None])) if any(c.get("excess_ew") is not None for c in done) else None),
+        "mean_batting_beat_ew": (float(np.mean([c["batting_beat_ew"] for c in done if c.get("batting_beat_ew") is not None])) if any(c.get("batting_beat_ew") is not None for c in done) else None),
     }
 
 

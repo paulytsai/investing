@@ -22,6 +22,7 @@ class PickResult:
     ret: float | None
     bench_ret: float | None
     status: str = "ok"           # ok | delisted_cash | no_prices | in_flight
+    bench2_ret: float | None = None   # equal-weight benchmark (RSP total return) — fair for an equal-weight 20-name book
     idea_strength: float | None = None
     angles: dict = field(default_factory=dict)
     action: str = ""
@@ -39,6 +40,12 @@ class PriceBook:
         b = read_df("benchmark_daily", "benchmark_id = 'SPY_TR'" if region == "US" else "benchmark_id = 'TOPIX_PR'")
         b["date"] = pd.to_datetime(b["date"])
         self.bench = b.set_index("date")["level"].sort_index()
+        self.bench2 = None
+        if region == "US":
+            b2 = read_df("benchmark_daily", "benchmark_id = 'RSP_TR'")
+            if not b2.empty:
+                b2["date"] = pd.to_datetime(b2["date"])
+                self.bench2 = b2.set_index("date")["level"].sort_index()
         self.cal = self.bench.index
         self.today = self.cal.max()
 
@@ -86,6 +93,13 @@ class PriceBook:
         return s / s.iloc[0]
 
 
+def _bench2_ret(book: PriceBook, entry, exit_) -> float | None:
+    if book.bench2 is None:
+        return None
+    s = book.bench2[(book.bench2.index >= entry) & (book.bench2.index <= exit_)]
+    return float(s.iloc[-1] / s.iloc[0] - 1.0) if len(s) > 1 else None
+
+
 def evaluate_cohort(picks, formation: pd.Timestamp, hold_months: int, book: PriceBook) -> list[PickResult]:
     entry, exit_, in_flight = book.entry_exit(formation, hold_months)
     out = []
@@ -97,6 +111,7 @@ def evaluate_cohort(picks, formation: pd.Timestamp, hold_months: int, book: Pric
         if in_flight and st == "ok":
             st = "in_flight"
         out.append(PickResult(c.security_id, c.symbol, formation, entry, exit_, p0, p1, r, book.bench_ret(entry, exit_), st,
+                              bench2_ret=_bench2_ret(book, entry, exit_),
                               idea_strength=c.idea_strength, angles={a.key: a.score for a in c.angles}, action=c.action, sector=c.sector))
     return out
 

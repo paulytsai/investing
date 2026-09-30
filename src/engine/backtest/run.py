@@ -129,6 +129,10 @@ def _render(out, rows, pooled, cstats, curve, ic, sens, results, cohorts, book, 
         base = c.index[0]
         series["Engine (8 overlapping cohorts, equal weight)"] = c["portfolio"] / c["portfolio"].iloc[0] * 100
         series[bench_label] = c["benchmark"] / c["benchmark"].iloc[0] * 100
+        if book.bench2 is not None:
+            b2 = book.bench2.reindex(c.index).ffill().dropna()
+            if len(b2):
+                series["RSP total return (equal-weight S&P 500)"] = b2 / b2.iloc[0] * 100
         _ = base
     curve_spec = build_series_chart("curve", f"Overlapping-cohort portfolio vs {bench_label} (rebased to 100)", series, ytitle="index") if series else None
     # cohort return bars as a series chart (cohort mean vs bench)
