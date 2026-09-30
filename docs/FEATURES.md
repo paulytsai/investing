@@ -4,7 +4,8 @@ Built in v1 are marked ✅; proposed next steps ☐. Every item maps to the spec
 
 ## Selection logic
 - ✅ **Sector call before stock call (two stages)** — theme sectors built from GICS-style sector/industry (`config/sectors.yaml`) with the AI
-  value chain split into layers (upstream semis/memory; infrastructure — hardware, networking, data-center power, uranium; platforms; applications).
+  value chain split into Jensen Huang's five layers — **Energy → Chips → Infrastructure → Models → Applications** (all five must scale together; a
+  bottleneck in one constrains the whole system) — each evaluated as something to be owned in its own right.
   A name in a non-core industry joins an AI layer point-in-time when its own calls talk about AI at intensity, so AI membership grows as the theme
   diffuses (from 2015 in the archive). Stage 1 scores every sector on its members' growth, fundamental momentum, quality, valuation and theme
   diffusion, gives a stance (overweight / neutral / underweight / avoid / thin) and a written rationale with the numbers and ranks it used;
