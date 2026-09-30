@@ -56,6 +56,12 @@ Built in v1 are marked ✅; proposed next steps ☐. Every item maps to the spec
 ## Macro and context (ALERT-only)
 - ✅ Macro strip on every board/idea/cohort: 10Y UST (flag > 4.5%), 10Y real, breakeven, 3M T-bill hurdle, CPI, core CPI, USDJPY, WTI.
 - ✅ Macro dashboard with spec §6.2 lines; Federal Register policy documents; Timmer X threads (6-month backfill, 372 threads, Claude-tagged: market relevant / themes / tickers / chart descriptions); inbox notes.
+- ✅ **Theme diffusion tracker** (`engine text themes`, F-39 / R-23 / §6.4): every earnings call since 2015 is scanned for the themes in
+  `config/themes.yaml` (AI compute, memory/HBM, data-center power, nuclear, GLP-1, reshoring, cybersecurity, cloud, EV, tariffs, crypto,
+  refinancing, agentic AI); per theme × quarter: share of calls mentioning it, sectors, first-time mentioners — so the dashboard shows when a
+  theme spreads beyond its origin sector (AI beyond Nvidia and semis). Emerging terms are found without a lexicon (bigrams whose document
+  frequency jumps ≥3× vs the prior year on a per-quarter sample). Timmer's tagged X threads are mapped onto the same buckets week by week and
+  his latest take sits beside each expanding theme. Exposure to expanding themes and first-mention status feed the story angle (SOFT, point-in-time).
 - ☐ Premise register (§6.4) with confirming/refuting evidence links from X threads and notes.
 - ☐ MOVE index (not on FRED) and breadth (RSP/SPY) panels.
 

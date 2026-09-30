@@ -24,6 +24,7 @@ Verified 2026-09-29 from this environment (keys from environment secrets; see `.
 
 ## Text documents
 - `engine text pull` stores every FMP earnings-call transcript since 2015 (dated by call; `available_from` = next trading day) and the latest 10-K (Items 1, 1A, 7; 20-F Items 4, 5) and 10-Q (Item 2) from EDGAR for every name whose market cap ever reached the cap floor since 2015, plus holdings. Raw HTTP is cached; tables `transcripts`, `filings_text`.
+- `engine text themes` scans the same transcripts for `config/themes.yaml` → `theme_mentions` (per call, PIT), `theme_quarterly` (breadth, sectors, new entrants), `theme_emerging`, and Timmer's `x_theme_weekly`.
 - `engine text build` runs the lexical extractor → `text_signals` (one row per document × category with count, words and the first quote). `engine text read` writes `text_reads` (Claude tier, request-hash cached).
 
 ## Pull mechanics (learned on the full US universe, 9,237 symbols)
