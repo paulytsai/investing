@@ -188,6 +188,14 @@ def data_pull(key: str = typer.Option("engine-data-latest.tar.gz"), overwrite: b
     pull(key=key, overwrite=overwrite)
 
 
+@app.command("mcp")
+def mcp_cmd() -> None:
+    """Run the engine as an MCP server (stdio) for Claude Desktop / Claude Code: evaluate, ideas_latest, sector_view, size, drivers."""
+    from .mcp_server import main
+
+    main()
+
+
 @app.command("evaluate")
 def evaluate(symbols: list[str] = typer.Argument(..., help="tickers to evaluate, and/or CSV/TXT/XLSX files of codes (a symbol/ticker/code column, else the first column)"), thesis: str = typer.Option(None, help="Paul's thesis: text, or a markdown file with '## SYM' sections"),
              as_of: str = typer.Option(None), region: str = typer.Option("auto", help="us | jp | auto (4-digit codes are Japanese)"), narrate: bool = typer.Option(False, help="thesis verdict + narrative pages (Claude)"),

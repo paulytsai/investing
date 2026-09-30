@@ -66,3 +66,26 @@ def test_paul_scenarios_override_the_engine_scenarios():
     ov = {"bull": {"prob": 0.25, "return": 0.80}, "base": {"prob": 0.50, "return": 0.25}, "bear": {"prob": 0.25, "return": -0.40}}
     b = scenario_block(C(), 0.10, 3.0, 0.5, 0.15, override=ov)
     assert abs(b["expected_return"] - 0.225) < 1e-9 and b["scenario_table"][0]["source"] == "Paul's scenario" and "Paul" in b["assumptions"][0]
+
+
+def test_diff_runs_reports_entries_exits_and_stance_flips(tmp_path):
+    import json
+
+    from engine.screen.diff import diff_runs
+
+    def run(name, as_of, cands, chosen, sectors):
+        d = tmp_path / name
+        d.mkdir()
+        (d / "run.json").write_text(json.dumps({"as_of": as_of, "n_scored": 2000}))
+        (d / "candidates.json").write_text(json.dumps(cands))
+        (d / "sizing.json").write_text(json.dumps({"weights": {c: 0.1 for c in chosen}}))
+        (d / "sectors.json").write_text(json.dumps(sectors))
+        return d
+    a = run("a", "2026-06-30", [{"security_id": "A", "symbol": "AAA", "idea_strength": 80, "action": "watch", "rank": 3}, {"security_id": "B", "symbol": "BBB", "idea_strength": 70, "action": "buy-in-stages", "rank": 5}],
+            ["A", "B"], {"ai_chips": {"label": "AI 2 · Chips — x", "stance": "overweight", "bet": {"cycle": {"phase": "expanding"}}}})
+    b = run("b", "2026-09-25", [{"security_id": "A", "symbol": "AAA", "idea_strength": 88, "action": "buy-in-stages", "rank": 1}, {"security_id": "C", "symbol": "CCC", "idea_strength": 75, "action": "buy-in-stages", "rank": 4}],
+            ["A", "C"], {"ai_chips": {"label": "AI 2 · Chips — x", "stance": "neutral", "bet": {"cycle": {"phase": "off its peak"}}}})
+    d = diff_runs(a, b)
+    assert d["entered"] == ["CCC"] and d["left"] == ["BBB"] and d["actions"] == ["AAA: watch → buy-in-stages"]
+    assert d["stances"] == ["AI 2 · Chips: overweight → neutral"] and d["cycles"] == ["AI 2 · Chips: expanding → off its peak"]
+    assert d["moves"][0].startswith("AAA 80 → 88") and not d["unchanged"]
