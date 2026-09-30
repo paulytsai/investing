@@ -89,6 +89,7 @@ def theme_charts() -> list[dict]:
     out = []
     if has_table("theme_quarterly"):
         tq = read_df("theme_quarterly")
+        tq = tq[tq["n_docs_all"] >= 200]          # quarters with a real sample only (the archive starts in FY2015; earlier stragglers are noise)
         if not tq.empty:
             lex = yaml.safe_load(open(CONFIG_DIR / "themes.yaml", encoding="utf-8"))["themes"]
             latest = tq.sort_values("quarter").groupby("theme").tail(1).sort_values("breadth_pct", ascending=False)
