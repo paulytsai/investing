@@ -153,12 +153,14 @@ def research(symbol: str, as_of: str = typer.Option(None)) -> None:
 @app.command("backtest")
 def backtest(start: str = typer.Option("2016-03-31"), end: str = typer.Option("2024-09-30"), hold: int = typer.Option(24),
              top: int = typer.Option(20), region: str = typer.Option("us"), preset: str = typer.Option(None),
-             sensitivity: bool = typer.Option(False), universe: str = typer.Option(None, help="cap_floor|sp500_pit")) -> None:
-    """Quarterly overlapping cohorts, HOLD months each, TOP names per cohort."""
+             sensitivity: bool = typer.Option(False), universe: str = typer.Option(None, help="cap_floor|sp500_pit"),
+             exit_rule: str = typer.Option(None, help="cycle (hold until the theme-sector cycle is judged over) | fixed (HOLD months)")) -> None:
+    """Quarterly overlapping cohorts, TOP names per cohort, exits by the cycle rule (default) or a fixed HOLD; equal-weight
+    and Kelly-weighted results side by side."""
     from .backtest.run import run_backtest
 
     run_backtest(start=start, end=end, hold_months=hold, top=top, region=region, preset=preset,
-                 sensitivity=sensitivity, universe_kind=universe)
+                 sensitivity=sensitivity, universe_kind=universe, exit_rule=exit_rule)
 
 
 @app.command("macro")

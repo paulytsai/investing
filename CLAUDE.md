@@ -35,7 +35,7 @@ engine pull us --pilot           # 60-name pilot; engine pull us for the full un
 engine build pit                 # normalize raw → point-in-time tables
 engine ideas --as-of 2026-09-26 --top 20 --region us
 engine drivers NVDA
-engine backtest --start 2016-03-31 --end 2024-09-30 --hold 24 --top 20
+engine backtest --start 2016-03-31 --end 2024-09-30 --top 20   # cycle-rule exits (D-24) and Kelly weights (D-01); --exit-rule fixed --hold 24
 engine serve                     # browse reports/
 pytest -q
 ```

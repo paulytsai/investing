@@ -21,6 +21,19 @@ Built in v1 are marked ✅; proposed next steps ☐. Every item maps to the spec
 - ✅ **INV-3 respected**: a drawdown scores only when the F-12 decomposition shows the multiple fell while earnings held.
 - ✅ **Reverse DCF** "growth the price implies" as a factor; scenario DCF with expected value **and** range (F-77).
 - ✅ **Weight presets** (paul_default, growth/value/quality tilt, crisis mode) and a board that re-ranks on any angle.
+- ✅ **Cycle-aware holding period (D-24)** — the backtest no longer assumes a fixed hold. A pick is held until its theme-sector cycle is judged
+  over, point-in-time from later quarterly evaluations only: the sector's stance falls to underweight/avoid at K consecutive evaluations, or the
+  theme's transcript breadth sits ≥25% below its trailing peak for K quarters (a theme counts as a cycle only once it has reached real breadth);
+  bounded by a 12-month floor and a 60-month ceiling (thematic cycles run 2–5 years; the AI cycle dates from Nov 2022). Fixed 24/36-month holds stay
+  in the sensitivity grid as variants; positions still open are marked at the last close and flagged, never silently dropped.
+- ✅ **Kelly position sizing (D-01, hypothesis)** — per name, the scenario Kelly f* = argmax Σ pᵢ ln(1 + f rᵢ) is found numerically over the DCF
+  bear/base/bull values vs price (the bear return floored at −1σ·√H of the name's own trailing volatility so a losing outcome always exists);
+  long-only 0 ≤ f ≤ 1, full/half/quarter shown, the practical position = min(½ × f* × confidence, 15% cap) and never called "the Kelly fraction";
+  no positive expectation → 0%. Confidence (high 1.0 / medium 0.75 / low 0.5 from factor coverage and DCF basis) scales the fraction, never the
+  edge. Across the book the portfolio Kelly w* = Σ⁻¹(μ − r_f·1) on the trailing 250-day covariance (shrunk toward the diagonal) sizes names that
+  share a driver (AI infrastructure, semis, oil, China, rates) as one bet; no leverage, remainder cash. Every idea page shows expected return,
+  worst outcome, full/half/quarter Kelly, cap, practical position, portfolio weight and the scenario assumptions; the backtest reports equal-weight
+  and Kelly-weighted cohort returns side by side (fully invested, and with the cash remainder at the 10Y rate).
 - ☐ Estimate-revision direction (F-17) as a live-only component using FMP analyst estimates + price-target history.
 - ✅ **Text layer (cognitive reading of disclosures)** — two tiers feeding the angles as SOFT components:
   - *Lexical, point-in-time, backtestable*: every earnings-call transcript since 2015 and the latest 10-K Items 1/1A/7 and 10-Q MD&A are scanned for

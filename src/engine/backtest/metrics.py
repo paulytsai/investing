@@ -9,19 +9,24 @@ from scipy import stats
 from ..frameworks.core import returns_pair
 
 
-def cohort_stats(results, hold_months: int) -> dict:
+def cohort_stats(results, hold_months: int, rf: float = 0.0) -> dict:
+    """Equal-weight and Kelly-weight cohort returns. Hold may vary per pick (cycle rule): CAGR uses the mean realised hold.
+    `in_flight` = any position still open (marked at the last close); `n_open` counts them."""
     ok = [r for r in results if r.ret is not None and r.status in ("ok", "delisted_cash", "in_flight")]
     if not ok:
         return {"n": 0}
     rets = np.array([r.ret for r in ok])
     bench = [r.bench_ret for r in ok if r.bench_ret is not None]
     b = float(np.mean(bench)) if bench else None
-    years = hold_months / 12.0
+    years = float(np.mean([r.hold_years for r in ok if r.hold_years])) if any(r.hold_years for r in ok) else hold_months / 12.0
     R = float(rets.mean())
     pair = returns_pair(R, years)
     bpair = returns_pair(b, years) if b is not None else {"cagr": None, "simple": None}
+    kelly = _kelly_returns(ok, years, rf)
     return {
-        "n": len(ok), "n_delisted": sum(1 for r in ok if r.status == "delisted_cash"), "in_flight": all(r.status == "in_flight" for r in ok),
+        "n": len(ok), "n_delisted": sum(1 for r in ok if r.status == "delisted_cash"), "in_flight": any(r.status == "in_flight" for r in ok),
+        "n_open": sum(1 for r in ok if r.status == "in_flight"), "hold_years": years,
+        "exit_reasons": sorted({r.exit_reason for r in ok}), **kelly,
         "ret_mean": R, "ret_median": float(np.median(rets)), "p10": float(np.percentile(rets, 10)), "p90": float(np.percentile(rets, 90)),
         "cagr": pair["cagr"], "simple": pair["simple"], "bench_ret": b, "bench_cagr": bpair["cagr"], "bench_simple": bpair["simple"],
         "excess": (R - b) if b is not None else None, "batting_pos": float((rets > 0).mean()),
@@ -33,14 +38,43 @@ def cohort_stats(results, hold_months: int) -> dict:
     }
 
 
-def pooled_stats(cohort_rows: list[dict]) -> dict:
-    done = [c for c in cohort_rows if c.get("n") and not c.get("in_flight")]
+def _kelly_returns(ok, years: float, rf: float) -> dict:
+    """Cohort return under the Kelly weights: fully invested (weights normalised, isolates the sizing effect) and with the
+    cash remainder earning the risk-free rate over the mean hold."""
+    if not any(r.weight is not None for r in ok):
+        return {}
+    w = np.array([float(r.weight or 0.0) for r in ok])
+    rets = np.array([r.ret for r in ok])
+    bench = np.array([r.bench_ret if r.bench_ret is not None else np.nan for r in ok])
+    gross = float(w.sum())
+    if gross <= 0:
+        return {"kelly_gross": 0.0, "ret_kelly": None, "ret_kelly_cash": None, "kelly_n_funded": 0}
+    rk = float((w * rets).sum() / gross)
+    cash_ret = (1.0 + rf) ** years - 1.0
+    rkc = float((w * rets).sum() + (1.0 - gross) * cash_ret)
+    bk = float(np.nansum(w * bench) / gross) if np.isfinite(bench).any() else None
+    return {"kelly_gross": gross, "ret_kelly": rk, "ret_kelly_cash": rkc, "kelly_n_funded": int((w > 0).sum()),
+            "excess_kelly": (rk - bk) if bk is not None else None, "cagr_kelly": returns_pair(rk, years)["cagr"],
+            "kelly_max_weight": float(w.max()), "kelly_top": [r.symbol for r in sorted(ok, key=lambda r: -(r.weight or 0))[:5]]}
+
+
+def pooled_stats(cohort_rows: list[dict], include_open: bool = False) -> dict:
+    done = [c for c in cohort_rows if c.get("n") and (include_open or not c.get("in_flight"))]
     if not done:
         return {}
     m = np.array([c["ret_mean"] for c in done])
     ex = np.array([c["excess"] for c in done if c.get("excess") is not None])
+    mk = [c["ret_kelly"] for c in done if c.get("ret_kelly") is not None]
+    mkc = [c["ret_kelly_cash"] for c in done if c.get("ret_kelly_cash") is not None]
+    exk = [c["excess_kelly"] for c in done if c.get("excess_kelly") is not None]
     return {
         "cohorts": len(done), "mean_cohort_ret": float(m.mean()), "median_cohort_ret": float(np.median(m)),
+        "mean_hold_years": float(np.mean([c.get("hold_years") or 0 for c in done])),
+        "n_open_positions": int(sum(c.get("n_open") or 0 for c in done)),
+        "mean_cohort_ret_kelly": float(np.mean(mk)) if mk else None, "mean_cohort_ret_kelly_cash": float(np.mean(mkc)) if mkc else None,
+        "mean_excess_kelly": float(np.mean(exk)) if exk else None, "share_cohorts_beating_kelly": float(np.mean([x > 0 for x in exk])) if exk else None,
+        "mean_kelly_gross": float(np.mean([c["kelly_gross"] for c in done if c.get("kelly_gross") is not None])) if mk else None,
+        "share_kelly_beats_ew": float(np.mean([c["ret_kelly"] > c["ret_mean"] for c in done if c.get("ret_kelly") is not None])) if mk else None,
         "mean_excess": float(ex.mean()) if len(ex) else None, "share_cohorts_beating": float((ex > 0).mean()) if len(ex) else None,
         "mean_batting_pos": float(np.mean([c["batting_pos"] for c in done])),
         "mean_batting_beat": float(np.mean([c["batting_beat"] for c in done if c.get("batting_beat") is not None])),

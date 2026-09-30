@@ -74,6 +74,22 @@
 </div>
 {% endif %}
 
+{% if kelly %}
+<h2>Position size — Kelly criterion (D-01, hypothesis)</h2>
+<div class="card">
+  <p>Kelly is used as a sizing algorithm: the fraction of capital that maximises expected log growth given the scenarios below (f* = argmax Σ pᵢ ln(1 + f rᵢ), long-only 0 ≤ f ≤ 1, found numerically). The practical position is min({{ kelly.fraction }} × f* × confidence, {{ '%.0f%%'|format(kelly.cap*100) }} cap) and is not the Kelly fraction.</p>
+  <table><thead><tr><th>Scenario</th><th class="num">Probability</th><th class="num">Return over ~{{ '%.1f'|format(kelly.horizon_years) }}y</th><th>Source</th></tr></thead><tbody>
+  {% for sc in kelly.scenario_table %}<tr><td>{{ sc.name }}</td><td class="num">{{ '%.0f%%'|format(sc.prob*100) }}</td><td class="num">{{ '%+.0f%%'|format(sc.return*100) }}</td><td class="small muted">{{ sc.source }}</td></tr>{% endfor %}
+  </tbody></table>
+  <div class="grid" style="margin-top:10px">
+    <div class="card tile"><div class="label">Expected return</div><div class="value">{{ '%+.0f%%'|format(kelly.expected_return*100) }}</div><div class="delta">worst outcome {{ '%+.0f%%'|format(kelly.worst*100) }} · ≈{{ '%+.1f%%'|format(kelly.mu_annual*100) }}/yr</div></div>
+    <div class="card tile"><div class="label">Full / half / quarter Kelly</div><div class="value">{{ '%.0f%%'|format(kelly.full*100) }}</div><div class="delta">half {{ '%.0f%%'|format(kelly.half*100) }} · quarter {{ '%.0f%%'|format(kelly.quarter*100) }}{% if kelly.full_unconstrained > kelly.full + 0.001 %} · unconstrained f* {{ '%.0f%%'|format(kelly.full_unconstrained*100) }} (clipped to 100%, no leverage){% endif %}</div></div>
+    <div class="card tile"><div class="label">Practical position</div><div class="value">{{ '%.1f%%'|format(kelly.practical*100) }}</div><div class="delta">{{ kelly.fraction }}× Kelly × confidence {{ kelly.confidence_label }} ({{ kelly.confidence }}), cap {{ '%.0f%%'|format(kelly.cap*100) }}{% if kelly.note %} · {{ kelly.note }}{% endif %}{% if kelly_weight is not none %} · <b>portfolio Kelly weight {{ '%.1f%%'|format(kelly_weight*100) }}</b> (Σ⁻¹(μ − r_f) across the top {{ n_top }}, correlated names share the budget){% endif %}</div></div>
+  </div>
+  <p class="small muted">Scenarios are the DCF bear/base/bull values vs today's price (F-77); the bear return is floored at −1σ·√H from the name's own trailing volatility ({{ '%.0f%%'|format((kelly.ann_vol or 0)*100) }} annualised) so a losing outcome always exists (* marks the floor binding). Confidence widens nothing — it scales the Kelly fraction (high 1.0 / medium 0.75 / low 0.5) from factor coverage and whether the DCF ran on reported cash flow. Sizing decisions D-01/D-02/D-04 are TBD(Paul).</p>
+</div>
+{% endif %}
+
 {% if narrative %}
 <h2>Thesis (Stage 2 — draft by the research agent, needs Paul)</h2>
 <div class="card">{{ narrative|safe }}</div>

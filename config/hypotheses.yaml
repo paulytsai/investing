@@ -68,14 +68,25 @@ drivers:
   macro_bench_move_pct: {value: 15, decision_id: none}
 
 backtest:
-  hold_months: {value: 24, decision_id: D-24}
+  hold_months: {value: 24, decision_id: D-24, note: "fixed-hold variant; the default exit rule is the cycle rule below"}
+  exit_rule: {value: cycle, decision_id: D-24, note: "cycle = hold until the name's theme-sector cycle is judged over (below); fixed = hold_months"}
+  min_hold_months: {value: 12, decision_id: D-24}
+  max_hold_months: {value: 60, decision_id: D-24, note: "thematic cycles run 2-5 years (Paul); the AI cycle started Nov 2022"}
+  cycle_over_consecutive: {value: 2, decision_id: D-24, note: "quarterly evaluations in a row at which the sector stance is underweight/avoid, or theme breadth is below its trailing peak by theme_breadth_drop_pct"}
+  theme_breadth_drop_pct: {value: 25, decision_id: D-24}
   top_n: {value: 20, decision_id: D-08}
   cadence: {value: quarterly, decision_id: none}
   us_start: {value: 2016-03-31, decision_id: none}
   jp_start: {value: 2017-12-31, decision_id: none}
   end: {value: 2024-09-30, decision_id: none}
 
-sizing:   # shown as hypothesis bands only; D-01/D-02/D-04 are TBD(Paul)
+sizing:   # bands are hypotheses; D-01/D-02/D-04 are TBD(Paul). Kelly sizing (below) is the backtest's weighting rule.
+  kelly:
+    fraction: {value: 0.5, decision_id: D-01, note: "half Kelly; the practical position is min(fraction x f* x confidence, cap) and is never called the Kelly fraction"}
+    cap_pct: {value: 15, decision_id: D-01, note: "maximum practical position"}
+    shrink: {value: 0.2, decision_id: none, note: "covariance shrinkage toward the diagonal for the portfolio Kelly (250 trading days is a short sample)"}
+    lookback_days: {value: 250, decision_id: none}
+    mu_cap_pct: {value: 60, decision_id: none, note: "annualised expected return winsor for the portfolio Kelly"}
   core_band_pct: {value: [3, 8], decision_id: D-01}
   non_core_band_pct: {value: [1, 3], decision_id: D-02}
   speculative_max_pct: {value: 1, decision_id: D-05}

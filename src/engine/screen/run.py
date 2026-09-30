@@ -170,11 +170,14 @@ def run_ideas(as_of=None, top: int = 20, regions: list[str] | None = None, prese
 
     sector_calls = evaluate_sectors(all_cands, as_of, hyp)          # stage 1: the sector call, before any stock is chosen
     chosen = select_top(all_cands, top, int(max_sector) if max_sector else None, sector_calls)
+    sizing = size_positions(chosen, as_of, hyp)                     # Kelly: per-name scenario Kelly + portfolio Kelly weights
     run_id = f"{as_of.date()}_{datetime.now().strftime('%H%M%S')}"
     out = out_dir or (REPORTS_DIR / "ideas" / run_id)
     out.mkdir(parents=True, exist_ok=True)
-    _render(all_cands, chosen, as_of, out, hyp, preset or hyp.get("screen.preset"), regions, top, narrate, narrate_symbols, sector_calls)
+    _render(all_cands, chosen, as_of, out, hyp, preset or hyp.get("screen.preset"), regions, top, narrate, narrate_symbols, sector_calls, sizing)
     (out / "sectors.json").write_text(json.dumps({k: v.model_dump(mode="json") for k, v in sector_calls.items()}, indent=1, default=str))
+    (out / "sizing.json").write_text(json.dumps({"weights": sizing.get("weights"), "cash": sizing.get("cash"), "rf": sizing.get("rf"), "params": sizing.get("params"),
+                                                 "blocks": {k: v for k, v in (sizing.get("blocks") or {}).items()}}, indent=1, default=str))
     (out / "run.json").write_text(json.dumps({"as_of": str(as_of.date()), "title": f"Top {top} ideas ({', '.join(regions)})", "entry": "board.html",
                                               "n_scored": len(all_cands), "preset": preset or hyp.get("screen.preset")}, indent=1))
     (out / "candidates.json").write_text(json.dumps([c.model_dump(mode="json") for c in all_cands], default=str))
@@ -187,8 +190,28 @@ def run_ideas(as_of=None, top: int = 20, regions: list[str] | None = None, prese
         for sc in sorted(sector_calls.values(), key=lambda x: -(x.score or 0)):
             print(f"  [sector] {sc.stance:<12} {sc.label[:44]:<44} score {sc.score if sc.score is not None else float('nan'):5.1f} members {sc.n_members:4d} slots {sc.slots}")
         for c in chosen:
-            print(f"  #{c.rank:<3} {c.symbol:<6} strength {c.idea_strength:5.1f}  {c.action:<14} {c.theme_sector:<18} {c.action_reason[:60]}")
-    return {"run_id": run_id, "path": out, "chosen": chosen, "all": all_cands}
+            w = (sizing.get("weights") or {}).get(c.security_id)
+            print(f"  #{c.rank:<3} {c.symbol:<6} strength {c.idea_strength:5.1f}  {c.action:<14} {c.theme_sector:<18} kelly {(w or 0)*100:4.1f}%  {c.action_reason[:60]}")
+        print(f"  [kelly] gross {(1 - sizing.get('cash', 1.0))*100:.0f}% invested, cash {sizing.get('cash', 1.0)*100:.0f}% (half Kelly, 15% cap, r_f {sizing.get('rf', 0)*100:.1f}%)")
+    return {"run_id": run_id, "path": out, "chosen": chosen, "all": all_cands, "sizing": sizing}
+
+
+def size_positions(chosen: list[IdeaCandidate], as_of: pd.Timestamp, hyp: Hypotheses) -> dict:
+    """Kelly sizing for the chosen names (D-01 hypothesis): scenario Kelly per name from its DCF, portfolio Kelly across
+    the book from the trailing covariance. Horizon = the cycle rule's expected hold."""
+    if not chosen:
+        return {"weights": {}, "cash": 1.0, "blocks": {}, "rf": 0.0}
+    from ..backtest.portfolio import PriceBook
+    from ..backtest.sizing import kelly_weights
+
+    region = chosen[0].security_id.split(":")[0]
+    try:
+        book = PriceBook([c.security_id for c in chosen], region)
+    except Exception as e:  # noqa: BLE001 — sizing is advisory; the board must still render
+        print(f"[kelly] prices unavailable ({e}); no sizing")
+        return {"weights": {}, "cash": 1.0, "blocks": {}, "rf": 0.0}
+    horizon = (int(hyp.get("backtest.min_hold_months")) + int(hyp.get("backtest.max_hold_months"))) / 24.0
+    return kelly_weights(chosen, as_of, book, hyp, horizon, rf_on(as_of) if region == "US" else 1.0)
 
 
 def _view(c: IdeaCandidate) -> dict:
@@ -206,7 +229,8 @@ def _view(c: IdeaCandidate) -> dict:
     return d
 
 
-def _render(all_cands, chosen, as_of, out, hyp, preset, regions, top, narrate, narrate_symbols=None, sector_calls=None) -> None:
+def _render(all_cands, chosen, as_of, out, hyp, preset, regions, top, narrate, narrate_symbols=None, sector_calls=None, sizing=None) -> None:
+    sizing = sizing or {}
     r = rules()
     angle_keys = list(r["angles"].keys())
     angle_labels = {k: v["label"] for k, v in r["angles"].items()}
@@ -222,6 +246,7 @@ def _render(all_cands, chosen, as_of, out, hyp, preset, regions, top, narrate, n
     spark_rows = max(top * 10, 200)          # sparklines only for the top rows: a 2,000-name board with charts is 20+ MB
     for i, c in enumerate(ranked):
         v = _view(c)
+        v["kelly_weight"] = (sizing.get("weights") or {}).get(c.security_id)
         if i < spark_rows:
             px = px_by.get(c.security_id, prices.iloc[0:0])
             spec = build_price_chart(c.security_id, c.symbol, px, start=as_of - pd.Timedelta(days=3 * 365), end=as_of, overlays={"price"}, compact=True, currency=c.currency)
@@ -277,5 +302,6 @@ def _render(all_cands, chosen, as_of, out, hyp, preset, regions, top, narrate, n
 
             narrative = narrative_html(c, snap, phases)
         html = itpl.render(title=f"{c.symbol} — idea", c=v, m=c.metrics, chart_id=spec["id"], chart_json=to_json(spec), macro=macro,
-                           n_scored=len(all_cands), phases=phases, narrative=narrative, dcf=c.metrics.get("dcf"), generated=render.now(), assets="../../../assets/")
+                           n_scored=len(all_cands), phases=phases, narrative=narrative, dcf=c.metrics.get("dcf"), generated=render.now(), assets="../../../assets/",
+                           kelly=(sizing.get("blocks") or {}).get(c.security_id), kelly_weight=(sizing.get("weights") or {}).get(c.security_id), n_top=len(chosen))
         render.write(out / "ideas" / f"{c.symbol}.html", html)

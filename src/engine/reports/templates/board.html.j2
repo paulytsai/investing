@@ -26,7 +26,7 @@
 <thead><tr>
 <th data-k="rank" class="num">#</th><th data-k="symbol">Name</th><th data-k="action">Action</th><th data-k="strength" class="num">Strength</th>
 {% for a in angle_keys %}<th data-k="{{ a }}" class="num" title="{{ angle_labels[a] }}">{{ angle_short[a] }}</th>{% endfor %}
-<th data-k="mcap" class="num">Mkt cap</th><th data-k="pe" class="num">P/E TTM</th><th data-k="pe_pct" class="num">P/E own pct</th><th data-k="growth" class="num">Rev g TTM</th>
+<th data-k="kelly" class="num" title="portfolio Kelly weight (half Kelly, 15% cap) across the chosen names">Kelly w</th><th data-k="mcap" class="num">Mkt cap</th><th data-k="pe" class="num">P/E TTM</th><th data-k="pe_pct" class="num">P/E own pct</th><th data-k="growth" class="num">Rev g TTM</th>
 <th style="min-width:330px">Top reasons</th><th style="min-width:170px">Gates / alerts</th><th style="min-width:190px">Chart (3y)</th>
 </tr></thead>
 <tbody>
@@ -37,7 +37,7 @@
 <td data-v="{{ c.action }}" style="min-width:150px"><span class="badge {{ 'buy' if c.action=='buy-in-stages' else c.action }}">{{ c.action }}</span><br><span class="small muted">{{ c.action_reason|truncate(70) }}</span></td>
 <td class="num" data-v="{{ c.idea_strength or 0 }}"><b>{{ '%.0f'|format(c.idea_strength or 0) }}</b><div class="bar"><i style="width:{{ c.idea_strength or 0 }}%"></i></div><span class="small muted">cov {{ '%.0f'|format(c.coverage*100) }}%</span></td>
 {% for a in angle_keys %}<td class="num" data-v="{{ c.angle_map[a] or 0 }}">{{ '%.0f'|format(c.angle_map[a]) if c.angle_map[a] is not none else '–' }}</td>{% endfor %}
-<td class="num" data-v="{{ c.market_cap or 0 }}">{{ c.mcap_fmt }}</td>
+<td class="num" data-v="{{ c.kelly_weight or 0 }}">{{ '%.1f%%'|format(c.kelly_weight*100) if c.kelly_weight is not none else '–' }}</td><td class="num" data-v="{{ c.market_cap or 0 }}">{{ c.mcap_fmt }}</td>
 <td class="num" data-v="{{ c.metrics.pe_ttm or 0 }}">{{ '%.1f'|format(c.metrics.pe_ttm) if c.metrics.pe_ttm else '–' }}</td>
 <td class="num" data-v="{{ c.metrics.pe_own_pctile or 0 }}">{{ '%.0f'|format(c.metrics.pe_own_pctile) if c.metrics.pe_own_pctile is not none else '–' }}</td>
 <td class="num" data-v="{{ c.metrics.rev_growth_ttm or 0 }}">{{ '%+.0f%%'|format(c.metrics.rev_growth_ttm*100) if c.metrics.rev_growth_ttm is not none else '–' }}</td>
