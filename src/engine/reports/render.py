@@ -29,6 +29,18 @@ def _num(v, digits: int = 2):
 
 _env.filters["pct"] = _pct
 _env.filters["num"] = _num
+from . import plain as _plain  # noqa: E402
+
+_env.filters["plain_reason"] = _plain.plain_reason
+_env.filters["plain_penalty"] = _plain.plain_penalty
+_env.filters["plain_gate"] = _plain.plain_gate
+_env.filters["plain_sector_line"] = _plain.plain_sector_line
+_env.globals["plain_action"] = _plain.plain_action
+_env.globals["plain_summary"] = _plain.plain_summary
+_env.globals["STANCE_WORDS"] = _plain.STANCE
+_env.globals["ASSET_WORDS"] = _plain.ASSET
+_env.globals["LAYER_WORDS"] = _plain.LAYER
+_env.globals["GLOSSARY"] = _plain.GLOSSARY
 
 
 def env() -> Environment:
