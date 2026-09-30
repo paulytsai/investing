@@ -74,6 +74,8 @@ class IdeaCandidate(BaseModel):
     sector: str | None = None
     industry: str | None = None
     country: str | None = None
+    theme_sector: str = "other"          # stage-1 sector (config/sectors.yaml), assigned before the stock call
+    ai_chain_layer: str | None = None    # ai_upstream | ai_infrastructure | ai_platforms | ai_applications when in the AI value chain
     asset_type: str = "non_commodity"
     ai_layer: str = "none"
     role_hint: str = "core_growth"

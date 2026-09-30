@@ -166,11 +166,15 @@ def run_ideas(as_of=None, top: int = 20, regions: list[str] | None = None, prese
         print("no candidates (run `engine pull` and `engine build pit` first)")
         return {}
     max_sector = hyp.get("screen.max_per_sector")
-    chosen = select_top(all_cands, top, int(max_sector) if max_sector else None)
+    from .sectors import evaluate_sectors
+
+    sector_calls = evaluate_sectors(all_cands, as_of, hyp)          # stage 1: the sector call, before any stock is chosen
+    chosen = select_top(all_cands, top, int(max_sector) if max_sector else None, sector_calls)
     run_id = f"{as_of.date()}_{datetime.now().strftime('%H%M%S')}"
     out = out_dir or (REPORTS_DIR / "ideas" / run_id)
     out.mkdir(parents=True, exist_ok=True)
-    _render(all_cands, chosen, as_of, out, hyp, preset or hyp.get("screen.preset"), regions, top, narrate, narrate_symbols)
+    _render(all_cands, chosen, as_of, out, hyp, preset or hyp.get("screen.preset"), regions, top, narrate, narrate_symbols, sector_calls)
+    (out / "sectors.json").write_text(json.dumps({k: v.model_dump(mode="json") for k, v in sector_calls.items()}, indent=1, default=str))
     (out / "run.json").write_text(json.dumps({"as_of": str(as_of.date()), "title": f"Top {top} ideas ({', '.join(regions)})", "entry": "board.html",
                                               "n_scored": len(all_cands), "preset": preset or hyp.get("screen.preset")}, indent=1))
     (out / "candidates.json").write_text(json.dumps([c.model_dump(mode="json") for c in all_cands], default=str))
@@ -180,8 +184,10 @@ def run_ideas(as_of=None, top: int = 20, regions: list[str] | None = None, prese
     render.update_index()
     if not quiet:
         print(f"[ideas] {len(all_cands)} scored, {len(chosen)} chosen → {out / 'board.html'}")
+        for sc in sorted(sector_calls.values(), key=lambda x: -(x.score or 0)):
+            print(f"  [sector] {sc.stance:<12} {sc.label[:44]:<44} score {sc.score if sc.score is not None else float('nan'):5.1f} members {sc.n_members:4d} slots {sc.slots}")
         for c in chosen:
-            print(f"  #{c.rank:<3} {c.symbol:<6} strength {c.idea_strength:5.1f}  {c.action:<14} {c.action_reason[:70]}")
+            print(f"  #{c.rank:<3} {c.symbol:<6} strength {c.idea_strength:5.1f}  {c.action:<14} {c.theme_sector:<18} {c.action_reason[:60]}")
     return {"run_id": run_id, "path": out, "chosen": chosen, "all": all_cands}
 
 
@@ -200,7 +206,7 @@ def _view(c: IdeaCandidate) -> dict:
     return d
 
 
-def _render(all_cands, chosen, as_of, out, hyp, preset, regions, top, narrate, narrate_symbols=None) -> None:
+def _render(all_cands, chosen, as_of, out, hyp, preset, regions, top, narrate, narrate_symbols=None, sector_calls=None) -> None:
     r = rules()
     angle_keys = list(r["angles"].keys())
     angle_labels = {k: v["label"] for k, v in r["angles"].items()}
@@ -228,7 +234,9 @@ def _render(all_cands, chosen, as_of, out, hyp, preset, regions, top, narrate, n
         else:
             excluded.append(v)
     tpl = render.env().get_template("board.html.j2")
+    scalls = sorted((sector_calls or {}).values(), key=lambda c: -(c.score or 0))
     html = tpl.render(title=f"Ideas {as_of.date()}", as_of=as_of.date(), ideas=board_rows[: max(top, len(board_rows))], excluded=excluded, n_scored=len(all_cands),
+                      sector_calls=scalls,
                       regions=regions, preset=preset, top=top, macro=macro, angle_keys=angle_keys, angle_labels=angle_labels, angle_short=angle_short,
                       sectors=sorted({c.sector for c in all_cands if c.sector}), asset_types=sorted({c.asset_type for c in all_cands}),
                       universe_note=f"{hyp.get('universe.kind')} (cap floor ${hyp.get('universe.cap_floor_usd')/1e9:.0f}B, hypothesis D-53)",

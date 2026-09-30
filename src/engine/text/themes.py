@@ -218,6 +218,9 @@ def build_timmer_weekly() -> pd.DataFrame:
 
 
 # --- screen factors (point-in-time) ------------------------------------------------------------------------
+AI_THEMES = ("ai_compute", "agentic_ai", "memory_hbm", "ai_power_grid")
+
+
 def expanding_themes(as_of: pd.Timestamp, min_docs: int = 20, ratio: float = 1.5) -> dict[str, dict]:
     """Themes whose breadth in the last completed quarter before as_of is ≥ ratio × four quarters earlier."""
     if not has_table("theme_quarterly"):
@@ -241,7 +244,7 @@ def theme_factors_for(as_of: pd.Timestamp, security_ids: list[str]) -> dict[str,
     """Per name: exposure to expanding themes (mentions per 10k words in the two latest visible calls) and whether it is a
     new entrant (first mention within the last two calls). {} when no theme data."""
     exp = expanding_themes(as_of)
-    if not exp or not has_table("theme_mentions") or not security_ids:
+    if not has_table("theme_mentions") or not security_ids:
         return {}
     ids = ",".join("'" + s + "'" for s in security_ids)
     tm = read_df("theme_mentions", f"security_id IN ({ids}) AND available_from <= DATE '{as_of.date()}'")
@@ -252,6 +255,8 @@ def theme_factors_for(as_of: pd.Timestamp, security_ids: list[str]) -> dict[str,
         g = g.sort_values("call_date")
         last_calls = sorted(g["call_date"].unique())[-2:]
         recent = g[g["call_date"].isin(last_calls)]
+        ai = recent[recent["theme"].isin(AI_THEMES)]
+        out[sid] = {"ai_theme_intensity": float((ai["count"] / ai["words"].clip(lower=2000) * 10_000).sum() / max(1, len(last_calls))) if len(ai) else 0.0}
         expo = 0.0
         entrant = 0.0
         themes_hit = []
@@ -265,6 +270,6 @@ def theme_factors_for(as_of: pd.Timestamp, security_ids: list[str]) -> dict[str,
             if g[g["theme"] == theme]["call_date"].min() in last_calls:
                 entrant = 1.0
         if themes_hit:
-            out[sid] = {"theme_exposure": expo, "theme_new_entrant": entrant, "themes_expanding_hit": themes_hit,
-                        "theme_quote": str(recent[recent["theme"].isin(themes_hit)].sort_values("count", ascending=False)["quote"].iloc[0])[:300]}
+            out[sid].update({"theme_exposure": expo, "theme_new_entrant": entrant, "themes_expanding_hit": themes_hit,
+                             "theme_quote": str(recent[recent["theme"].isin(themes_hit)].sort_values("count", ascending=False)["quote"].iloc[0])[:300]})
     return out

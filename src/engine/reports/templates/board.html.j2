@@ -7,6 +7,12 @@
   {% for k, v in macro.items() %}<span>{{ k }}: <b>{{ v }}</b></span>{% endfor %}
   <span class="muted">macro as of formation date (FRED, point-in-time)</span>
 </div>
+{% if sector_calls %}
+<h2 style="margin-top:14px">Stage 1 — the sector call (R-23 / F-39; theme sectors from config/sectors.yaml, AI split by value-chain layer)</h2>
+<div class="card" style="overflow-x:auto"><table><thead><tr><th>Theme sector</th><th>Stance</th><th class="num">Score</th><th class="num">Members / eligible</th><th class="num">Slots</th><th>Rationale — the numbers the call used (rank among sectors)</th></tr></thead><tbody>
+{% for s in sector_calls %}<tr><td><b>{{ s.label }}</b></td><td><span class="badge {{ 'buy' if s.stance=='overweight' else ('excluded' if s.stance in ('avoid','underweight') else '') }}">{{ s.stance }}</span></td><td class="num">{{ '%.0f'|format(s.score) if s.score is not none else '–' }}</td><td class="num">{{ s.n_members }} / {{ s.n_eligible }}</td><td class="num">{{ s.slots }}</td><td class="small">{{ s.rationale|join(' · ') }}</td></tr>{% endfor %}
+</tbody></table><div class="small muted">Stance thresholds and weights are hypotheses (D-58 / D-27). Stock slots go to sectors by stance first; the best Idea Strength inside each sector fills them; no slot goes to an "avoid" sector.</div></div>
+{% endif %}
 <div class="filters">
   <label>Region <select id="f-region"><option value="">all</option>{% for r in regions %}<option>{{ r }}</option>{% endfor %}</select></label>
   <label>Sector <select id="f-sector"><option value="">all</option>{% for s in sectors %}<option>{{ s }}</option>{% endfor %}</select></label>

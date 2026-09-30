@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import pandas as pd
@@ -56,6 +56,7 @@ class Cohort:
     region: str
     picks: list[IdeaCandidate]
     scored: list[IdeaCandidate]
+    sector_calls: dict = field(default_factory=dict)
 
     @property
     def n_eligible(self) -> int:
@@ -69,10 +70,13 @@ def form_cohort(as_of: pd.Timestamp, region: str, hyp: Hypotheses, top_n: int, p
     if not cands:
         return Cohort(as_of, region, [], [])
     score_universe(cands, hyp, preset)
-    picks = select_top(cands, top_n, max_per_sector)
+    from ..screen.sectors import evaluate_sectors
+
+    sector_calls = evaluate_sectors(cands, as_of, hyp)
+    picks = select_top(cands, top_n, max_per_sector, sector_calls)
     chosen = {c.security_id for c in picks}
     for c in cands:                      # non-picks keep only what rank-IC and the stats need (35 dates × ~1,900 names
         if c.security_id not in chosen:  # with 45 reasons each reached 13 GB and was OOM-killed)
             c.reasons, c.gates, c.alerts, c.penalties, c.fit_notes = [], [], [], [], []
             c.metrics = {}
-    return Cohort(as_of, region, picks, cands)
+    return Cohort(as_of, region, picks, cands, sector_calls)

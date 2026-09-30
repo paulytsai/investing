@@ -2,7 +2,7 @@
 {% block nav %}<a href="../board.html">← ideas board</a> · {{ c.symbol }}{% endblock %}
 {% block content %}
 <h1>{{ c.symbol }} <span class="muted" style="font-weight:400;font-size:18px">{{ c.name }}</span></h1>
-<p class="sub">{{ c.sector }} · {{ c.industry }} · {{ c.asset_type }} · AI layer: {{ c.ai_layer }} · role: {{ c.role_hint }} · as of {{ c.as_of }} · data basis {{ c.basis }} (period end {{ c.period_end }}) · price {{ c.price_fmt }} · mkt cap {{ c.mcap_fmt }}</p>
+<p class="sub">{{ c.sector }} · {{ c.industry }} · theme sector: <b>{{ c.theme_sector }}</b>{% if c.ai_chain_layer %} ({{ c.ai_chain_layer }}){% endif %} · {{ c.asset_type }} · AI layer: {{ c.ai_layer }} · role: {{ c.role_hint }} · as of {{ c.as_of }} · data basis {{ c.basis }} (period end {{ c.period_end }}) · price {{ c.price_fmt }} · mkt cap {{ c.mcap_fmt }}</p>
 
 <div class="grid">
   <div class="card tile"><div class="label">Idea Strength (0–100)</div><div class="value">{{ '%.0f'|format(c.idea_strength) if c.idea_strength is not none else '–' }}</div><div class="delta">rank #{{ c.rank or '–' }} of {{ n_scored }} · coverage {{ '%.0f'|format(c.coverage*100) }}%</div></div>

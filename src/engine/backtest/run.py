@@ -15,7 +15,7 @@ from ..reports.charts import build_price_chart, build_series_chart, to_json
 from ..screen.rules import rules
 from ..store import has_table, ledger, read_df
 from .cohorts import Cohort, candidate_cache_path, candidates_at, form_cohort, formation_dates
-from .metrics import cohort_stats, curve_stats, pooled_stats, rank_ic, result_by_formation
+from .metrics import cohort_stats, curve_stats, pooled_stats, rank_ic, result_by_formation, sector_attribution
 from .portfolio import PriceBook, evaluate_cohort, overlapping_curve
 
 
@@ -73,6 +73,9 @@ def run_backtest(start="2016-03-31", end="2024-09-30", hold_months=24, top=20, r
     rows = []
     for d in dates:
         st = cohort_stats(results[d], hold_months)
+        st.update({k: v for k, v in sector_attribution(results[d], all_results[d]).items() if k != "sectors"})
+        st["sector_detail"] = sector_attribution(results[d], all_results[d]).get("sectors", {})
+        st["sector_calls"] = {k: {"stance": v.stance, "score": v.score, "slots": v.slots} for k, v in (cohorts[d].sector_calls or {}).items()}
         st["formation"] = d.date()
         st["n_scored"], st["n_eligible"] = len(cohorts[d].scored), cohorts[d].n_eligible
         st["picks"] = [r.symbol for r in results[d]]

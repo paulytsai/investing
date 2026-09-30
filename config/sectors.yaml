@@ -1,0 +1,55 @@
+# Theme sectors (spec R-23 / F-39 / D-58 hypothesis; the sector call comes before the stock call). Built from FMP/GICS
+# sector + industry, with the AI value chain split out into layers. A name in a non-obvious industry joins an AI layer
+# point-in-time when its own earnings calls talk about AI at intensity (theme_mentions, ai_compute family) — the sector's
+# membership expands as the theme diffuses, from the start of the AI era in the transcript archive (2015→).
+ai_theme_min_per_10k: {value: 3.0, decision_id: D-58, note: "AI-family mentions per 10k words in the two latest calls to join an AI layer from a non-core industry"}
+ai_layers:
+  ai_upstream:
+    label: "AI upstream — semis, memory, equipment"
+    industries: [Semiconductors, Semiconductor Equipment & Materials]
+    always: true                       # core industries are in from the start
+  ai_infrastructure:
+    label: "AI infrastructure — hardware, networking, data-center power, uranium"
+    industries: [Computer Hardware, Communication Equipment, Electronic Components, Electrical Equipment & Parts, Uranium, Utilities - Independent Power Producers,
+                 Utilities - Regulated Electric, REIT - Specialty, Engineering & Construction, Building Products & Equipment, Specialty Industrial Machinery, Scientific & Technical Instruments]
+    always_industries: [Computer Hardware, Communication Equipment, Uranium]
+  ai_platforms:
+    label: "AI platforms — hyperscalers, cloud, foundational software"
+    industries: [Software - Infrastructure, Internet Content & Information, Information Technology Services]
+    symbols: [MSFT, GOOGL, GOOG, AMZN, META, ORCL, NVDA]
+  ai_applications:
+    label: "AI applications — software and services applying AI"
+    industries: [Software - Application, Internet Retail, Advertising Agencies, Entertainment, Health Information Services, Staffing & Employment Services, Consulting Services, Education & Training Services]
+theme_sectors:                        # everything else, from the GICS-style sector (FMP profile)
+  tech_other:          {label: "Technology (non-AI)",            sectors: [Technology]}
+  communication:       {label: "Communication & media",          sectors: [Communication Services]}
+  healthcare:          {label: "Healthcare & biotech",           sectors: [Healthcare]}
+  financials:          {label: "Financials (ex banks)",          sectors: [Financial Services]}
+  industrials:         {label: "Industrials",                    sectors: [Industrials]}
+  consumer_cyclical:   {label: "Consumer cyclical",              sectors: [Consumer Cyclical]}
+  consumer_defensive:  {label: "Consumer staples",               sectors: [Consumer Defensive]}
+  energy:              {label: "Energy",                         sectors: [Energy]}
+  materials:           {label: "Materials & mining",             sectors: [Basic Materials]}
+  real_estate:         {label: "Real estate",                    sectors: [Real Estate]}
+  utilities:           {label: "Utilities (ex AI power)",        sectors: [Utilities]}
+  other:               {label: "Other",                          sectors: []}
+scoring:                              # sector score = weighted z across sectors at the date (hypothesis, D-58 / D-27)
+  weights: {growth: 0.25, momentum: 0.25, quality: 0.20, valuation: 0.15, diffusion: 0.15}
+  stance: {overweight_min: 62, underweight_max: 40}
+  min_members: 8                      # fewer members → "thin" (neutral, flagged)
+  slots: {overweight: 2.0, neutral: 1.0, underweight: 0.4, avoid: 0.0}   # relative slot weights × sqrt(eligible members)
+theme_for_sector:                     # which diffusion theme speaks for each sector (breadth trend input)
+  ai_upstream: ai_compute
+  ai_infrastructure: ai_power_grid
+  ai_platforms: ai_compute
+  ai_applications: agentic_ai
+  healthcare: glp1
+  energy: nuclear
+  industrials: reshoring
+  utilities: ai_power_grid
+  real_estate: rates_refinancing
+  financials: crypto_digital_assets
+  consumer_cyclical: tariffs_trade
+  materials: electrification_ev
+  tech_other: cybersecurity
+  communication: agentic_ai

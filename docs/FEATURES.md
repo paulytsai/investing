@@ -3,6 +3,13 @@
 Built in v1 are marked ✅; proposed next steps ☐. Every item maps to the spec.
 
 ## Selection logic
+- ✅ **Sector call before stock call (two stages)** — theme sectors built from GICS-style sector/industry (`config/sectors.yaml`) with the AI
+  value chain split into layers (upstream semis/memory; infrastructure — hardware, networking, data-center power, uranium; platforms; applications).
+  A name in a non-core industry joins an AI layer point-in-time when its own calls talk about AI at intensity, so AI membership grows as the theme
+  diffuses (from 2015 in the archive). Stage 1 scores every sector on its members' growth, fundamental momentum, quality, valuation and theme
+  diffusion, gives a stance (overweight / neutral / underweight / avoid / thin) and a written rationale with the numbers and ranks it used;
+  stage 2 allocates the top-N slots to sectors by stance and picks the best Idea Strength inside each sector. The backtest reports each pick
+  against its own sector (equal-weight of all eligible members) and splits the result into allocation (the sector calls) and selection (the names).
 - ✅ **Idea Strength (0–100)** = preset-weighted blend of eight angles, each 0–100 within region × date: story & growth
   (P-24/R-43), moat/toll booth (F-01/F-43), quality & cash (F-07/F-82/F-40), on sale vs fair value (F-13/F-14/F-12),
   asymmetry (F-76), alignment (F-09 proxy/R-22), fundamental momentum (F-17), portfolio fit (R-40/R-77).

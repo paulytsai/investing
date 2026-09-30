@@ -314,19 +314,49 @@ def _assign_actions(cands: list[IdeaCandidate], hyp: Hypotheses) -> None:
             c.action, c.action_reason = "pass", f"Idea Strength {c.idea_strength:.0f} < {watch_min:.0f}"
 
 
-def select_top(cands: list[IdeaCandidate], top_n: int, max_per_sector: int | None) -> list[IdeaCandidate]:
+def select_top(cands: list[IdeaCandidate], top_n: int, max_per_sector: int | None, sector_calls: dict | None = None) -> list[IdeaCandidate]:
+    """Stage 2. With `sector_calls` (stage 1), slots go to theme sectors by stance first and the best eligible names fill
+    each sector's slots; leftover slots go to the next-best names from non-avoid sectors. Without calls: the old
+    region-wide ranking with a GICS sector cap. Every scored name still gets an overall rank."""
     ranked = sorted([c for c in cands if c.idea_strength is not None], key=lambda c: -c.idea_strength)
-    chosen, per_sector = [], {}
-    for c in ranked:
-        if not c.eligible:
-            continue
-        sec = c.sector or "?"
-        if max_per_sector and per_sector.get(sec, 0) >= max_per_sector:
-            continue
-        chosen.append(c)
-        per_sector[sec] = per_sector.get(sec, 0) + 1
-        if len(chosen) >= top_n:
-            break
     for i, c in enumerate(ranked, 1):
         c.rank = i
-    return chosen
+    if not sector_calls:
+        chosen, per_sector = [], {}
+        for c in ranked:
+            if not c.eligible:
+                continue
+            sec = c.sector or "?"
+            if max_per_sector and per_sector.get(sec, 0) >= max_per_sector:
+                continue
+            chosen.append(c)
+            per_sector[sec] = per_sector.get(sec, 0) + 1
+            if len(chosen) >= top_n:
+                break
+        return chosen
+    from .sectors import allocate_slots
+
+    slots = allocate_slots(sector_calls, top_n, max_per_sector)
+    chosen: list[IdeaCandidate] = []
+    taken: dict[str, int] = {}
+    for c in ranked:                                   # pass 1: fill each sector's slots in strength order
+        if not c.eligible:
+            continue
+        s = c.theme_sector
+        if taken.get(s, 0) < slots.get(s, 0):
+            chosen.append(c)
+            taken[s] = taken.get(s, 0) + 1
+    for c in ranked:                                   # pass 2: leftover slots, never into an 'avoid' sector
+        if len(chosen) >= top_n:
+            break
+        if not c.eligible or c in chosen:
+            continue
+        s = c.theme_sector
+        if sector_calls.get(s) and sector_calls[s].stance == "avoid":
+            continue
+        if max_per_sector and taken.get(s, 0) >= max_per_sector:
+            continue
+        chosen.append(c)
+        taken[s] = taken.get(s, 0) + 1
+    chosen.sort(key=lambda c: -(c.idea_strength or 0))
+    return chosen[:top_n]

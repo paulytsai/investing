@@ -16,6 +16,13 @@
 {% if cohort_json %}<div class="card"><div id="cohorts" class="chart" style="height:260px"></div><script type="application/json" id="spec-cohorts">{{ cohort_json|safe }}</script></div>{% endif %}
 
 {% if cstats and cstats.calendar_years %}
+{% if pooled.mean_excess_vs_sector is not none %}
+<h2>Sector call first — sector-adjusted results (R-23 / F-39)</h2>
+<div class="card"><div>Mean pick excess vs <b>its own theme sector</b> (equal-weight of every eligible member over the same window): <b>{{ '%+.1f%%'|format(pooled.mean_excess_vs_sector*100) }}</b> · picks beating their sector {{ '%.0f%%'|format((pooled.mean_batting_beat_sector or 0)*100) }} · Brinson vs the equal-weight eligible universe: <b>allocation {{ '%+.1f%%'|format((pooled.mean_allocation or 0)*100) }}</b> (the sector calls) · <b>selection {{ '%+.1f%%'|format((pooled.mean_selection or 0)*100) }}</b> (the names inside sectors), per cohort.</div>
+<table style="margin-top:10px"><thead><tr><th>Theme sector</th><th class="num">Picks</th><th class="num">Mean pick return</th><th class="num">Sector (EW eligible)</th><th class="num">Excess</th><th>Stances over cohorts</th></tr></thead><tbody>
+{% for s in pooled.sector_summary %}<tr><td>{{ s.sector }}</td><td class="num">{{ s.picks }}</td><td class="num">{{ '%+.1f%%'|format(s.mean_pick_ret*100) if s.mean_pick_ret is not none else '–' }}</td><td class="num">{{ '%+.1f%%'|format(s.mean_sector_ret*100) if s.mean_sector_ret is not none else '–' }}</td><td class="num">{{ '%+.1f%%'|format((s.mean_pick_ret - s.mean_sector_ret)*100) if s.mean_pick_ret is not none and s.mean_sector_ret is not none else '–' }}</td><td class="small">{{ s.stances }}</td></tr>{% endfor %}
+</tbody></table></div>
+{% endif %}
 <h2>Calendar years (overlapping portfolio)</h2>
 <div class="card"><table><thead><tr><th>Year</th><th class="num">Engine</th><th class="num">Benchmark</th><th class="num">Excess</th></tr></thead><tbody>
 {% for y in cstats.calendar_years %}<tr><td>{{ y.year }}</td><td class="num">{{ '%+.1f%%'|format(y.portfolio*100) }}</td><td class="num">{{ '%+.1f%%'|format(y.benchmark*100) if y.benchmark == y.benchmark else '–' }}</td><td class="num">{{ '%+.1f%%'|format((y.portfolio - y.benchmark)*100) if y.benchmark == y.benchmark else '–' }}</td></tr>{% endfor %}

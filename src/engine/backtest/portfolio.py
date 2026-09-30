@@ -23,6 +23,7 @@ class PickResult:
     bench_ret: float | None
     status: str = "ok"           # ok | delisted_cash | no_prices | in_flight
     bench2_ret: float | None = None   # equal-weight benchmark (RSP total return) — fair for an equal-weight 20-name book
+    theme_sector: str = "other"       # stage-1 sector of the name at formation (sector-adjusted excess, Brinson attribution)
     idea_strength: float | None = None
     angles: dict = field(default_factory=dict)
     action: str = ""
@@ -105,13 +106,13 @@ def evaluate_cohort(picks, formation: pd.Timestamp, hold_months: int, book: Pric
     out = []
     for c in picks:
         if entry is None:
-            out.append(PickResult(c.security_id, c.symbol, formation, None, None, None, None, None, None, "no_prices"))
+            out.append(PickResult(c.security_id, c.symbol, formation, None, None, None, None, None, None, "no_prices", theme_sector=getattr(c, "theme_sector", "other")))
             continue
         p0, p1, r, st = book.ret(c.security_id, entry, exit_)
         if in_flight and st == "ok":
             st = "in_flight"
         out.append(PickResult(c.security_id, c.symbol, formation, entry, exit_, p0, p1, r, book.bench_ret(entry, exit_), st,
-                              bench2_ret=_bench2_ret(book, entry, exit_),
+                              bench2_ret=_bench2_ret(book, entry, exit_), theme_sector=getattr(c, "theme_sector", "other"),
                               idea_strength=c.idea_strength, angles={a.key: a.score for a in c.angles}, action=c.action, sector=c.sector))
     return out
 
