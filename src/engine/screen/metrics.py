@@ -15,6 +15,7 @@ from .rules import ai_layer_score
 TAX = 0.21
 
 
+METRICS_VERSION = "v2"     # bump when metric definitions change: the backtest candidate cache is keyed by it
 PE_BAND_MAX = 150.0        # P/E above this is "EPS ≈ 0", not a valuation
 PE_BAND_MIN_DAYS = 3 * 250 # ≥ 3 years of meaningful daily P/E before the own-history percentile is scored (F-13)
 

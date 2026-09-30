@@ -24,7 +24,9 @@ def candidate_cache_path(as_of: pd.Timestamp, region: str, universe_kind: str | 
     hyp = hyp or Hypotheses.load()
     kind = universe_kind or hyp.get("universe.kind")
     floor = hyp.get("universe.cap_floor_usd" if region == "US" else "universe.cap_floor_jpy")
-    return CACHE / f"{region}_{kind}_{int(floor)}_{as_of.date()}.json"
+    from ..screen.metrics import METRICS_VERSION
+
+    return CACHE / f"{region}_{kind}_{int(floor)}_{METRICS_VERSION}_{as_of.date()}.json"
 
 
 def candidates_at(as_of: pd.Timestamp, region: str, hyp: Hypotheses, universe_kind: str | None = None, use_cache: bool = True) -> list[IdeaCandidate]:
