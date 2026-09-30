@@ -24,6 +24,7 @@
   {% if s.bet.cycle %}<div class="small muted">Cycle: {{ s.bet.cycle.phase }} — {{ s.bet.cycle.theme }} in {{ '%.0f%%'|format(s.bet.cycle.breadth_now) }} of calls ({{ s.bet.cycle.quarter }}), peak {{ '%.0f%%'|format(s.bet.cycle.breadth_peak) }}, {{ s.bet.cycle.trend }}{% if s.bet.cycle.cycle_started %}, since {{ s.bet.cycle.cycle_started }}{% endif %}</div>{% endif %}{% endif %}
   <div class="small muted">{{ STANCE_WORDS.get(s.stance, s.stance) }}.</div>
   {% if s.cycle_read %}<div class="small"><b>Commodity cycle:</b> {{ s.cycle_read.verdict }}</div>{% endif %}
+  {% if s.danoff %}<div class="small"><b>Danoff:</b> {{ s.danoff.verdict[12:] }}</div>{% endif %}
   <details class="small"><summary class="muted">Why — the numbers the call used</summary><ul style="margin:6px 0 0;padding-left:18px">{% for r in s.rationale %}<li>{{ r|plain_sector_line }} <span class="muted">— {{ r }}</span></li>{% endfor %}</ul></details>
 </div>{% endfor %}
 </div>
@@ -60,6 +61,7 @@
   </div>
   <div class="small muted">{{ c.sector }} · theme sector <b>{{ sector_map.get(c.theme_sector).label if sector_map.get(c.theme_sector) else c.theme_sector }}</b> · {{ ASSET_WORDS.get(c.asset_type, c.asset_type) }}{% if c.ai_layer != "none" %} · {{ LAYER_WORDS.get(c.ai_layer, c.ai_layer) }}{% endif %}</div>
 {% set sp = summary_parts(c, sector_map.get(c.theme_sector), c.kelly_weight) %}<div class="summary"><p class="thesis">{{ sp.thesis }}</p><ol>{% for r in sp.reasons %}<li>{{ r }}</li>{% endfor %}</ol><p class="recap">{{ sp.recap }}</p></div>
+  {% if c.metrics.danoff %}<div class="small"><b>Danoff:</b> {{ c.metrics.danoff.verdict }} ({{ '%.0f'|format(c.metrics.danoff.score) }}/100){% if c.metrics.danoff.years_to_double %} · earnings double in {{ '%.1f'|format(c.metrics.danoff.years_to_double) }} years at the recent rate{% endif %} · {{ c.metrics.danoff.face }}.</div>{% endif %}
   <details class="evidence"><summary class="small muted">Show the evidence (angles, reasons with rule ids, gates)</summary>
   <div class="chips">{% for a in angle_keys %}<span class="chip" title="{{ angle_labels[a] }}">{{ angle_short[a] }} <b>{{ '%.0f'|format(c.angle_map[a]) if c.angle_map[a] is not none else '–' }}</b></span>{% endfor %}
     {% for g in c.gates if g.outcome != 'pass' %}<span class="badge gate" title="{{ g.evidence }}">{{ g.gate_id }} {{ g.outcome }}</span>{% endfor %}{% for x in c.excluded_by %}<span class="badge hard">{{ x }}</span>{% endfor %}{% for a in c.alerts %}<span class="badge alert" title="{{ a.message }}">{{ a.rule_id }}</span>{% endfor %}</div>

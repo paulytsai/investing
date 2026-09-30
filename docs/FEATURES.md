@@ -31,6 +31,20 @@ Built in v1 are marked ✅; proposed next steps ☐. Every item maps to the spec
   diffusion, gives a stance (overweight / neutral / underweight / avoid / thin) and a written rationale with the numbers and ranks it used;
   stage 2 allocates the top-N slots to sectors by stance and picks the best Idea Strength inside each sector. The backtest reports each pick
   against its own sector (equal-weight of all eligible members) and splits the result into allocation (the sector calls) and selection (the names).
+- ✅ **The story, built from the fundamentals (Paul, 2026-09-30: "the thesis leans too hard on the quant screen")** — every idea page now leads
+  with a narrative assembled from the filings themselves, no model needed: what the company does (its own profile description), how the earnings
+  have grown (a six-year table of revenue, growth, operating margin, EPS and free cash flow plus the three-year and twelve-month rates), what is
+  driving it in management's words (the demand, receipts, guidance and leadership quotes from the latest calls, Claude's one-line read when
+  available), how good the business is (returns, margins and their trend, cash conversion, balance sheet, R&D), what could break it (deceleration,
+  red flags, leverage, cash quality, concentration, a commodity peak, a negative quote), and what you pay. The Claude thesis record sits on top of
+  this when narratives are on. Idea Strength moves down the page.
+- ✅ **Danoff lens (The Smiley Fund)** — a separate read beside Idea Strength, never blended: *follow earnings* (years for EPS to double at the
+  slower of the three-year and twelve-month rate, capped at 60%/yr; four-to-five years is the test), *smile or frown* (EPS growth, acceleration,
+  beat streak, guidance language, red flags → keep / sell-or-swap), *quality over price* (ROIC, gross margin and its trend, leadership language,
+  the indispensable-#1 read, cash conversion → best of breed), *price vs growth* (the price is forgotten if the growth is there), and *ignore the
+  past price* (a stock up 50%+ is not a missed stock; the question is whether earnings can double from here). Score 0–100 with a verdict (would own
+  / look closer / pass / sell-or-swap). Per sector: share of members smiling and frowning, median years to double, the best-of-breed name. Shown
+  on every idea page, board row and sector card, and on the evaluator page.
 - ✅ **Commodity cycles and the barbell (Paul, 2026-09-30)** — oil and tech are the two ends of the barbell, and oil has become less cyclical as capex
   discipline grew; the engine watches for the same shift in every commodity-type group (memory runs the same pattern on a longer cycle). A build
   step aggregates quarterly revenue, operating income, cash flow and capex per group (oil & gas, memory & storage, copper, steel, chemicals, gold

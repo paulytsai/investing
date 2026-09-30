@@ -127,7 +127,13 @@ def run_evaluate(symbols: list[str], thesis: str | None = None, as_of=None, regi
         scored = sorted([r for r in c.reasons if r.kind == "factor" and r.contribution is not None], key=lambda r: -abs(r.contribution))
         ent = ledger.entry(c.symbol, str(as_of.date()), run_id, c, place[c.security_id], calls.get(c.theme_sector), (sizing.get("weights") or {}).get(c.security_id), verdict, t)
         since = ledger.diff(ledger.previous(c.symbol), ent)
-        rows.append({"c": c, "place": place[c.security_id], "thesis": t, "verdict_html": verdict_html, "verdict": verdict, "since": since, "ledger_entry": ent,
+        from ..research.story import build_story
+
+        try:
+            story = build_story(c, None, calls.get(c.theme_sector))
+        except Exception:  # noqa: BLE001
+            story = None
+        rows.append({"c": c, "place": place[c.security_id], "thesis": t, "verdict_html": verdict_html, "verdict": verdict, "since": since, "ledger_entry": ent, "story": story,
                      "kelly": (sizing.get("blocks") or {}).get(c.security_id), "weight": (sizing.get("weights") or {}).get(c.security_id),
                      "sector_call": calls.get(c.theme_sector), "angles": {a.key: a.score for a in c.angles},
                      "top_reasons": [{**r.model_dump(), "value_fmt": render.fmt_value(r.value, r.unit)} for r in scored[:5]],

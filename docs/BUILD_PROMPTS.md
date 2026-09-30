@@ -120,3 +120,12 @@ workflows (W3, W4, W6, W7, M8).
 > (2) add a portfolio mode (`--holdings config/holdings.yaml`) that sizes the evaluated names alongside what he already owns (redundancy
 > R-40, Kelly across the whole book); (3) an earnings-checkpoint workflow (W3) that re-runs the verdict after each new filing and diffs the
 > claims; (4) a JP path (`--region jp`). Keep INV-2/3/5: reasons with rule ids and periods, no price-only buys, hypotheses labelled.
+
+
+## Prompt — the fundamentals story and the Danoff lens (2026-09-30)
+> The idea pages lean too hard on the quant screen. Build a narrative from the fundamentals for every idea without a model call
+> (`research/story.py`): what the company does, the earnings table, what is driving it in management's words, how good the business is,
+> what could break it, what you pay. Add Will Danoff's method as a separate lens (`frameworks/danoff.py`, from The Smiley Fund: prices follow
+> EPS, smile or frown, quality over price, listen, write it down, ignore the past price) with a per-name score and verdict and a per-sector
+> view (share smiling, years to double, best of breed). Lead the idea page with the story, put Idea Strength below it, show the Danoff read on
+> the board, sector cards and the evaluator. Keep the lens out of Idea Strength unless Paul chooses to weight it.

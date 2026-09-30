@@ -313,6 +313,13 @@ def _render(all_cands, chosen, as_of, out, hyp, preset, regions, top, narrate, n
                                  overlays={"price", "price_tr", "pe_band", "eps", "drawdown", "events", "phases"}, eps_series=eps, events=ev, phases=phases,
                                  subtitle="10 years · price, TTM P/E band, TTM EPS, events, phases", currency=c.currency)
         v = _view(c)
+        from ..research.story import build_story
+
+        try:
+            story = build_story(c, snap.fy_history, (sector_calls or {}).get(c.theme_sector))
+        except Exception as e:  # noqa: BLE001
+            print(f"[story] {c.symbol}: {e}")
+            story = None
         narrative = None
         if narrate and (c in chosen or (narrate_symbols and c.symbol.upper() in {x.upper() for x in narrate_symbols})):
             from ..research.stages import narrative_html
@@ -321,5 +328,5 @@ def _render(all_cands, chosen, as_of, out, hyp, preset, regions, top, narrate, n
         html = itpl.render(title=f"{c.symbol} — idea", c=v, m=c.metrics, chart_id=spec["id"], chart_json=to_json(spec), macro=macro,
                            n_scored=len(all_cands), phases=phases, narrative=narrative, dcf=c.metrics.get("dcf"), generated=render.now(), assets="../../../assets/",
                            kelly=(sizing.get("blocks") or {}).get(c.security_id), kelly_weight=(sizing.get("weights") or {}).get(c.security_id), n_top=len(chosen),
-                           sector_call=(sector_calls or {}).get(c.theme_sector))
+                           sector_call=(sector_calls or {}).get(c.theme_sector), story=story)
         render.write(out / "ideas" / f"{c.symbol}.html", html)

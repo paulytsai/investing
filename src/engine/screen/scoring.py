@@ -186,8 +186,11 @@ def score_universe(cands: list[IdeaCandidate], hyp: Hypotheses, preset_name: str
         if c.metrics.get("currency_mismatch"):
             c.alerts.append(Alert(rule_id="R-14", message=f"valuation not computed: {c.metrics['currency_mismatch']} (ADR reporting currency); growth and quality ratios only"))
 
+    from ..frameworks.danoff import danoff_read
     from .commodity import cycle_read, group_for
 
+    for c in cands:                                   # the Danoff lens, a separate read beside Idea Strength (never blended)
+        c.metrics["danoff"] = danoff_read(c.metrics)
     for c in cands:                                   # commodity-group members carry their group's cycle read (plain English + penalty rule)
         g = group_for(c.industry, c.symbol)
         if g:

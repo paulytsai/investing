@@ -8,9 +8,32 @@
   <h3 style="margin-top:0">In plain English</h3>
 {% set sp = summary_parts(c, sector_call, kelly_weight) %}<div class="summary"><p class="thesis">{{ sp.thesis }}</p><ol>{% for r in sp.reasons %}<li>{{ r }}</li>{% endfor %}</ol><p class="recap">{{ sp.recap }}</p></div>
   <style>.summary { font-size:16px; line-height:1.55 } .summary .thesis { font-weight:600; margin:4px 0 } .summary ol { margin:4px 0; padding-left:22px } .summary .recap { color:var(--ink2); margin:4px 0 }</style>
+  {% if story and story.danoff %}<div class="small" style="margin:4px 0"><b>Danoff:</b> {{ story.danoff.verdict }} ({{ '%.0f'|format(story.danoff.score) }}/100).</div>{% endif %}
   {% set open_gates = c.gates|rejectattr('outcome', 'equalto', 'pass')|list %}{% if open_gates %}<ul class="small" style="margin:0;padding-left:18px">{% for g in open_gates %}<li>{{ g|plain_gate }}</li>{% endfor %}</ul>{% endif %}
   {% if c.alerts %}<div class="small muted">{% for a in c.alerts %}⚑ {{ a.message }} {% endfor %}</div>{% endif %}
 </div>
+
+{% if story %}
+<h2>The story — built from the fundamentals</h2>
+<div class="card story">
+  <h3>What it does</h3><p>{{ story.what }}</p>
+  <h3>How the earnings have grown</h3><p>{{ story.earnings }}</p>
+  {% if story.earnings_rows %}<div style="overflow-x:auto"><table><thead><tr><th>Fiscal year</th><th class="num">Revenue</th><th class="num">Growth</th><th class="num">Op. margin</th><th class="num">EPS</th><th class="num">EPS growth</th><th class="num">Free cash flow</th></tr></thead><tbody>
+  {% for r in story.earnings_rows %}<tr><td>{{ r.fy }}</td><td class="num">{{ r.revenue }}</td><td class="num">{{ r.rev_growth }}</td><td class="num">{{ r.op_margin }}</td><td class="num">{{ r.eps }}</td><td class="num">{{ r.eps_growth }}</td><td class="num">{{ r.fcf }}</td></tr>{% endfor %}
+  </tbody></table></div>{% endif %}
+  {% if story.driving %}<h3>What is driving it — in management's words</h3><ul>{% for x in story.driving %}<li>{{ x }}</li>{% endfor %}</ul>{% endif %}
+  {% if story.quality %}<h3>How good the business is</h3><p>{{ story.quality }}</p>{% endif %}
+  {% if story.risks %}<h3>What could break it</h3><ul>{% for x in story.risks %}<li>{{ x }}</li>{% endfor %}</ul>{% endif %}
+  {% if story.pay %}<h3>What you pay</h3><p>{{ story.pay }}</p>{% endif %}
+  <div class="small muted">Every figure is from filings visible on {{ c.as_of }} (data basis {{ c.basis }}, period end {{ c.period_end }}); quotes are from the earnings-call transcripts and filings with their document and date. The Claude thesis record, when generated, appears further down and builds on this, never replaces it.</div>
+</div>
+<h2>Through Danoff's eyes (The Smiley Fund)</h2>
+<div class="card">
+  <p><b>{{ story.danoff.verdict }}</b> <span class="muted">— Danoff score {{ '%.0f'|format(story.danoff.score) }} of 100, a separate lens beside Idea Strength ({{ '%.0f'|format(c.idea_strength) if c.idea_strength is not none else '–' }}).</span></p>
+  <ul>{% for x in story.danoff.lines %}<li>{{ x }}</li>{% endfor %}</ul>
+  <div class="small muted">The six rules: stock prices follow earnings per share (double the earnings in four or five years and the stock should double); the smile — earnings growing and the story getting better — is a keep, the frown a sell or a swap for a better idea; pay for quality, the price is forgotten; listen (management's own words above); write the thesis down (this page is that record); a stock that has doubled is not a missed stock.</div>
+</div>
+{% endif %}
 
 <div class="grid">
   <div class="card tile"><div class="label">Idea Strength (0–100)</div><div class="value">{{ '%.0f'|format(c.idea_strength) if c.idea_strength is not none else '–' }}</div><div class="delta">rank #{{ c.rank or '–' }} of {{ n_scored }} · coverage {{ '%.0f'|format(c.coverage*100) }}%</div></div>

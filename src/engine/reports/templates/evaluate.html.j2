@@ -22,8 +22,11 @@
   {% if r.sector_call %}<h3>Sector view first — {{ r.sector_call.label }}</h3>
   <p><span class="badge {{ 'buy' if r.sector_call.stance=='overweight' else ('excluded' if r.sector_call.stance in ('avoid','underweight') else '') }}">{{ r.sector_call.stance }}</span> {% if r.sector_call.bet %}<b>Recommended bet:</b> {{ r.sector_call.bet.summary }}{% endif %}</p>
   <div class="small muted">{{ STANCE_WORDS.get(r.sector_call.stance, r.sector_call.stance) }}.</div>
-  <ul class="small">{% for x in r.sector_call.rationale[:6] %}<li>{{ x|plain_sector_line }}</li>{% endfor %}</ul>{% endif %}
+  <ul class="small">{% for x in r.sector_call.rationale[:6] %}<li>{{ x|plain_sector_line }}</li>{% endfor %}</ul>
+  {% if r.sector_call.danoff %}<div class="small"><b>Danoff on the sector:</b> {{ r.sector_call.danoff.verdict[12:] }}</div>{% endif %}{% endif %}
 
+  {% if r.story %}<h3>The story</h3><p class="small">{{ r.story.what }}</p><p class="small">{{ r.story.earnings }} {{ r.story.quality }}</p>{% if r.story.driving %}<ul class="small">{% for x in r.story.driving[:3] %}<li>{{ x }}</li>{% endfor %}</ul>{% endif %}
+  <h3>Through Danoff's eyes</h3><p class="small"><b>{{ r.story.danoff.verdict }}</b> ({{ '%.0f'|format(r.story.danoff.score) }}/100)</p><ul class="small">{% for x in r.story.danoff.lines %}<li>{{ x }}</li>{% endfor %}</ul>{% endif %}
   <h3>What the engine sees</h3>
   <div style="display:flex;flex-wrap:wrap;gap:24px">
     <div style="flex:1;min-width:280px"><div class="small"><b>For</b></div><ul class="small" style="margin:4px 0;padding-left:18px">{% for x in r.top_reasons if x.contribution > 0 %}<li>{{ x|plain_reason }} <span class="muted">({{ x.rule_id }})</span></li>{% endfor %}</ul></div>

@@ -68,6 +68,7 @@ class SectorCall(BaseModel):
     diffusion: dict = Field(default_factory=dict)
     bet: dict = Field(default_factory=dict)         # the recommended sector bet: market weight, recommended weight, active bet, Kelly-implied, cycle status
     cycle_read: dict = Field(default_factory=dict)  # commodity-cycle read for commodity sectors (phase, capex discipline, dampening, cycle length)
+    danoff: dict = Field(default_factory=dict)      # the sector through Danoff's eyes: share smiling, median years to double, best of breed
 
 
 AGG = {   # aggregate: (metric key, statistic, direction, group, label)
@@ -196,12 +197,18 @@ def evaluate_sectors(cands: list[IdeaCandidate], as_of: pd.Timestamp, hyp=None) 
         cr = creads.get(s) or {}
         if cr:
             why.append(f"commodity cycle: {cr['verdict']} Score {cr['score_adjust']:+.0f} points for the cycle position.")
+        from ..frameworks.danoff import danoff_sector
+
+        dreads = [(m.metrics.get("danoff"), m.symbol) for m in elig if m.metrics.get("danoff")]
+        dan = danoff_sector([r for r, _ in dreads], [sy for _, sy in dreads]) if dreads else {}
+        if dan:
+            why.append(dan["verdict"])
         head = {"overweight": "Overweight", "neutral": "Neutral", "underweight": "Underweight", "avoid": "Avoid (members losing money and shrinking earnings)", "thin": "Thin sample — neutral"}[stance]
         calls[s] = SectorCall(sector=s, label=labels.get(s, s), as_of=str(pd.Timestamp(as_of).date()), n_members=len(members), n_eligible=len(elig),
                               score=sc, stance=stance, inputs={a: (None if v is None else float(v)) for a, v in inputs.items()},
                               ranks={a: (None if s not in ranks[a].index or np.isnan(ranks[a][s]) else int(ranks[a][s])) for a in AGG},
                               rationale=[f"{head}: sector score {sc:.0f}/100 across {n} theme sectors" if sc is not None else head] + why,
-                              theme=k["theme_for_sector"].get(s), diffusion=d, cycle_read=creads.get(s) or {})
+                              theme=k["theme_for_sector"].get(s), diffusion=d, cycle_read=creads.get(s) or {}, danoff=dan)
     return calls
 
 
