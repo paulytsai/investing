@@ -31,7 +31,7 @@ const GLOSS = {
   'Idea Strength': 'The engine\'s overall score, 0–100. It is a weighted average of eight sub-scores: story & growth 20%, moat 15%, quality & cash 15%, on sale vs fair value 15%, asymmetry 10%, management alignment 10%, fundamental momentum 10%, portfolio fit 5%. Each sub-score is itself a percentile rank within the run\'s universe, so 50 is about average. Penalties are then subtracted, for example for a big 12-month run-up or a cyclical company at peak margins.',
   'Percentile': 'Where the company\'s Idea Strength ranks in the run\'s universe: 100 × (1 − (rank − 1) ÷ number of companies). 100 is the top; 74 means it scores higher than about 74% of the companies; 3 means near the bottom. This is a rank against other companies, not a return or a probability.',
   'Engine status': 'The engine\'s action. Buy in stages = Idea Strength ≥ 70, on-sale sub-score ≥ 50, and every gate passed. Watch = Idea Strength ≥ 55 and every gate passed. Pass = no buy or watch call, either because the score is too low or because a gate held it back (see Blocked by). Excluded = removed by a hard rule. Insufficient data = too few metrics to score.',
-  'Blocked by': 'The rule that made the company ineligible. G2 avoid = the value-trap gate: below 1× book with no catalyst; for Japan this is mostly a data gap (Section 5). X-01/X-02 = loss-making or pre-revenue. X-22/R-15 = cyclical at peak margins. "none" = passed every gate.',
+  'Blocked by': 'The rule that made the company ineligible; Section 2 explains each in full. G2 value trap = trades below 1× book with no catalyst (insider buying, or dividends plus buybacks of 2% or more a year); for Japan the engine lacks that data, so this mostly means not tested. X-01/X-02 no revenue = excluded as pre-revenue or a loss-making "dream stock"; in these runs it fired only because the engine had no data for the company. X-22/R-15 peak margins = a cyclical company whose operating margin is at the top of its own history. "none" = passed every gate.',
   'P/B': 'Price to book: market value ÷ book equity from the latest report. Below 1 means the market values the company at less than its accounting net assets.',
   'Tier': 'Strictest cash test the company passes. A (NCAV) = current assets minus all liabilities ≥ market value. B (net cash) = cash and short-term investments minus debt ≥ market value. C (gross cash) = cash and short-term investments ≥ market value, debt not subtracted. D (working capital) = current assets minus current liabilities ≥ market value.',
   'Mkt cap ¥B': 'Market value in ¥ billions at the 2026-09-29 close: price × shares outstanding excluding treasury shares.',
@@ -63,19 +63,38 @@ K.push(B('Murakami-linked investors started 17 new 5% stakes in 2026. ', 'No new
 K.push(B('The engine is lukewarm on these new stakes. ', 'Only TOW, one of Takateru\'s, reaches Watch (74th percentile). Most of the family\'s new positions sit in the bottom decile: Yamada and Rengo at the 3rd percentile, Air Water at the 7th. The engine scores earnings momentum, quality and growth. A Murakami position is a bet on a catalyst: buybacks, unwinding cross-shareholdings, or a sale of the company. The engine does not score catalysts.'));
 K.push(B(`${st.ncand} companies from the cash-rich list look like plausible next targets. `, 'They are below book value, profitable, liquid enough to build a 5% stake, and have no shareholder above 30%. At the top are Hi-Lex, Kato Works, Nakayama Steel, Futaba, Shima Seiki, Mitsuba and Shindengen. Another seven high scorers are blocked by a controlling shareholder.'));
 K.push(B(`${st.nheld} of the ${st.n} cash-rich companies already have a Murakami-linked holder. `, 'Nippon Paper and Shinko Shoji (the family), AD Works (Takateru), Kinki Sharyo and Naigai (Effissimo), GungHo and Kyokuto Boeki (Strategic Capital).'));
-K.push(B('Treat the engine\'s Japan verdicts with care. ', `Its value-trap gate (G2) blocked ${st.g2} of the ${st.n} names. That gate needs insider buying or a shareholder yield of 2% or more, and the engine has neither for Japan. ${st.g2y} of those ${st.g2} actually pay a dividend of 2% or more. Section 5 explains this.`));
+K.push(B('Treat the engine\'s Japan verdicts with care. ', `Two of its rules misfire on Japanese data. The value-trap gate (G2) blocked ${st.g2} of the ${st.n} names because the engine cannot see Japanese buybacks or insider buying; ${st.g2y} of those ${st.g2} actually pay a dividend of 2% or more. The no-revenue rule (X-01/X-02) blocked ${st.x01} names only because the engine never downloaded their data. Section 2 explains each rule.`));
 
 K.push(h1('1. How to read the tables'));
 K.push(p('Every table is followed by a Columns key that defines each column. The terms used most often:', { size: 18 }));
 K.push(B('Idea Strength (0–100). ', 'The engine\'s overall score: a weighted average of eight sub-scores (story & growth, moat, quality & cash, on sale vs fair value, asymmetry, management alignment, fundamental momentum, portfolio fit), each ranked against the other companies in the run, minus penalties.'));
 K.push(B('Percentile. ', 'A rank, not a return or a probability. It shows how the company\'s Idea Strength compares with every other company in the same run: 100 × (1 − (rank − 1) ÷ number of companies). TOW at the 74th percentile scores higher than about 74% of the 948 companies in that run; Yamada at the 3rd percentile is near the bottom. Each run\'s universe is the engine\'s Japan universe (Prime and Standard companies worth ¥100B or more on 2026-09-29) plus the names being evaluated: 948 companies for the Murakami positions, 1,257 for the cash-rich list.'));
 K.push(B('Engine status. ', 'Buy in stages and Watch are the engine\'s positive calls. Pass means the company cleared the hard exclusions but isn\'t a call. Excluded means a hard rule removed it: X-01/X-02 for a loss-maker, X-22/R-15 for a cyclical at peak margins.'));
-K.push(B('Blocked by. ', 'The gate or rule that made a company ineligible. G2 avoid is the value-trap gate: below 1× book with no catalyst.'));
+K.push(B('Blocked by. ', 'The gate or rule that made a company ineligible. Section 2 explains each one.'));
 K.push(B('Cash-rich tiers. ', 'A: current assets minus all liabilities (NCAV) at least market value. B: net cash at least market value. C: gross cash at least market value. D: working capital at least market value. A and B are the cleanest asset plays.'));
 K.push(B('Murakami fit (0–10). ', 'My score for resemblance to the 2026 Murakami entries: market value ¥5–300B (2 points), P/B below 0.7 (2) or below 1 (1), tier A or B (2), profitable (1), median daily trading ≥¥50M (2) or ≥¥20M (1), payout ratio under 35% (1). It subtracts 3 for payment float or property inventory. The register check uses the Kabutan top-10 shareholder list.'));
 
+
+K.push(h1('2. The rules that block a company'));
+K.push(p('The engine scores every company, then applies hard exclusions and gates. A company that fails one is ineligible: it keeps its Idea Strength and percentile, but cannot be a Buy in stages or Watch call. Only three rules blocked companies in these runs.', { size: 18 }));
+K.push(h2('G2 value trap (engine rule F-22/X-18)'));
+K.push(B('What it tests. ', 'Whether a stock trading below 1× book (P/B under 1) has a catalyst. It passes only if officers bought shares on the open market in the last 12 months, or dividends plus buybacks over the last year equal at least 2% of market value. Otherwise the outcome is "avoid".'));
+K.push(B('Why it exists. ', 'Your spec calls a P/B below 1 without a catalyst a value trap (価値の罠): cheap assets that stay cheap because owners and management have no reason to return them. The philosophy file adds that Japanese names need a specific story.'));
+K.push(B('How often it fired. ', `${st.g2} of the ${st.n} cash-rich stocks (plus ${st.x22} that also hit X-22/R-15), and 9 of the 17 Murakami stakes (including Metal Art, which also hit X-22/R-15).`));
+K.push(B('Why most of these blocks are not real. ', `For Japan the engine has dividends per share but not total dividends paid or buybacks, and there is no Japanese equivalent of US insider-trading filings. Shareholder yield therefore comes out as 0% and the gate fails automatically. Using J-Quants dividend per share against price, ${st.g2y} of the ${st.g2} blocked cash-rich names yield 2% or more from dividends alone and would pass. Read a G2 block on a Japanese company as "not tested", not as "value trap".`));
+K.push(h2('X-01/X-02 no revenue (pre-revenue or loss-making "dream stock")'));
+K.push(B('What it tests. ', 'Excludes a company whose trailing 12-month revenue is missing or below the engine\'s floor (set as US$100 million), or that is loss-making while priced above 15× sales.'));
+K.push(B('Why it exists. ', 'Your spec treats pre-revenue or loss-making "dream" stocks as speculative positions, never core holdings.'));
+K.push(B('How often it fired. ', `${st.x01} cash-rich stocks, plus Sankei Real Estate among the Murakami stakes.`));
+K.push(B('Why these blocks are not real. ', `Every one fired because the engine had no data for the company, not because of its numbers. The engine downloads only Prime and Standard companies, so the ${st.x01_growth} Growth-market names and the Sankei REIT have no prices or financials. The other 3 (Nepon, Kawase Computer Supplies, Yamazaki) are filed under old market-segment names and were not downloaded either. All ${st.x01} have revenue of ¥1.6–50B, and ${st.x01_profit} are profitable.`));
+K.push(h2('X-22/R-15 peak margins (cyclical at peak margins)'));
+K.push(B('What it tests. ', 'For companies the engine classifies as commodity cyclicals or resource producers, it excludes those whose operating margin is at or above the 90th percentile of their own history.'));
+K.push(B('Why it exists. ', 'At peak margins a cyclical company\'s earnings are flattered, so a low P/E is a trap: the earnings usually fall back.'));
+K.push(B('How often it fired. ', `${st.x22} cash-rich stocks (all of which also failed G2), plus Metal Art among Takateru\'s stakes. This rule reflects real data and is a genuine judgment.`));
+K.push(p('Other gates (G1 management alignment, G3 balance sheet, G4 speculation, and the remaining exclusions such as funds, banks and recent listings) were checked but did not block any company here. G3 can cap a position size without blocking it.', { size: 18, before: 60 }));
+
 K.push(new Paragraph({ children: [new PageBreak()] }));
-K.push(h1('2. New Murakami-linked stakes in 2026, through the engine'));
+K.push(h1('3. New Murakami-linked stakes in 2026, through the engine'));
 K.push(p('Each row is a stake first reported at 5% or more in 2026, with the latest stake and direction from the filings. Engine scores are as of 2026-09-29, in a universe of 948.', { size: 18 }));
 K.push(table(['Investor', 'Code', 'Company', 'First 5% filing', 'Stake', 'Trend', 'Idea Strength', 'Percentile', 'Engine status', 'Blocked by', 'P/B'], S.mura,
   [11, 5, 17, 9, 6, 9, 7, 6, 8, 11, 5], ['', '', '', '', 'r', '', 'r', 'r', '', '', 'r'], 14));
@@ -83,10 +102,10 @@ legend(['Investor', 'Code', 'Company', 'First 5% filing', 'Stake', 'Trend', 'Ide
 K.push(h2('What stands out'));
 K.push(B('The paper cluster. ', 'The family holds Nippon Paper (9.8%), Rengo (6.1%), Mitsubishi Paper (6.1%), Japan Pulp & Paper (5.1%) and KPP (5.0%). That looks like a bet on industry consolidation. The engine scores them weakly (3rd–50th percentile). Nippon Paper is the strongest at the 50th percentile, at 0.28× book, but G2 blocks it.'));
 K.push(B('Takateru\'s stakes score better than his father\'s. ', 'Primo (69th percentile), DaikyoNishikawa and AD Works (both 63rd), and TOW (74th, Watch). That fits his move toward better businesses at a discount. The engine excludes Metal Art as a cyclical at peak margins.'));
-K.push(B('Sankei Real Estate (29.9%) ', 'scores 59 but is excluded under X-01/X-02. It is a REIT, so the engine\'s operating-company tests don\'t fit it.'));
+K.push(B('Sankei Real Estate (29.9%) ', 'scores 59 but is excluded under X-01/X-02. That is a data gap, not a judgment: it is a REIT, REITs trade on a separate market the engine does not download, so it has no revenue data (Section 2).'));
 
 K.push(new Paragraph({ children: [new PageBreak()] }));
-K.push(h1('3. Likely next targets among the cash-rich stocks'));
+K.push(h1('4. Likely next targets among the cash-rich stocks'));
 K.push(p(`These are the cash-rich names with fit 8 or more, P/B below 1, median trading of ¥20M a day or more, no Murakami-linked holder yet, and no strategic holder at 30% or more. Sorted by fit, then Idea Strength.`, { size: 18 }));
 K.push(table(['Code', 'Company', 'Tier', 'Mkt cap ¥B', 'P/B', '¥M/day', 'Largest strategic holder', 'Fit', 'Idea Str.', 'Percentile', 'Engine', 'Div. yield'], S.cand,
   [5, 15, 9, 6, 5, 6, 17, 4, 6, 5, 7, 6], ['', '', '', 'r', 'r', 'r', '', 'r', 'r', 'r', '', 'r'], 14));
@@ -106,7 +125,7 @@ K.push(table(['Code', 'Company', 'Held by', 'Tier', 'P/B', 'Idea Str.', 'Percent
 legend(['Code', 'Company', 'Held by', 'Tier', 'P/B', 'Idea Str.', 'Percentile', 'Engine', 'Blocked by'], UNI.cash).forEach(x => K.push(x));
 
 K.push(new Paragraph({ children: [new PageBreak()] }));
-K.push(h1(`4. Engine results for all ${st.n} cash-rich stocks`));
+K.push(h1(`5. Engine results for all ${st.n} cash-rich stocks`));
 K.push(p(`Tiers: A ${st.tiers.A}, B ${st.tiers.B}, C ${st.tiers.C}, D ${st.tiers.D}. The engine ranked them in a universe of 1,257 Japanese names. Buy in stages: ${st.bis}. Watch: ${st.watch}. Eligible: ${st.elig}. Chosen by the sourcing top-20: ${st.chosen}. Blocked: G2 ${st.g2}, X-01/X-02 ${st.x01}, X-22/R-15 plus G2 ${st.x22}.`, { size: 18 }));
 K.push(h2('Eligible names (passed every gate)'));
 K.push(table(['Code', 'Company', 'Tier', 'Idea Strength', 'Percentile', 'Engine status', 'Chosen'], S.eligible, [6, 30, 14, 10, 8, 12, 8], ['', '', '', 'r', 'r', '', ''], 16));
@@ -116,7 +135,8 @@ K.push(h2('Top 25 by Idea Strength'));
 K.push(table(['Code', 'Company', 'Tier', 'Mkt cap ¥B', 'P/B', 'Div. yield', 'Idea Str.', 'Percentile', 'Engine', 'Blocked by'], S.engine_top, [5, 22, 11, 7, 5, 6, 6, 5, 8, 12], ['', '', '', 'r', 'r', 'r', 'r', 'r', '', ''], 15));
 legend(['Code', 'Company', 'Tier', 'Mkt cap ¥B', 'P/B', 'Div. yield', 'Idea Str.', 'Percentile', 'Engine', 'Blocked by'], UNI.cash).forEach(x => K.push(x));
 
-K.push(h1('5. Data gaps and caveats'));
+K.push(h1('6. Data gaps and caveats'));
+K.push(B('X-01/X-02 fired only on missing data. ', `The engine downloads Prime and Standard companies only, so Growth-market names, REITs and companies still filed under old segment names have no data and are excluded as no revenue (${st.x01} cash-rich names plus Sankei Real Estate).`));
 K.push(B('The value-trap gate (G2) is mostly a data artifact for Japan. ', `G2 lets a stock below book pass only with insider buying or a shareholder yield of at least 2%. For Japan the engine has dividends per share but not dividends paid or buybacks, and there is no Japanese equivalent of US insider-trading filings. So shareholder yield is always 0%. ${st.g2y} of the ${st.g2} G2-blocked names yield 2% or more on J-Quants dividend per share.`));
 K.push(B('Every Japanese name is filed under the sector "Other". ', 'The engine doesn\'t map the Tokyo Stock Exchange\'s 17 sector groups, so it makes no sector calls for Japan. The macro panel is US-only, and written narratives were off because there is no Anthropic API key.'));
 K.push(B('The two runs used slightly different universes. ', 'The 331-name run ranked against 1,257 names and the Murakami run against 948. Both share the same base of Japanese companies worth ¥100B or more, so the percentiles are comparable but not identical.'));
