@@ -90,3 +90,14 @@ u = user_by_username("XDevelopers")
 user_tweets(u["id"], max_results=10)
 get("tweets/counts/recent", query="$NVDA", granularity="day")
 ```
+
+## Volatility decomposition study
+
+`investing/volstudy/` splits S&P 100 volatility into valuation-multiple and
+fundamental components, tests vol forecasts, and backtests against CBOE
+single-stock implied vol. Needs `pandas numpy statsmodels`. Findings are in
+[`investing/volstudy/README.md`](investing/volstudy/README.md).
+
+```sh
+python -m investing.volstudy --fetch
+```
