@@ -24,6 +24,11 @@ const UNI = { mura: '948 companies', cash: '1,257 companies' };
 const GLOSS = {
   'Investor': 'Which Murakami-linked group holds the stake. Murakami family = City Index Eleventh, Aya Nomura and the related family companies. Takateru (MI) = Takateru Murakami and his companies MI1, MI2 and MI5. Strategic Capital = the fund founded by ex-Murakami Fund manager Tsuyoshi Maruki.',
   'Code': 'Tokyo Stock Exchange securities code.',
+  'New in 2026': 'Yes if the investor\'s first large-shareholding report (crossing 5%) was triggered on or after 2026-01-01; No for positions started earlier and still held at 5% or more.',
+  'Cash ÷ value': 'Cash and short-term investments ÷ market value, from the latest quarterly balance sheet (FMP; J-Quants for Primo). Debt not subtracted.',
+  'Net cash + securities ÷ value': 'Cash and short-term investments plus long-term investment securities (largely cross-shareholdings) minus all debt, ÷ market value. The broadest measure of cash-like assets net of borrowing.',
+  'Cash verdict': 'Cash-rich (tier A–D) = passes one of the four 100% tests used for the 331 list. Cash-heavy = net cash + securities between 30% and 100% of market value. Not cash-rich = below 30%.',
+  'Note': 'Why a cash verdict may overstate the cash a shareholder could get back.',
   'Company': 'Company name.',
   'First 5% filing': 'Date the investor first crossed 5%: the trigger date of its first large-shareholding report (大量保有報告書).',
   'Stake': 'Percentage of the company\'s shares held by the investor and its joint holders, per its latest filing.',
@@ -61,6 +66,7 @@ K.push(new Paragraph({ spacing: { after: 200 }, border: { bottom: { style: Borde
 K.push(h1('Summary'));
 K.push(B('Murakami-linked investors started 17 new 5% stakes in 2026. ', 'No new filings appeared on Sept 30 or Oct 1. The Murakami family opened 9, mostly a paper and packaging cluster: Rengo, Japan Pulp & Paper, Nippon Paper, KPP and Mitsubishi Paper, plus Air Water, Yamada, Sankei Real Estate and Nippon Chemical, which has since been cut below 5%. Takateru Murakami opened 5, and Strategic Capital, founded by an ex-Murakami Fund manager, opened 3.'));
 K.push(B('The engine is lukewarm on these new stakes. ', 'Only TOW, one of Takateru\'s, reaches Watch (74th percentile). Most of the family\'s new positions sit in the bottom decile: Yamada and Rengo at the 3rd percentile, Air Water at the 7th. The engine scores earnings momentum, quality and growth. A Murakami position is a bet on a catalyst: buybacks, unwinding cross-shareholdings, or a sale of the company. The engine does not score catalysts.'));
+K.push(B('Few of the new Murakami stakes are cash-rich. ', 'Only Nippon Paper and AD Works pass a cash test, and both are hollow: debt or property inventory sits behind the cash. TOW, Metal Art and Nippn are cash-heavy; the other 12 are not cash-rich. TOW, the engine\'s best-rated new pick, holds cash equal to 45% of its market value, short of the 100% bar, so it was never on the 331 list (Section 4).'));
 K.push(B(`${st.ncand} companies from the cash-rich list look like plausible next targets. `, 'They are below book value, profitable, liquid enough to build a 5% stake, and have no shareholder above 30%. At the top are Hi-Lex, Kato Works, Nakayama Steel, Futaba, Shima Seiki, Mitsuba and Shindengen. Another seven high scorers are blocked by a controlling shareholder.'));
 K.push(B(`${st.nheld} of the ${st.n} cash-rich companies already have a Murakami-linked holder. `, 'Nippon Paper and Shinko Shoji (the family), AD Works (Takateru), Kinki Sharyo and Naigai (Effissimo), GungHo and Kyokuto Boeki (Strategic Capital).'));
 K.push(B('Treat the engine\'s Japan verdicts with care. ', `Two of its rules misfire on Japanese data. The value-trap gate (G2) blocked ${st.g2} of the ${st.n} names because the engine cannot see Japanese buybacks or insider buying; ${st.g2y} of those ${st.g2} actually pay a dividend of 2% or more. The no-revenue rule (X-01/X-02) blocked ${st.x01} names only because the engine never downloaded their data. Section 2 explains each rule.`));
@@ -104,8 +110,19 @@ K.push(B('The paper cluster. ', 'The family holds Nippon Paper (9.8%), Rengo (6.
 K.push(B('Takateru\'s stakes score better than his father\'s. ', 'Primo (69th percentile), DaikyoNishikawa and AD Works (both 63rd), and TOW (74th, Watch). That fits his move toward better businesses at a discount. The engine excludes Metal Art as a cyclical at peak margins.'));
 K.push(B('Sankei Real Estate (29.9%) ', 'scores 59 but is excluded under X-01/X-02. That is a data gap, not a judgment: it is a REIT, REITs trade on a separate market the engine does not download, so it has no revenue data (Section 2).'));
 
+
 K.push(new Paragraph({ children: [new PageBreak()] }));
-K.push(h1('4. Likely next targets among the cash-rich stocks'));
+K.push(h1('4. Every Murakami-linked pick: new position, and is it cash-rich?'));
+K.push(p(`All ${st.npicks} positions the four Murakami-linked groups hold at 5% or more, plus 2026 entries since cut, rated on two questions: did they start it in 2026, and does the company pass the cash tests used for the 331 list? Engine scores are from one run of all the picks together, in a universe of 956 companies.`, { size: 18 }));
+K.push(B('Why TOW was not on the cash-rich list. ', 'TOW\'s cash is 45% of its market value, net cash 42% and NCAV 44%, so it fails all four 100% tests. My pre-filter had also skipped it (P/B 1.78), but the full test gives the same answer. It was left off the target list in any case because Takateru already owns 7.47%. TOW is cash-heavy, not cash-rich, and it is the engine\'s best-rated new Murakami pick: Watch, 74th percentile, no rule blocking it. G2 does not apply because it trades above book.'));
+K.push(B('Most 2026 entries are not cash plays. ', `Of the 17 stakes started in 2026, only two pass a cash test, and both are hollow: Nippon Paper on gross cash alone (its debt is 6× its market value) and AD Works on working capital that is mostly property inventory. Three are cash-heavy (TOW, Metal Art and Nippn). The other 12 are not cash-rich, including Sankei Real Estate, whose "investments" are its buildings. The family\'s 2026 thesis is leveraged, low-P/B paper and industrial companies, consolidation and cross-shareholdings, not idle cash.`));
+K.push(B('The older book is more cash-heavy. ', 'Of the positions started before 2026, three pass a cash test (Kinki Sharyo, Naigai and GungHo) and 11 are cash-heavy, mostly Effissimo holdings. The engine\'s only positive calls among all picks are TOW, Fujibo and Kanto Denka (Watch); none of them is cash-rich.'));
+K.push(table(['Investor', 'Code', 'Company', 'First 5% filing', 'New in 2026', 'Stake', 'Cash ÷ value', 'Net cash + securities ÷ value', 'Cash verdict', 'Note', 'Idea Strength', 'Percentile', 'Engine status', 'Blocked by'], S.picks,
+  [9, 4, 13, 7, 4, 5, 5, 6, 8, 13, 5, 5, 6, 10], ['', '', '', '', '', 'r', 'r', 'r', '', '', 'r', 'r', '', ''], 13));
+legend(['Investor', 'Code', 'Company', 'First 5% filing', 'New in 2026', 'Stake', 'Cash ÷ value', 'Net cash + securities ÷ value', 'Cash verdict', 'Note', 'Idea Strength', 'Percentile', 'Engine status', 'Blocked by'], '956 companies').forEach(x => K.push(x));
+
+K.push(new Paragraph({ children: [new PageBreak()] }));
+K.push(h1('5. Likely next targets among the cash-rich stocks'));
 K.push(p(`These are the cash-rich names with fit 8 or more, P/B below 1, median trading of ¥20M a day or more, no Murakami-linked holder yet, and no strategic holder at 30% or more. Sorted by fit, then Idea Strength.`, { size: 18 }));
 K.push(table(['Code', 'Company', 'Tier', 'Mkt cap ¥B', 'P/B', '¥M/day', 'Largest strategic holder', 'Fit', 'Idea Str.', 'Percentile', 'Engine', 'Div. yield'], S.cand,
   [5, 15, 9, 6, 5, 6, 17, 4, 6, 5, 7, 6], ['', '', '', 'r', 'r', 'r', '', 'r', 'r', 'r', '', 'r'], 14));
@@ -125,7 +142,7 @@ K.push(table(['Code', 'Company', 'Held by', 'Tier', 'P/B', 'Idea Str.', 'Percent
 legend(['Code', 'Company', 'Held by', 'Tier', 'P/B', 'Idea Str.', 'Percentile', 'Engine', 'Blocked by'], UNI.cash).forEach(x => K.push(x));
 
 K.push(new Paragraph({ children: [new PageBreak()] }));
-K.push(h1(`5. Engine results for all ${st.n} cash-rich stocks`));
+K.push(h1(`6. Engine results for all ${st.n} cash-rich stocks`));
 K.push(p(`Tiers: A ${st.tiers.A}, B ${st.tiers.B}, C ${st.tiers.C}, D ${st.tiers.D}. The engine ranked them in a universe of 1,257 Japanese names. Buy in stages: ${st.bis}. Watch: ${st.watch}. Eligible: ${st.elig}. Chosen by the sourcing top-20: ${st.chosen}. Blocked: G2 ${st.g2}, X-01/X-02 ${st.x01}, X-22/R-15 plus G2 ${st.x22}.`, { size: 18 }));
 K.push(h2('Eligible names (passed every gate)'));
 K.push(table(['Code', 'Company', 'Tier', 'Idea Strength', 'Percentile', 'Engine status', 'Chosen'], S.eligible, [6, 30, 14, 10, 8, 12, 8], ['', '', '', 'r', 'r', '', ''], 16));
@@ -135,7 +152,7 @@ K.push(h2('Top 25 by Idea Strength'));
 K.push(table(['Code', 'Company', 'Tier', 'Mkt cap ¥B', 'P/B', 'Div. yield', 'Idea Str.', 'Percentile', 'Engine', 'Blocked by'], S.engine_top, [5, 22, 11, 7, 5, 6, 6, 5, 8, 12], ['', '', '', 'r', 'r', 'r', 'r', 'r', '', ''], 15));
 legend(['Code', 'Company', 'Tier', 'Mkt cap ¥B', 'P/B', 'Div. yield', 'Idea Str.', 'Percentile', 'Engine', 'Blocked by'], UNI.cash).forEach(x => K.push(x));
 
-K.push(h1('6. Data gaps and caveats'));
+K.push(h1('7. Data gaps and caveats'));
 K.push(B('X-01/X-02 fired only on missing data. ', `The engine downloads Prime and Standard companies only, so Growth-market names, REITs and companies still filed under old segment names have no data and are excluded as no revenue (${st.x01} cash-rich names plus Sankei Real Estate).`));
 K.push(B('The value-trap gate (G2) is mostly a data artifact for Japan. ', `G2 lets a stock below book pass only with insider buying or a shareholder yield of at least 2%. For Japan the engine has dividends per share but not dividends paid or buybacks, and there is no Japanese equivalent of US insider-trading filings. So shareholder yield is always 0%. ${st.g2y} of the ${st.g2} G2-blocked names yield 2% or more on J-Quants dividend per share.`));
 K.push(B('Every Japanese name is filed under the sector "Other". ', 'The engine doesn\'t map the Tokyo Stock Exchange\'s 17 sector groups, so it makes no sector calls for Japan. The macro panel is US-only, and written narratives were off because there is no Anthropic API key.'));
