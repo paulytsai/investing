@@ -1,6 +1,6 @@
 # Japan cash / working-capital screen through the Paul Tsai investment engine (as of 2026-09-29)
 
-The 331 non-financial companies whose cash or working capital was at least their market value, from the screen saved at  (local only; the repo ignores CSVs in reports), run through  on branch . Each name is ranked by Idea Strength within a universe of 1,257 Japanese names: the engine's own universe of companies worth ¥100B or more, plus these 331.
+The 331 non-financial companies whose cash or working capital was at least their market value, from the screen saved at `reports/japan_cash_wc_above_mktcap_2026-09-30.csv` (local only; the repo ignores CSVs in reports), run through `engine evaluate --region jp --as-of 2026-09-29 --universe full` on branch `claude/investment-philosophy-summary-218q6y`. Each name is ranked by Idea Strength within a universe of 1,257 Japanese names: the engine's own universe of companies worth ¥100B or more, plus these 331.
 
 Screen tiers: **A** = current assets minus all liabilities (NCAV) at least market value; **B** = net cash at least market value; **C** = gross cash at least market value; **D** = working capital at least market value.
 
@@ -21,7 +21,7 @@ Screen tiers: **A** = current assets minus all liabilities (NCAV) at least marke
 1. **Gate G2 (value trap) blocks every Japanese stock trading below book.** G2 passes a stock below 1× book only if there is insider buying, or shareholder yield (dividends plus buybacks) of at least 2%. For Japan, though, the engine has dividends per share but not dividends paid or buybacks, and there is no Japanese equivalent of US insider-trading filings. So shareholder yield always comes out as 0%, and G2 blocked 275 of the 331. Using the J-Quants dividend per share against price, **201 of those 275 actually yield 2% or more**. With complete data they would pass G2.
 2. **Every Japanese name is filed under the sector 'Other'.** The engine's theme sectors don't map the Tokyo Stock Exchange's 17 sector groups, so there is no sector call and the sector-first top-N treats Japan as one bucket.
 3. **The macro panel is US-only** (Treasury yields, CPI, oil), and **narratives are off** because this session has no Anthropic API key.
-4. **Local changes needed to run** (not committed): the engine asked J-Quants for data from , but the subscription now starts , so  in  was moved to that date.  was killed for lack of memory on 16 GB of RAM with no swap, so it was rerun with a 16 GB swap file.
+4. **Local changes needed to run** (not committed): the engine asked J-Quants for data from `2016-09-30`, but the subscription now starts `2016-10-01`, so `JQ_START` in `src/engine/pit/pull_jp.py` was moved to that date. `engine build pit --region jp` was killed for lack of memory on 16 GB of RAM with no swap, so it was rerun with a 16 GB swap file.
 
 ## Highest Idea Strength among the 331
 
@@ -361,4 +361,4 @@ Sorted by Idea Strength. 'Blocked by' is the engine's own result; 'Div. yield' s
 | 330 | 4539 | NIPPON CHEMIPHAR CO.,LTD. | pass | 17.1 | 1254 | C | 6.66 | 0.34 | 3.2% | G2 avoid |
 | 331 | 7896 | SEVEN INDUSTRIES CO.,LTD. | pass | 15.1 | 1257 | D | 2.36 | 0.39 | 4.0% | G2 avoid |
 
-Sources: J-Quants (prices, 決算短信 earnings summaries, listed-issue master data) and FMP quarterly balance sheets, both via the session proxy. Engine run  in the engine clone.
+Sources: J-Quants (prices, 決算短信 earnings summaries, listed-issue master data) and FMP quarterly balance sheets, both via the session proxy. Engine run `reports/evaluate/2026-09-29_033952` in the engine clone.
