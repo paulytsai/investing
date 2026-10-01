@@ -21,6 +21,7 @@
       if (p.range) layout[key].range = p.range;
       if (p.log) { layout[key].dtick = 'D2'; layout[key].tickformat = '.3~g'; }
       y -= h; }
+    if (spec.barmode) layout.barmode = spec.barmode;
     layout.xaxis = { gridcolor: cssVar('--grid'), linecolor: cssVar('--axis'), showspikes: !spec.compact, spikemode:'across', spikethickness:1, spikecolor: cssVar('--axis'), tickfont:{size:11}, fixedrange: spec.compact };
     const traces = spec.traces.map(t => { const tt = Object.assign({}, t); tt.yaxis = axisOf[t.panel]; tt.xaxis='x'; delete tt.panel; delete tt.overlay; return tt; });
     for (const s of spec.shapes){ const ss = Object.assign({}, s); if (!ss.absolute_y) ss.yref = 'paper'; delete ss.panel; layout.shapes.push(ss); }

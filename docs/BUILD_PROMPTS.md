@@ -144,3 +144,14 @@ history and the cycle read, `screen/sector_index.py` (equal-weight index from `p
 and `build_valuation_chart`, `research/pitch.py` with `StockPitch` / `SectorPitch` schemas on the existing `parse_structured` cache and
 `verify.py`, `reports/sections.py`, the `_sector_section` / `_stock_section` partials, the board/idea/evaluate/home templates, the MCP
 tools, `config/hypotheses.yaml` `valuation.*` (D-24 / D-25), docs and tests. Deterministic prose when no key: the page always reads.
+
+## Prompt — the product lens (2026-10-01)
+
+> Chart all of the regions for Nike, not China only. Look at Nike's business from a Mars & Co framework (GM aftermarket growth roadmap:
+> baseline vs reach, headwinds and tailwinds by region and channel, pressure up and down the value chain) and BCG's Project Tiger (trade
+> spend, the fictitious price gap, forward buying). Use this framework to improve the engine's analysis of consumer products companies and
+> any company that sells a product.
+
+Build: `research/segments.py` (10-K XBRL segment history, member discovery), `frameworks/product_lens.py` (bridge, channel mix, sales quality,
+baseline vs required, pure and tested), `research/product_lens.py` (orchestration, price language from the calls, `ValueChainRead`, the regions
+chart), two lexical categories, the `_product_lens.html.j2` block inside the stock story, the pitch instruction, docs and tests.

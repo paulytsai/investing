@@ -30,6 +30,7 @@
       {% if x.implied_growth and x.implied_growth.implied_pct is not none %}<div class="small" style="margin-top:6px"><b>Priced-in growth:</b> {{ '%.0f%%'|format(x.implied_growth.implied_pct) }} a year for {{ x.implied_growth.years }} years ({{ 'earnings' if x.implied_growth.basis=='eps' else 'revenue' }}), exit at {{ '%.0f×'|format(x.implied_growth.pe_exit) }}{% if x.implied_growth.trailing_pct is not none %} · <b>delivered:</b> {{ '%.0f%%'|format(x.implied_growth.trailing_pct) }} a year{% endif %}{% if x.implied_growth.hypergrowth_ok is not none %} · no earnings: growth {{ 'rapid enough' if x.implied_growth.hypergrowth_ok else 'not rapid enough' }}{% endif %}</div>{% endif %}
     </div>
   </div>
+  {% if x.product_lens %}{% set pl = x.product_lens %}{% include "_product_lens.html.j2" %}{% endif %}
   <details class="evidence small"><summary class="muted">Back-up — every number behind the story</summary>
     {% if x.story %}{% if x.story.earnings_rows %}<div style="overflow-x:auto"><table><thead><tr><th>Fiscal year</th><th class="num">Revenue</th><th class="num">Growth</th><th class="num">Op. margin</th><th class="num">EPS</th><th class="num">EPS growth</th><th class="num">Free cash flow</th></tr></thead><tbody>
     {% for r in x.story.earnings_rows %}<tr><td>{{ r.fy }}</td><td class="num">{{ r.revenue }}</td><td class="num">{{ r.rev_growth }}</td><td class="num">{{ r.op_margin }}</td><td class="num">{{ r.eps }}</td><td class="num">{{ r.eps_growth }}</td><td class="num">{{ r.fcf }}</td></tr>{% endfor %}</tbody></table></div>{% endif %}

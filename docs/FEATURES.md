@@ -127,6 +127,32 @@ presentation and trying to convince me". The report is now told sector by sector
   `evaluate` / `ideas_latest` answers and the home tile. The G4 speculation gate still uses the P/E-as-required-CAGR proxy; switching it
   to this figure is Paul's call (D-25).
 
+## The product lens — Mars & Co and BCG playbooks for any company that sells a product (2026-10-01)
+
+Two consulting decks Paul supplied set the frame: Mars & Co's GM aftermarket roadmap (growth as a bridge — a *baseline* from the
+installed base and current commitments by region, quantified headwinds and tailwinds, *reach* growth that needs investment and arrives
+at lower margin; pressure up and down the value chain; defence and offence per channel) and BCG's Project Tiger for Nestlé Japan (the
+quality of a sale — trade spend and the fictitious gap between list and realised price, forward buying and month-end volume push that
+show up as channel inventory and receivables, account-level profit). The engine now reads every product company through them.
+
+- **Regions and channels from the filings** (`research/segments.py`): the segment note of each 10-K read from the XBRL instance (EDGAR's
+  companyfacts drops dimensioned facts), member vocabulary discovered per filer (`segment_members`), regions on the segment/subsegment/
+  geographic axes with parent brands and reconciling items excluded, channels from the us-gaap sales-channel axis (direct vs wholesale);
+  each fiscal year taken from the latest filing that reports it. Live layer, cached by filing. Nike: FY2009–FY2026, five regions, two channels.
+- **The growth bridge** (`frameworks/product_lens.py::region_bridge`): per region revenue, share, last year's growth, 3-year CAGR, EBIT margin
+  and its change, contribution to last year's growth, a label (engine / steady / stalled / shrinking / recovering); baseline growth = the
+  share-weighted trend of the regions. `channel_mix`: direct share and its shift (push to pull). `baseline_vs_required`: the price's implied
+  growth (F-16) against the baseline — the gap is reach growth, lower margin, investment first.
+- **Is the growth real?** (`sales_quality`): inventory days and receivable days against revenue growth (forward buying and channel loading),
+  gross margin against three years ago (price realization). `price_language`: full-price vs promotional language in the last two calls, from
+  two new lexical categories (`full_price`, `promo_push` in `text/lexical.py`, factor `text_full_price`).
+- **The value chain, read by Claude** (`ValueChainRead`): suppliers and inputs, channel partners, the consumer, entrants and counterfeit, what
+  carries the baseline, what reach would need, defence and offence, a verdict and a pressure score; every figure in a ledger and traced.
+- **On the page**: a "Through the product lens" block inside every stock story (regions chart: revenue stacked and EBIT margin by region; the
+  bridge table; the sales-quality line), and the stock pitch is asked to say which regions carry the growth, whether the sales look earned or
+  pushed, and whether the price asks more than the regions deliver. Applies when `sells_product()` is true (consumer, industrial, hardware,
+  materials, energy, healthcare products; never banks, REITs, software, media, services).
+
 ## Backtest evidence so far (US, 2016-03-31 → 2024-09-30, top 20, cap-floor universe with delisted and acquired names)
 - **Cycle-rule exits + Kelly weights, five AI layers, per-sector angle weights, share-count and ADR fixes** (run 4, 2026-09-30): 22 cohorts closed
   under the cycle rule (formations to 2021; later cohorts still hold open positions marked at the last close), mean hold 3.6 years, mean cohort

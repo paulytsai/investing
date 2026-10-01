@@ -332,7 +332,8 @@ def _render(all_cands, chosen, as_of, out, hyp, preset, regions, top, narrate, n
     region = (regions or ["US"])[0].upper()
     sections, others = build_sections(all_cands, chosen, sector_calls or {}, sizing, as_of, out, view_fn=_view, story_fn=lambda c: page_data(c)["story"],
                                       phases_fn=lambda c: page_data(c)["phases"], use_llm=pitch, region=region, extra_symbols=extra_symbols,
-                                      spark_fn=lambda c: _spark(c, px_by.get(c.security_id, prices.iloc[0:0]), as_of, _view(c)["chart_id"]))
+                                      spark_fn=lambda c: _spark(c, px_by.get(c.security_id, prices.iloc[0:0]), as_of, _view(c)["chart_id"]),
+                                      fy_fn=lambda c: page_data(c)["snap"].fy_history)
     section_of = {x["c"]["symbol"]: (sec, x) for sec in sections for x in sec["stocks"]}
     tpl = render.env().get_template("board.html.j2")
     html = tpl.render(title=f"Ideas {as_of.date()}", as_of=as_of.date(), ideas=board_rows[: max(top, len(board_rows))], excluded=excluded, n_scored=len(all_cands),
@@ -368,7 +369,7 @@ def _render(all_cands, chosen, as_of, out, hyp, preset, regions, top, narrate, n
             section, stock = sec_pair
         else:   # a page outside the book: the same section, deterministic prose (no model call for the ranked tail)
             section, stock = None, stock_section(c, v, story=story, sector_call=(sector_calls or {}).get(c.theme_sector),
-                                                 kelly_weight=(sizing.get("weights") or {}).get(c.security_id), phases=phases, use_llm=False)
+                                                 kelly_weight=(sizing.get("weights") or {}).get(c.security_id), phases=phases, use_llm=False, lens=False)
         html = itpl.render(title=f"{c.symbol} — idea", c=v, m=c.metrics, chart_id=spec["id"], chart_json=to_json(spec), macro=macro,
                            n_scored=len(all_cands), phases=phases, narrative=narrative, dcf=c.metrics.get("dcf"), generated=render.now(), assets="../../../assets/",
                            kelly=(sizing.get("blocks") or {}).get(c.security_id), kelly_weight=(sizing.get("weights") or {}).get(c.security_id), n_top=len(chosen),

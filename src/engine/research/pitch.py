@@ -29,7 +29,9 @@ indispensable number one. why_now: what changed in the numbers, the demand, the 
 valuation_in_cycle: where the multiple sits in the company's own history (use the ValuationCycle document) and the most likely reason
 it is there (use the WhyCheap document). what_the_price_assumes: state the implied growth figure from the ImpliedGrowth document
 exactly, against the growth the company has delivered, and say whether the price asks for more or less than it has shown; for a company
-without earnings say plainly whether its growth is rapid enough to justify a price on no earnings. three_reasons: exactly three
+without earnings say plainly whether its growth is rapid enough to justify a price on no earnings. When Regions, ChannelMix, SalesQuality or
+BaselineVsRequired documents are present, the story must say which regions carry the growth and which hold it back, whether the sales look
+earned or pushed, and whether the price asks for more than the regions' own trends deliver. three_reasons: exactly three
 sentences in this order — the strongest reason, the weakest of the three, the second-strongest. what_breaks_it: the honest bear case
 and the sign that would end the thesis. closing: the ask — what the engine proposes (use the Action document), how big (the Kelly
 weight if given) and the one thing to watch."""
@@ -125,13 +127,13 @@ def _extra_docs(c, story, sector_call, kelly_weight, phases) -> list[str]:
     return docs
 
 
-def stock_pitch(c, story=None, sector_call=None, kelly_weight=None, phases=None, *, use_llm: bool = True) -> dict:
+def stock_pitch(c, story=None, sector_call=None, kelly_weight=None, phases=None, *, use_llm: bool = True, extra_docs: list[str] | None = None) -> dict:
     """The pitch for one stock → dict of the StockPitch fields plus source ('claude' | 'engine'), unverified_count, numbers."""
     if use_llm:
         try:
             msgs = build_context(c, phases)
             m = copy.deepcopy(msgs)
-            m[0]["content"][0]["text"] += "\n\n" + "\n\n".join(_extra_docs(c, story, sector_call, kelly_weight, phases))
+            m[0]["content"][0]["text"] += "\n\n" + "\n\n".join(_extra_docs(c, story, sector_call, kelly_weight, phases) + list(extra_docs or []))
             m[0]["content"].append({"type": "text", "text": PITCH_RULES + "\n\n" + STOCK_INSTR.format(symbol=c.symbol, as_of=c.as_of)})
             p = parse_structured(SYSTEM, m, StockPitch, cache_key=f"pitch:{c.symbol}:{c.as_of}", max_tokens=6000)
             _check_prose(p, ["opening", "the_business", "why_now", "valuation_in_cycle", "what_the_price_assumes", "three_reasons", "what_breaks_it", "closing"], m, financial_read(c))

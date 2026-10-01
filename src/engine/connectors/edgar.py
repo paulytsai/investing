@@ -51,9 +51,21 @@ class EDGAR:
         return out
 
     # ---- documents -------------------------------------------------------------------------
-    def filing_index(self, cik: str | int, forms: tuple[str, ...] = ("10-K", "10-Q", "8-K", "20-F")) -> list[dict[str, Any]]:
+    def filing_index(self, cik: str | int, forms: tuple[str, ...] = ("10-K", "10-Q", "8-K", "20-F"), older: bool = False) -> list[dict[str, Any]]:
+        """Filings of the given forms, newest first. `older=True` also reads the archived submission pages (the recent
+        page holds about 1,000 filings; a heavy Form-4 filer's 10-Ks from a decade ago sit in the archive)."""
         sub = self.submissions(cik)
-        rec = sub.get("filings", {}).get("recent", {})
+        pages = [sub.get("filings", {}).get("recent", {})]
+        if older:
+            for f in sub.get("filings", {}).get("files", []):
+                pages.append(self.c.get(f"submissions/{f['name']}", key=f["name"].replace(".json", ""), max_age_days=30).data or {})
+        rows = []
+        for rec in pages:
+            rows.extend(self._index_rows(rec, forms))
+        return rows
+
+    @staticmethod
+    def _index_rows(rec: dict[str, Any], forms: tuple[str, ...]) -> list[dict[str, Any]]:
         rows = []
         for i, form in enumerate(rec.get("form", [])):
             if form in forms:

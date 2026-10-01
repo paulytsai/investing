@@ -90,6 +90,7 @@ def text_factors(sig: pd.DataFrame) -> dict:
             "text_demand": (c.get("demand_up", 0) - c.get("demand_down", 0)) * k, "text_pricing": (c.get("pricing_up", 0) - c.get("pricing_down", 0)) * k,
             "text_guidance": (c.get("guidance_up", 0) - c.get("guidance_down", 0)) * k, "text_leadership": c.get("leadership", 0) * k,
             "text_red_flags": c.get("red_flag", 0) * k, "text_concentration": c.get("concentration", 0) * k, "text_ai_receipts": c.get("ai_receipts", 0) * k,
+            "text_full_price": (c.get("full_price", 0) - c.get("promo_push", 0)) * k,
         })
     if not per_doc:
         return {}

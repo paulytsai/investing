@@ -20,19 +20,34 @@ def _key(s: str) -> str:
     return s.replace(".", "_").replace(" ", "_")
 
 
-def stock_section(c, view: dict, *, story=None, sector_call=None, kelly_weight=None, phases=None, use_llm: bool, chart_prefix: str = "val") -> dict:
-    """Everything the stock's section needs: the pitch, the valuation chart spec (JSON), the implied-growth record."""
+def stock_section(c, view: dict, *, story=None, sector_call=None, kelly_weight=None, phases=None, use_llm: bool, chart_prefix: str = "val", fy=None,
+                  lens: bool = True) -> dict:
+    """Everything the stock's section needs: the product lens (for a company that sells a product), the pitch, the
+    valuation chart spec (JSON), the implied-growth record."""
     m = c.metrics
     hist = m.get("pe_history") or m.get("ps_history") or []
     vc = m.get("valuation_cycle") or {}
     vspec = build_valuation_chart(f"{chart_prefix}-{_key(c.symbol)}", c.symbol, hist, vc)
-    pitch = stock_pitch(c, story, sector_call, kelly_weight, phases, use_llm=use_llm)
+    pl = None
+    if lens:
+        try:
+            from ..research.product_lens import build_product_lens
+
+            pl = build_product_lens(c, fy, m.get("implied_growth"), use_llm=use_llm, phases=phases)
+        except Exception as e:  # noqa: BLE001 — the section must still render
+            print(f"[product lens] {c.symbol}: {e}")
+            pl = None
+    if pl:
+        pl["chart_id"] = pl["chart"]["id"]
+        pl["chart_json"] = to_json(pl["chart"]) if not pl["chart"]["empty"] else None
+    pitch = stock_pitch(c, story, sector_call, kelly_weight, phases, use_llm=use_llm, extra_docs=(pl or {}).get("docs"))
     return {"c": view, "pitch": pitch, "val_chart_id": vspec["id"], "val_chart_json": to_json(vspec) if not vspec["empty"] else None,
-            "valuation_cycle": vc, "implied_growth": m.get("implied_growth"), "story": story, "kelly_weight": kelly_weight}
+            "valuation_cycle": vc, "implied_growth": m.get("implied_growth"), "story": story, "kelly_weight": kelly_weight,
+            "product_lens": ({k: v for k, v in pl.items() if k not in ("docs", "chart")} if pl else None)}
 
 
 def build_sections(all_cands, chosen, sector_calls: dict, sizing: dict, as_of: pd.Timestamp, out: Path, *, view_fn, story_fn, phases_fn,
-                   use_llm: bool, years: int = 3, region: str = "US", extra_symbols: set[str] | None = None, spark_fn=None) -> tuple[list[dict], list[dict]]:
+                   use_llm: bool, years: int = 3, region: str = "US", extra_symbols: set[str] | None = None, spark_fn=None, fy_fn=None) -> tuple[list[dict], list[dict]]:
     """Returns (sections, other_sectors). Sections are the sector calls holding at least one chosen name (or an extra
     symbol, for the evaluate page), ordered by stance then score; other_sectors is a compact table of the rest."""
     chosen_ids = {c.security_id for c in chosen}
@@ -85,11 +100,13 @@ def build_sections(all_cands, chosen, sector_calls: dict, sizing: dict, as_of: p
             v["kelly_weight"] = weights.get(c.security_id)
             if spark_fn is not None:
                 v["chart_json"] = spark_fn(c)
-            stocks.append(stock_section(c, v, story=story_fn(c), sector_call=sc, kelly_weight=weights.get(c.security_id), phases=phases_fn(c), use_llm=use_llm))
+            stocks.append(stock_section(c, v, story=story_fn(c), sector_call=sc, kelly_weight=weights.get(c.security_id), phases=phases_fn(c), use_llm=use_llm,
+                                        fy=(fy_fn(c) if fy_fn else None)))
         sections.append({"call": sc.model_dump(), "label": label, "pitch": pitch, "chart_a_id": spec_a["id"], "chart_a_json": to_json(spec_a) if not spec_a["empty"] else None,
                          "chart_b_id": spec_b["id"], "chart_b_json": to_json(spec_b) if not spec_b["empty"] else None, "rows": rows, "n_members": len(members),
                          "n_drawn": min(len(members), MAX_THIN), "stocks": stocks, "window": window_text})
     (out / "sections.json").write_text(json.dumps([{"sector": s["call"]["sector"], "pitch": s["pitch"], "stocks": [{"symbol": x["c"]["symbol"], "pitch": x["pitch"],
-                                                     "implied_growth": x["implied_growth"], "valuation_cycle": x["valuation_cycle"]} for x in s["stocks"]]} for s in sections],
+                                                     "implied_growth": x["implied_growth"], "valuation_cycle": x["valuation_cycle"],
+                                                     "product_lens": ({k: v for k, v in x["product_lens"].items() if k not in ("chart_json",)} if x.get("product_lens") else None)} for x in s["stocks"]]} for s in sections],
                                                    indent=1, default=str))
     return sections, others

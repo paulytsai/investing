@@ -56,6 +56,18 @@ SIGNALS: list[tuple[str, str, int, list[str]]] = [
         r"\bSEC (?:investigation|subpoena|inquiry|enforcement)\b", r"\bDOJ (?:investigation|subpoena)\b", r"\bdelisting notice\b", r"\bchapter 11\b", r"\bliquidity (?:concerns?|crisis)\b",
         r"\bimpairment (?:charge|of goodwill)\b", r"\bauditor (?:resigned|resignation|dismissed)\b", r"\bcustomer (?:loss|churn) (?:increased|accelerated)\b",
     ]),
+    # product-company lens (BCG Project Tiger: price realization vs the "fictitious price gap"; Mars & Co: push vs pull)
+    ("full_price", "F-08/P-LENS", +1, [
+        r"\bfull[- ]price (?:realization|realisation|sell[- ]through|sales|mix) (?:improved|increased|rose|grew|is up|was up|higher)\b", r"\b(?:less|lower|reduced|fewer) (?:promotional|promotions|markdowns?|discounting|closeouts?)\b",
+        r"\bmarkdowns? (?:declined|decreased|fell|were lower|are lower|down)\b", r"\b(?:healthy|clean|lean) (?:channel |retail )?inventor(?:y|ies)\b", r"\bsell[- ]through (?:improved|accelerated|strong|outpaced sell[- ]in)\b",
+        r"\b(?:pull|pull[- ]based) (?:model|strategy|market(?:place)?)\b", r"\boff[- ]price (?:was |is )?down\b", r"\bimprov(?:ed|ing|ement in) (?:full[- ]price|price) realization\b",
+    ]),
+    ("promo_push", "F-08/P-LENS", -1, [
+        r"\b(?:elevated|higher|increased|heavier|more) (?:promotional|promotions|markdowns?|discounting|closeouts?|clearance)\b", r"\bpromotional (?:environment|activity|intensity|pressure)\b",
+        r"\bmarkdowns? (?:increased|rose|were higher|are higher|up)\b", r"\b(?:elevated|excess|high) (?:channel |retail |wholesale )?inventor(?:y|ies)\b", r"\bclose[- ]?out (?:mix|sales|product)\b",
+        r"\boff[- ]price (?:channel|sales|mix|was up|increased)\b", r"\bsell[- ]in (?:ahead of|exceeded|outpaced|above) sell[- ]through\b", r"\bextended (?:payment )?terms\b", r"\bload(?:ing|ed) the channel\b",
+        r"\bdiscount mentality\b", r"\bliquidat(?:e|ing|ion of) (?:excess |aged )?inventory\b",
+    ]),
     ("ai_receipts", "F-45/F-40", +1, [
         r"\bAI[- ]related (?:revenue|bookings|backlog|orders|demand)\b", r"\b(?:GPU|accelerator|AI (?:server|infrastructure|data ?center)) (?:demand|orders|backlog|bookings|revenue)\b",
         r"\b(?:token|inference|training) (?:volumes?|demand|revenue|workloads?) (?:grew|increased|rose|doubled|tripled|up)\b", r"\b(?:sovereign|hyperscaler|neocloud) (?:demand|orders|commitments?|customers?)\b",

@@ -1,0 +1,35 @@
+{# the product-company lens for one stock: pl = product lens dict (bridge, mix, quality, language, reach, score, sentences, value_chain, chart_id/chart_json) #}
+{% if pl and pl.applies %}
+<div class="lens">
+  <h3 style="margin:10px 0 4px">Through the product lens <span class="muted small" style="font-weight:400">— regions, channels, the quality of the sale, the value chain (Mars & Co / BCG playbooks)</span></h3>
+  <div class="lens-body">
+    <div class="lens-text">
+      {% set vc = pl.value_chain or {} %}
+      {% if vc.verdict %}<p class="opening">{{ vc.verdict }}</p>{% endif %}
+      {% for s in pl.sentences %}<p>{{ s }}</p>{% endfor %}
+      <p><b>Is the growth real?</b> {{ pl.quality.verdict }}</p>
+      {% if pl.reach.verdict %}<p class="assumes"><b>Baseline against what the price asks.</b> {{ pl.reach.verdict }}</p>{% endif %}
+      {% if vc.source == 'claude' %}
+      <p><b>Up the chain — suppliers and inputs.</b> {{ vc.upstream }}</p>
+      <p><b>Down the chain — channel partners.</b> {{ vc.channel }}</p>
+      <p><b>At the consumer.</b> {{ vc.consumer }}</p>
+      <p><b>Entrants and counterfeit.</b> {{ vc.entrants_and_counterfeit }}</p>
+      <p><b>What carries the baseline.</b> {{ vc.baseline_drivers }}</p>
+      <p><b>Reach — growth that needs investment.</b> {{ vc.reach_opportunities }}</p>
+      <p><b>Defence and offence.</b> {{ vc.defence_offence }}</p>
+      <div class="small muted">Value-chain read written by Claude from the filings and the latest call; pressure {{ vc.pressure_score }} of 100 (0 = the chain works for the company).</div>
+      {% else %}<div class="small muted">Value-chain read not generated{% if vc.note %}: {{ vc.note }}{% endif %}.</div>{% endif %}
+      {% if pl.language and pl.language.quotes %}<div class="small" style="margin-top:6px"><b>On price, in management's words:</b> {% for q in pl.language.quotes[:3] %}“{{ q.quote }}” ({{ q.call }}){% if not loop.last %} · {% endif %}{% endfor %}</div>{% endif %}
+    </div>
+    <div class="lens-charts">
+      {% if pl.chart_json %}<div id="{{ pl.chart_id }}" class="chart" style="height:420px"></div><script type="application/json" id="spec-{{ pl.chart_id }}">{{ pl.chart_json|safe }}</script>{% endif %}
+      {% if pl.bridge.rows %}<div style="overflow-x:auto"><table class="small"><thead><tr><th>Region</th><th class="num">Revenue</th><th class="num">Share</th><th class="num">Last year</th><th class="num">{{ pl.bridge.rows[0].cagr_years }}-yr a year</th><th class="num">EBIT margin</th><th class="num">Margin Δ</th><th>Read</th></tr></thead><tbody>
+      {% for r in pl.bridge.rows %}<tr><td>{{ r.segment }}</td><td class="num">{{ '%.1f'|format(r.revenue/1e9) if r.revenue >= 1e9 else '%.0fm'|format(r.revenue/1e6) }}{% if r.revenue >= 1e9 %}bn{% endif %}</td><td class="num">{{ '%.0f%%'|format(r.share_pct) if r.share_pct is not none else '–' }}</td><td class="num">{{ '%+.0f%%'|format(r.growth_1y_pct) if r.growth_1y_pct is not none else '–' }}</td><td class="num">{{ '%+.0f%%'|format(r.cagr_pct) if r.cagr_pct is not none else '–' }}</td><td class="num">{{ '%.0f%%'|format(r.margin_pct) if r.margin_pct is not none else '–' }}</td><td class="num">{{ '%+.0f pp'|format(r.margin_change_pp) if r.margin_change_pp is not none else '–' }}</td><td>{{ r.label }}</td></tr>{% endfor %}
+      </tbody></table></div>{% endif %}
+      <div class="small muted" style="margin-top:6px">Sales quality: inventory {{ '%.0f'|format(pl.quality.inventory_days) if pl.quality.inventory_days else '–' }} days{% if pl.quality.inventory_days_change is not none %} ({{ '%+.0f'|format(pl.quality.inventory_days_change) }}){% endif %} · receivables {{ '%.0f'|format(pl.quality.dso) if pl.quality.dso else '–' }} days{% if pl.quality.dso_change is not none %} ({{ '%+.0f'|format(pl.quality.dso_change) }}){% endif %} · gross margin {{ '%.1f%%'|format(pl.quality.gross_margin_pct) if pl.quality.gross_margin_pct is not none else '–' }}{% if pl.quality.gross_margin_change_pp is not none %} ({{ '%+.1f pp'|format(pl.quality.gross_margin_change_pp) }} vs 3 yrs ago){% endif %}{% if pl.mix %} · direct {{ '%.0f%%'|format(pl.mix.direct_share_pct) }} of revenue ({{ '%+.0f pp'|format(pl.mix.direct_share_change_pp) }}){% endif %} · lens score {{ '%.0f'|format(pl.score.score) }}/100.</div>
+    </div>
+  </div>
+</div>
+<style>.lens-body { display:grid; grid-template-columns: minmax(0,1fr) 420px; gap:8px 22px; align-items:start; } .lens-text p { font-size:15px; line-height:1.55; margin:6px 0; } .lens-text .opening { font-weight:600; } .lens-text .assumes { background:var(--page); border-left:3px solid var(--s2); padding:6px 10px; }
+@media (max-width: 900px) { .lens-body { grid-template-columns: 1fr; } }</style>
+{% endif %}
