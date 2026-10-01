@@ -50,6 +50,14 @@ thresholds:
   insider_buy_signal_usd: {value: 1.0e+6, decision_id: D-57, note: "G1 proxy: officer open-market buys in 12m"}
   ip_pattern_rd_pct: {value: 20, decision_id: none, note: "stated (F-106)"}
 
+valuation:   # what the price assumes (F-16 / F-91 / R-24): earnings growth solved backwards from today's multiple
+  implied_growth_years: {value: 5, decision_id: D-24, note: "horizon over which the price must be earned back; the cycle rule's expected hold"}
+  exit_pe_fallback: {value: 16, decision_id: D-25, note: "exit multiple when a name has < 3 years of own P/E history (long-run market multiple)"}
+  hypergrowth_min_rev_growth_pct: {value: 30, decision_id: D-25, note: "Paul: a company with no earnings must be growing very rapidly; below this it fails the rule"}
+  mature_margin_pct: {value: 15, decision_id: D-25, note: "net margin a no-earnings company is assumed to reach for the revenue-based implied growth"}
+  cycle_trough_pctile: {value: 20, decision_id: D-25, note: "own-history P/E percentile at or below which the valuation cycle reads 'trough'"}
+  cycle_peak_pctile: {value: 80, decision_id: D-25, note: "own-history P/E percentile at or above which the valuation cycle reads 'peak'"}
+
 dcf:
   erp_pct: {value: 5.0, decision_id: D-25, note: "equity risk premium over 10Y UST"}
   beta_floor: {value: 0.8, decision_id: D-25}

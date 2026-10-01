@@ -78,7 +78,7 @@ def placement(all_cands: list[IdeaCandidate], names: list[IdeaCandidate], top: i
 
 
 def run_evaluate(symbols: list[str], thesis: str | None = None, as_of=None, region: str = "US", narrate: bool = False, universe: str = "latest",
-                 top: int = 20, out_dir=None, scenarios: dict | None = None) -> dict:
+                 top: int = 20, out_dir=None, scenarios: dict | None = None, pitch: bool = True) -> dict:
     """`scenarios` = Paul's own {SYM: {bull: {prob, return}, base: {...}, bear: {...}}} — used for Kelly instead of the engine's."""
     from . import ledger
 
@@ -114,7 +114,10 @@ def run_evaluate(symbols: list[str], thesis: str | None = None, as_of=None, regi
     out = out_dir or (REPORTS_DIR / "evaluate" / run_id)
     out.mkdir(parents=True, exist_ok=True)
     # 3. the idea pages (same template as sourcing: chart, reasons, gates, valuation, DCF, sector view, Kelly, narrative)
-    _render(all_cands, names, as_of, out, hyp, hyp.get("screen.preset"), [region], top, narrate, [c.symbol for c in names], calls, sizing)
+    rendered = _render(all_cands, names, as_of, out, hyp, hyp.get("screen.preset"), [region], top, narrate, [c.symbol for c in names], calls, sizing,
+                       pitch=pitch, extra_symbols={c.symbol for c in names})
+    sections = rendered.get("sections") or []
+    pitch_of = {x["c"]["symbol"]: x["pitch"] for sec in sections for x in sec["stocks"]}
     # 4. the verdict page
     rows = []
     for c in names:
@@ -134,6 +137,7 @@ def run_evaluate(symbols: list[str], thesis: str | None = None, as_of=None, regi
         except Exception:  # noqa: BLE001
             story = None
         rows.append({"c": c, "place": place[c.security_id], "thesis": t, "verdict_html": verdict_html, "verdict": verdict, "since": since, "ledger_entry": ent, "story": story,
+                     "pitch": pitch_of.get(c.symbol),
                      "kelly": (sizing.get("blocks") or {}).get(c.security_id), "weight": (sizing.get("weights") or {}).get(c.security_id),
                      "sector_call": calls.get(c.theme_sector), "angles": {a.key: a.score for a in c.angles},
                      "top_reasons": [{**r.model_dump(), "value_fmt": render.fmt_value(r.value, r.unit)} for r in scored[:5]],
@@ -145,7 +149,7 @@ def run_evaluate(symbols: list[str], thesis: str | None = None, as_of=None, regi
 
     angle_labels = {k: v["label"] for k, v in rules()["angles"].items()}
     html = render.env().get_template("evaluate.html.j2").render(
-        title=f"Evaluate {' '.join(symbols)}", as_of=as_of.date(), rows=rows, n_scored=len(all_cands), universe_src=src, top=top,
+        title=f"Evaluate {' '.join(symbols)}", as_of=as_of.date(), rows=rows, n_scored=len(all_cands), universe_src=src, top=top, sections=sections,
         sector_calls=sorted(calls.values(), key=lambda x: -(x.score or 0)), sizing=sizing, angle_labels=angle_labels, macro=render.macro_strip(as_of),
         narrate=narrate, decisions=hyp.decisions_touched(), generated=render.now(), assets="../../assets/")
     render.write(out / "index.html", html)
@@ -168,4 +172,4 @@ def run_evaluate(symbols: list[str], thesis: str | None = None, as_of=None, regi
               f"  kelly {((r['weight'] or 0)*100):4.1f}%" + (f"  verdict {r['verdict']['overall']}" if r["verdict"] else ""))
         if sc and sc.bet:
             print(f"         sector bet: {sc.bet['summary'][:150]}")
-    return {"run_id": run_id, "path": out, "rows": rows, "placement": place, "sizing": sizing, "sector_calls": calls}
+    return {"run_id": run_id, "path": out, "rows": rows, "placement": place, "sizing": sizing, "sector_calls": calls, "sections": sections}

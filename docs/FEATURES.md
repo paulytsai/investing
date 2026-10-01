@@ -93,6 +93,40 @@ Built in v1 are marked ✅; proposed next steps ☐. Every item maps to the spec
 - ✅ Japan pilot (Core30 + Large70) screened and backtested from 2017-12-31 on J-Quants 決算短信 point-in-time data (DiscDate), split-restated per-share figures, 簡易FCF / ROIC proxies labelled.
 - ☐ Japan-specific yardsticks (総還元 vs JGB; R-38 FX-sensitivity check) and EDINET governance parsing for G1/G2.
 
+## The pitch report — stories by sector, charts of the sector, valuation cycle, what the price assumes (2026-10-01)
+
+Paul's reaction to the first boards: "everything the engine outputs is a technical cite — I need a narrative, like someone making a
+presentation and trying to convince me". The report is now told sector by sector, as a pitch; the statistics stay one click below.
+
+- **Sector-grouped board.** One section per sector call that holds a chosen name (ordered by stance, then score): the sector's story,
+  chart A (the sector as an equal-weighted index of every scored member, rebased to 100 over three years, against the S&P 500 total
+  return, with the chosen names' own lines), chart B (every member as a thin line over the index — the 60 largest drawn when there are
+  more, all of them in the table with strength, call, three-year return, P/E, own-history percentile and valuation phase), then each
+  stock's section. Sectors without a pick are one compact table. The old sortable table of every name is kept at the foot.
+  Code: `screen/sector_index.py` (daily-rebalanced equal weight, the backtest's arithmetic), `reports/charts.py::build_rebased_chart`,
+  `reports/sections.py`, templates `_sector_section.html.j2` / `_stock_section.html.j2`.
+- **The stock's story** (`research/pitch.py`, schema `StockPitch`): opening, the business, why now, the valuation in its own cycle, what
+  the price assumes, three reasons (strongest, weakest, second — the sandwich), what breaks it, the closing ask. Written by Claude from
+  the same context as the thesis record (FinancialRead, reasons, 10-K Items 1/1A/7, 10-Q MD&A, latest transcript) plus the fundamentals
+  story, the valuation cycle, the implied-growth record, the why-cheap read and the engine's action, in a presenter's voice with no rule
+  ids. Every figure must appear in `numbers_used` with a source; `verify.py` checks the claims and every number in the prose is traced to
+  the context (the count of untraceable figures is printed under the story). Cached by request hash; `--no-pitch` or no key → the same
+  eight sections assembled deterministically from the engine's own prose. The sector's story (`SectorPitch`) is built the same way from
+  the sector call, its rationale, bet, cycle read, breadth and member table.
+- **Valuation cycle** (`frameworks/valuation_cycle.py`): the daily P/E history the own-history band is scored on is kept as month-end
+  samples (`metrics.pe_history`) with a cycle read (`metrics.valuation_cycle`: percentile, 10th/median/90th, phase trough / below norm /
+  normal / above norm / peak, a plain sentence) and drawn under every stock story (`build_valuation_chart`: the multiple, the band shaded,
+  the median dashed, today marked). Names without earnings get the same on price-to-sales. Thresholds: `valuation.cycle_*_pctile` (D-25).
+- **What the price assumes** (`frameworks/implied_growth.py`, F-16/F-91/R-24): the earnings growth solved backwards from today's multiple —
+  g = ((P/E_now ÷ P/E_exit) × (1 + r)^N)^(1/N) − 1, with r = 10-yr UST + the hurdle margin (D-47), N = `valuation.implied_growth_years`
+  (D-24) and the exit multiple the lower of the company's own 10-year median and the long-run market multiple (`valuation.exit_pe_fallback`,
+  D-25); the growth needed "if it keeps its usual multiple" is shown beside it. Compared with delivered three-year growth → "priced for
+  less / about / more than it has delivered". A company with no earnings gets the revenue-growth version (margins reaching
+  `valuation.mature_margin_pct`) and Paul's rule: its growth must be very rapid (`valuation.hypergrowth_min_rev_growth_pct`) or the story
+  says so. The sentence is in every thesis summary (`summary_parts` recap), every stock section, the idea page, the evaluate page, the MCP
+  `evaluate` / `ideas_latest` answers and the home tile. The G4 speculation gate still uses the P/E-as-required-CAGR proxy; switching it
+  to this figure is Paul's call (D-25).
+
 ## Backtest evidence so far (US, 2016-03-31 → 2024-09-30, top 20, cap-floor universe with delisted and acquired names)
 - **Cycle-rule exits + Kelly weights, five AI layers, per-sector angle weights, share-count and ADR fixes** (run 4, 2026-09-30): 22 cohorts closed
   under the cycle rule (formations to 2021; later cohorts still hold open positions marked at the last close), mean hold 3.6 years, mean cohort

@@ -36,7 +36,9 @@ def build_server():
             for row in r["rows"]:
                 c, p = row["c"], row["place"]
                 sp = summary_parts(c, row["sector_call"], row["weight"])
-                out["names"].append({"symbol": c.symbol, "summary": sp, "rank": p["rank"], "of": p["of"], "would_sourcing_choose_it": p["would_be_chosen"],
+                out["names"].append({"symbol": c.symbol, "summary": sp, "story": row.get("pitch"), "implied_growth": sp.get("implied_growth"),
+                                     "valuation_cycle": (c.metrics.get("valuation_cycle") or {}).get("sentence"),
+                                     "rank": p["rank"], "of": p["of"], "would_sourcing_choose_it": p["would_be_chosen"],
                                      "action": c.action, "idea_strength": c.idea_strength, "kelly_weight": row["weight"], "kelly": row["kelly"],
                                      "verdict": row["verdict"], "since_last_time": row["since"], "page": str(Path(r["path"]) / "ideas" / f"{c.symbol}.html")})
         return out
@@ -56,8 +58,15 @@ def build_server():
         sectors = json.loads((run / "sectors.json").read_text())
         chosen = [c for c in cands if c["security_id"] in (sizing.get("weights") or {})]
         chosen.sort(key=lambda c: -(c.get("idea_strength") or 0))
+        stories, sector_stories = {}, {}
+        if (run / "sections.json").exists():
+            for sec in json.loads((run / "sections.json").read_text()):
+                sector_stories[sec["sector"]] = sec.get("pitch")
+                for x in sec.get("stocks", []):
+                    stories[x["symbol"]] = x.get("pitch")
         return {"as_of": json.loads((run / "run.json").read_text()).get("as_of"), "board": str(run / "board.html"),
-                "names": [{"symbol": c["symbol"], "summary": summary_parts(c, sectors.get(c["theme_sector"]), sizing["weights"].get(c["security_id"]))} for c in chosen],
+                "names": [{"symbol": c["symbol"], "story": stories.get(c["symbol"]), "summary": summary_parts(c, sectors.get(c["theme_sector"]), sizing["weights"].get(c["security_id"]))} for c in chosen],
+                "sector_stories": sector_stories,
                 "sectors": [{"sector": v["label"], "stance": v["stance"], "bet": (v.get("bet") or {}).get("summary")} for v in sorted(sectors.values(), key=lambda v: -(v.get("score") or 0))],
                 "since_last_run": latest_diff()}
 

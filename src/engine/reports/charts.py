@@ -218,3 +218,76 @@ def build_series_chart(chart_id: str, title: str, series: dict[str, pd.Series], 
     return {"id": chart_id, "empty": not traces, "title": title, "subtitle": "", "panels": [{"id": "main", "height": 1.0, "title": ytitle, "log": False}],
             "traces": traces, "shapes": shapes, "annotations": [], "compact": False, "height": height,
             "x_range": [_d(x0), _d(x1)] if x0 is not None else None, "meta": {"sources": ["fred"]}}
+
+
+def build_rebased_chart(chart_id: str, title: str, series: dict[str, pd.Series], *, bold: set[str] | None = None, dashed: set[str] | None = None,
+                        thin: bool = False, height: int = 340, subtitle: str = "", max_thin: int = 60) -> dict:
+    """Several price lines rebased to 100 on one panel: `bold` names (the sector index, the chosen stocks) drawn on top
+    with full colour, `dashed` names (the benchmark) as a reference, everything else as muted thin lines with hover labels
+    (the "every stock in the sector" chart). Legend click isolates a line; thin lines are hidden from the legend when
+    there are many."""
+    bold, dashed = bold or set(), dashed or set()
+    slots = ["s1", "s2", "s3", "s4", "s5", "s6", "s7", "s8"]
+    traces, x0, x1 = [], None, None
+    others = [n for n in series if n not in bold and n not in dashed]
+    many = len(others) > 12
+    ci = 0
+    order = others + [n for n in series if n in dashed] + [n for n in series if n in bold]   # bold last → drawn on top
+    for name in order:
+        s = series[name].dropna()
+        if name not in bold and name not in dashed and isinstance(s.index, pd.DatetimeIndex) and len(s) > 200:
+            s = s.resample("W-FRI").last().dropna()      # thin lines weekly: 60 members × 3 years stays under 300 KB
+        if s.empty:
+            continue
+        x0 = min(x0, s.index.min()) if x0 is not None else s.index.min()
+        x1 = max(x1, s.index.max()) if x1 is not None else s.index.max()
+        base = {"panel": "main", "overlay": "series", "type": "scatter", "mode": "lines", "name": name, "x": [_d(d) for d in s.index],
+                "y": s.round(2).tolist(), "hovertemplate": "%{x}<br>%{y:.0f}<extra>" + name + "</extra>"}
+        if name in bold:
+            base["line"] = {"width": 3 if name == next(iter(bold), None) else 2, "color": f"var(--{slots[ci % 8]})"}
+            ci += 1
+        elif name in dashed:
+            base["line"] = {"width": 1.5, "color": "var(--ink2)", "dash": "dash"}
+        else:
+            base["line"] = {"width": 1, "color": "var(--axis)"}
+            base["opacity"] = 0.55
+            if many:
+                base["showlegend"] = False
+        traces.append(base)
+    shapes = [{"type": "line", "xref": "paper", "yref": "y", "x0": 0, "x1": 1, "y0": 100, "y1": 100, "panel": "main",
+               "line": {"width": 1, "color": "var(--grid)", "dash": "dot"}, "absolute_y": True}]
+    return {"id": chart_id, "empty": not traces, "title": title, "subtitle": subtitle,
+            "panels": [{"id": "main", "height": 1.0, "title": "rebased to 100", "log": True}], "traces": traces, "shapes": shapes, "annotations": [],
+            "compact": False, "height": height, "x_range": [_d(x0), _d(x1)] if x0 is not None else None, "meta": {"sources": ["fmp"], "n_lines": len(traces)}}
+
+
+def build_valuation_chart(chart_id: str, symbol: str, history: list[list], cycle: dict | None, *, height: int = 240) -> dict:
+    """Where the stock sits in its own valuation cycle: the multiple (P/E, or P/S for names without earnings) over ten
+    years, the 10th–90th band shaded, the median dashed, today's point annotated with its percentile. One panel."""
+    cycle = cycle or {}
+    basis = cycle.get("basis") or "pe"
+    label = "P/E (trailing)" if basis == "pe" else "P/S (trailing)"
+    if not history:
+        return {"id": chart_id, "empty": True, "title": f"{symbol} — {label}", "subtitle": "", "panels": [], "traces": [], "shapes": [], "annotations": [],
+                "compact": False, "height": height, "x_range": None, "meta": {}}
+    xs = [h[0] for h in history]
+    ys = [h[1] for h in history]
+    traces = [{"panel": "main", "overlay": "multiple", "type": "scatter", "mode": "lines", "name": label, "x": xs, "y": ys,
+               "line": {"width": 2, "color": "var(--s1)"}, "hovertemplate": "%{x}<br>%{y:.1f}x<extra>" + label + "</extra>"}]
+    shapes, annotations = [], []
+    lo, hi, med, cur = cycle.get("low"), cycle.get("high"), cycle.get("median"), cycle.get("current")
+    if lo and hi:
+        shapes.append({"type": "rect", "xref": "paper", "yref": "y", "x0": 0, "x1": 1, "y0": lo, "y1": hi, "panel": "main", "absolute_y": True,
+                       "fillcolor": "var(--s1)", "opacity": 0.08, "line": {"width": 0}, "layer": "below"})
+    if med:
+        shapes.append({"type": "line", "xref": "paper", "yref": "y", "x0": 0, "x1": 1, "y0": med, "y1": med, "panel": "main", "absolute_y": True,
+                       "line": {"width": 1, "color": "var(--ink2)", "dash": "dash"}})
+    if cur:
+        traces.append({"panel": "main", "overlay": "now", "type": "scatter", "mode": "markers", "name": "now", "x": [xs[-1]], "y": [round(float(cur), 2)],
+                       "marker": {"size": 10, "color": "var(--s2)"}, "hovertemplate": f"now: {cur:.1f}x<extra></extra>"})
+    pct = cycle.get("percentile")
+    sub = (f"now {cur:.1f}x — {pct:.0f}th percentile of {cycle.get('n_years', 0):.0f} years · band 10th–90th {lo:.0f}x–{hi:.0f}x · median {med:.0f}x"
+           if cur and pct is not None and lo and hi and med else (cycle.get("sentence") or ""))
+    return {"id": chart_id, "empty": False, "title": f"{symbol} — {label}, own history", "subtitle": sub,
+            "panels": [{"id": "main", "height": 1.0, "title": label, "log": False}], "traces": traces, "shapes": shapes, "annotations": annotations,
+            "compact": False, "height": height, "x_range": [xs[0], xs[-1]], "meta": {"basis": basis, "sources": ["fmp", "engine"]}}

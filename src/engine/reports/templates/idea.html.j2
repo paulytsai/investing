@@ -4,8 +4,18 @@
 <h1>{{ c.symbol }} <span class="muted" style="font-weight:400;font-size:18px">{{ c.name }}</span></h1>
 <p class="sub">{{ c.sector }} · {{ c.industry }} · theme sector: <b>{{ sector_call.label if sector_call else c.theme_sector }}</b> · {{ ASSET_WORDS.get(c.asset_type, c.asset_type) }} · {{ LAYER_WORDS.get(c.ai_layer, c.ai_layer) }} · role: {{ c.role_hint }} · as of {{ c.as_of }} · data basis {{ c.basis }} (period end {{ c.period_end }}) · price {{ c.price_fmt }} · mkt cap {{ c.mcap_fmt }}</p>
 
+{% if stock %}
+<h2 style="margin-top:8px">The case{% if section %} — inside the {{ section.label }} call ({{ section.call.stance }}){% endif %}</h2>
+{% set x = stock %}{% include "_stock_section.html.j2" %}
+{% if section %}<div class="small muted" style="margin:-4px 0 10px">The sector's story, its chart and every name in it are on the <a href="../board.html#sector-{{ section.call.sector }}">board under {{ section.label }}</a>.</div>{% endif %}
+<style>.pitch p { font-size:16px; line-height:1.6; margin:8px 0; } .pitch ol { font-size:16px; line-height:1.6; margin:2px 0 8px; padding-left:24px; } .pitch .opening { font-weight:600; font-size:17px; } .pitch .closing { color:var(--ink2); } .pitch .assumes { background:var(--page); border-left:3px solid var(--s1); padding:6px 10px; }
+.stock { padding:12px 16px; margin:10px 0; min-width:0; } .stock-head { display:flex; flex-wrap:wrap; gap:6px 16px; align-items:baseline; } .stock-head .stat { white-space:nowrap; font-variant-numeric: tabular-nums; }
+.stock-body { display:grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 8px 22px; align-items:start; margin-top:4px; } .stock-body .pitch, .stock-body .charts { min-width:0; }
+.chips { display:flex; flex-wrap:wrap; gap:4px 6px; margin:6px 0; } .chip { font-size:12px; padding:1px 7px; border-radius:6px; background:var(--page); border:1px solid var(--border); white-space:nowrap; }
+@media (max-width: 900px) { .stock-body { grid-template-columns: 1fr; } }</style>
+{% endif %}
 <div class="card" style="border-left:4px solid var(--s1)">
-  <h3 style="margin-top:0">In plain English</h3>
+  <h3 style="margin-top:0">In one minute</h3>
 {% set sp = summary_parts(c, sector_call, kelly_weight) %}<div class="summary"><p class="thesis">{{ sp.thesis }}</p><ol>{% for r in sp.reasons %}<li>{{ r }}</li>{% endfor %}</ol><p class="recap">{{ sp.recap }}</p></div>
   <style>.summary { font-size:16px; line-height:1.55 } .summary .thesis { font-weight:600; margin:4px 0 } .summary ol { margin:4px 0; padding-left:22px } .summary .recap { color:var(--ink2); margin:4px 0 }</style>
   {% if story and story.danoff %}<div class="small" style="margin:4px 0"><b>Danoff:</b> {{ story.danoff.verdict }} ({{ '%.0f'|format(story.danoff.score) }}/100).</div>{% endif %}

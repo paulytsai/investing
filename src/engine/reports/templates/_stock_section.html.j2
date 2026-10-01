@@ -1,0 +1,44 @@
+{# one stock's story: x = stock section dict (c, pitch, val_chart_id/json, valuation_cycle, implied_growth, story, kelly_weight); link = href prefix #}
+{% set c = x.c %}{% set p = x.pitch %}
+<div class="card stock" id="stock-{{ c.symbol }}">
+  <div class="stock-head">
+    <span class="name">{% if link is defined and link %}<a href="{{ link }}{{ c.symbol }}.html">{% endif %}<b style="font-size:20px">{{ c.symbol }}</b>{% if link is defined and link %}</a>{% endif %} <span class="muted">{{ c.name }}</span></span>
+    <span class="badge {{ 'buy' if c.action=='buy-in-stages' else c.action }}">{{ c.action }}</span>
+    <span class="stat"><b>{{ '%.0f'|format(c.idea_strength or 0) }}</b> <span class="muted small">strength</span></span>
+    <span class="stat"><b>{{ '%.1f%%'|format(x.kelly_weight*100) if x.kelly_weight is not none else '–' }}</b> <span class="muted small">of the book</span></span>
+    <span class="stat"><b>{{ c.price_fmt }}</b> <span class="muted small">price</span></span>
+    <span class="stat"><b>{{ '%.1f×'|format(c.metrics.pe_ttm) if c.metrics.pe_ttm else 'no earnings' }}</b> <span class="muted small">P/E</span></span>
+    {% if x.valuation_cycle and x.valuation_cycle.phase %}<span class="badge {{ 'buy' if x.valuation_cycle.phase in ('trough','below norm') else ('excluded' if x.valuation_cycle.phase in ('peak','above norm') else '') }}">valuation: {{ x.valuation_cycle.phase }}</span>{% endif %}
+  </div>
+  <div class="stock-body">
+    <div class="pitch">
+      <p class="opening">{{ p.opening }}</p>
+      <p>{{ p.the_business }}</p>
+      <p>{{ p.why_now }}</p>
+      <p>{{ p.valuation_in_cycle }}</p>
+      <p class="assumes"><b>What the price assumes.</b> {{ p.what_the_price_assumes }}</p>
+      <p style="margin-bottom:2px"><b>Three reasons.</b></p>
+      <ol>{% for r in p.three_reasons if r %}<li>{{ r }}</li>{% endfor %}</ol>
+      <p><b>What breaks it.</b> {{ p.what_breaks_it }}</p>
+      <p class="closing">{{ p.closing }}</p>
+      <div class="small muted">{% if p.source == 'claude' %}Story written by Claude from the filings, the latest earnings call and the engine's numbers{% if p.unverified_count %} · {{ p.unverified_count }} figure{{ 's' if p.unverified_count != 1 }} could not be traced to a source and should be checked{% else %} · every figure traced to a filing or an engine number{% endif %}{% else %}Story assembled by the engine from its own numbers (no Claude call{% if p.note %}: {{ p.note }}{% endif %}){% endif %}.</div>
+    </div>
+    <div class="charts">
+      {% if x.val_chart_json %}<div id="{{ x.val_chart_id }}" class="chart" style="height:240px"></div><script type="application/json" id="spec-{{ x.val_chart_id }}">{{ x.val_chart_json|safe }}</script>
+      <div class="small muted" style="margin:-4px 0 8px">{{ x.valuation_cycle.sentence }}</div>{% else %}<div class="small muted">{{ x.valuation_cycle.sentence if x.valuation_cycle else 'No valuation history.' }}</div>{% endif %}
+      {% if c.chart_json %}<div id="sp-{{ c.chart_id }}" class="chart" style="height:70px"></div><script type="application/json" id="spec-sp-{{ c.chart_id }}">{{ c.chart_json|safe }}</script><div class="small muted">price, 3 years</div>{% endif %}
+      {% if x.implied_growth and x.implied_growth.implied_pct is not none %}<div class="small" style="margin-top:6px"><b>Priced-in growth:</b> {{ '%.0f%%'|format(x.implied_growth.implied_pct) }} a year for {{ x.implied_growth.years }} years ({{ 'earnings' if x.implied_growth.basis=='eps' else 'revenue' }}), exit at {{ '%.0f×'|format(x.implied_growth.pe_exit) }}{% if x.implied_growth.trailing_pct is not none %} · <b>delivered:</b> {{ '%.0f%%'|format(x.implied_growth.trailing_pct) }} a year{% endif %}{% if x.implied_growth.hypergrowth_ok is not none %} · no earnings: growth {{ 'rapid enough' if x.implied_growth.hypergrowth_ok else 'not rapid enough' }}{% endif %}</div>{% endif %}
+    </div>
+  </div>
+  <details class="evidence small"><summary class="muted">Back-up — every number behind the story</summary>
+    {% if x.story %}{% if x.story.earnings_rows %}<div style="overflow-x:auto"><table><thead><tr><th>Fiscal year</th><th class="num">Revenue</th><th class="num">Growth</th><th class="num">Op. margin</th><th class="num">EPS</th><th class="num">EPS growth</th><th class="num">Free cash flow</th></tr></thead><tbody>
+    {% for r in x.story.earnings_rows %}<tr><td>{{ r.fy }}</td><td class="num">{{ r.revenue }}</td><td class="num">{{ r.rev_growth }}</td><td class="num">{{ r.op_margin }}</td><td class="num">{{ r.eps }}</td><td class="num">{{ r.eps_growth }}</td><td class="num">{{ r.fcf }}</td></tr>{% endfor %}</tbody></table></div>{% endif %}
+    {% if x.story.danoff %}<div><b>Danoff:</b> {{ x.story.danoff.verdict }} ({{ '%.0f'|format(x.story.danoff.score) }}/100).</div>{% endif %}{% endif %}
+    {% if x.implied_growth %}<div><b>What the price assumes (F-16):</b> {{ x.implied_growth.note }}</div>{% endif %}
+    {% if c.metrics.dcf and c.metrics.dcf.summary %}<div><b>DCF cross-check:</b> {{ c.metrics.dcf.summary }}</div>{% endif %}
+    <div class="chips">{% for a in c.angles %}<span class="chip" title="{{ a.label }}">{{ a.label|truncate(14, true, '') }} <b>{{ '%.0f'|format(a.score) if a.score is not none else '–' }}</b></span>{% endfor %}
+      {% for g in c.gates if g.outcome != 'pass' %}<span class="badge gate" title="{{ g.evidence }}">{{ g.gate_id }} {{ g.outcome }}</span>{% endfor %}{% for a in c.alerts %}<span class="badge alert" title="{{ a.message }}">{{ a.rule_id }}</span>{% endfor %}</div>
+    <div class="reasons">{% for r in c.top_reasons %}<div><span class="{{ 'reason-pos' if r.contribution and r.contribution>0 else 'reason-neg' }}">{{ r.rule_id }}</span> {{ r.label|truncate(80) }}{% if r.value is not none %}: <b>{{ r.value_fmt }}</b>{% endif %}</div>{% endfor %}{% if c.decisions_touched %}<div class="muted">D-IDs: {{ c.decisions_touched|join(' ') }}</div>{% endif %}</div>
+    {% if p.numbers_used %}<div class="muted" style="margin-top:4px">Figures the story used: {% for n in p.numbers_used %}{{ n.text|truncate(60) }} ({{ n.period }}, {{ n.source|truncate(40) }}){{ '' if n.verified else ' ✗' }}{% if not loop.last %} · {% endif %}{% endfor %}</div>{% endif %}
+  </details>
+</div>

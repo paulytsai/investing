@@ -31,14 +31,28 @@ class Snapshot:
 
     def eps_ttm_series(self) -> pd.Series:
         """TTM diluted EPS keyed by the date each quarter became visible (available_from) — for P/E history."""
+        return self.ttm_series("eps_diluted")
+
+    def ttm_series(self, field_: str) -> pd.Series:
+        """Rolling 4-quarter sum of a flow field keyed by available_from (point-in-time)."""
         if self.q_rows is None or self.q_rows.empty:
             return pd.Series(dtype=float)
-        q = self.q_rows[self.q_rows.field == "eps_diluted"].sort_values("period_end")
+        q = self.q_rows[self.q_rows.field == field_].sort_values("period_end")
         if q.empty:
             return pd.Series(dtype=float)
         q = q.drop_duplicates("period_end")
         ttm = q["value"].rolling(4).sum()
         s = pd.Series(ttm.values, index=pd.to_datetime(q["available_from"]).values).dropna()
+        return s[~s.index.duplicated(keep="last")].sort_index()
+
+    def level_series(self, field_: str) -> pd.Series:
+        """Latest value of a level field (e.g. shares_diluted) keyed by available_from (point-in-time)."""
+        if self.q_rows is None or self.q_rows.empty:
+            return pd.Series(dtype=float)
+        q = self.q_rows[self.q_rows.field == field_].sort_values("period_end").drop_duplicates("period_end")
+        if q.empty:
+            return pd.Series(dtype=float)
+        s = pd.Series(q["value"].values, index=pd.to_datetime(q["available_from"]).values).dropna()
         return s[~s.index.duplicated(keep="last")].sort_index()
 
 

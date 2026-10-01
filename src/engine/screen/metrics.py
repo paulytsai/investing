@@ -148,6 +148,28 @@ def compute_metrics(inp: Inputs, as_of: pd.Timestamp, hyp_thresholds: dict) -> d
             out["pe_band_note"] = f"own-history band needs ≥{PE_BAND_MIN_DAYS} days of meaningful P/E (have {band['n']})"
     out["pe_own_pctile"], out["pe_band_low"], out["pe_band_median"], out["pe_band_high"], out["pe_band_n"] = (
         band["percentile"], band["low"], band["median"], band["high"], band["n"])
+    # where the stock sits in its own valuation cycle (F-13 / T-03): the P/E history the band was scored on is kept
+    # (month-end samples) so the page draws the same band the score used; names without earnings get the same on P/S
+    from ..frameworks import valuation_cycle as vc
+
+    trough_p, peak_p = float(hyp_thresholds.get("cycle_trough_pctile", 20)), float(hyp_thresholds.get("cycle_peak_pctile", 80))
+    out["pe_history"] = vc.monthly(pe_hist.dropna()) if not pe_hist.empty else []
+    out["ps_history"] = []
+    if pe and pe <= PE_BAND_MAX:
+        out["valuation_cycle"] = vc.valuation_cycle(pe_hist.dropna(), pe, basis="pe", trough_pctile=trough_p, peak_pctile=peak_p, min_days=PE_BAND_MIN_DAYS)
+    else:
+        ps_hist = pd.Series(dtype=float)
+        rev_series, sh_series = s.ttm_series("revenue"), s.level_series("shares_diluted")
+        if not rev_series.empty and not sh_series.empty and not px.empty:
+            daily = px.set_index(pd.to_datetime(px["date"]))["close_adj"].astype(float)
+            idx = daily.index
+            rev_d = rev_series.reindex(idx.union(rev_series.index)).ffill().reindex(idx)
+            sh_d = sh_series.reindex(idx.union(sh_series.index)).ffill().reindex(idx)
+            ps_hist = (daily * sh_d / rev_d).replace([np.inf, -np.inf], np.nan)
+            ps_hist = ps_hist[(rev_d > 0) & (ps_hist > 0) & (ps_hist <= 200)]
+            out["ps_history"] = vc.monthly(ps_hist.dropna())
+        ps_now = fw.safe_div(mcap, _v(m, "revenue")) if mcap and (_v(m, "revenue") or 0) > 0 else None
+        out["valuation_cycle"] = vc.valuation_cycle(ps_hist.dropna(), ps_now, basis="ps", trough_pctile=trough_p, peak_pctile=peak_p, min_days=PE_BAND_MIN_DAYS)
     # normalized P/E (F-13 / R-14): a company temporarily in the red is valued on its prior normal state — the median of
     # the positive TTM EPS observations of the last 3 years; used for the own-band percentile when TTM EPS is ≤ 0 or ≈ 0
     out["eps_normalized"] = out["pe_normalized"] = None

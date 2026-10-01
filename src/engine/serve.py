@@ -47,7 +47,12 @@ def home():
             sectors = json.loads((run / "sectors.json").read_text())
             meta = json.loads((run / "run.json").read_text())
             chosen = sorted([c for c in cands if c["security_id"] in (sizing.get("weights") or {})], key=lambda c: -(c.get("idea_strength") or 0))
-            names = [{"symbol": c["symbol"], "thesis": summary_parts(c, sectors.get(c["theme_sector"]), sizing["weights"].get(c["security_id"]))["thesis"].split(" — ", 1)[-1]} for c in chosen[:8]]
+            openings = {}
+            if (run / "sections.json").exists():
+                for sec in json.loads((run / "sections.json").read_text()):
+                    for x in sec.get("stocks", []):
+                        openings[x["symbol"]] = (x.get("pitch") or {}).get("opening")
+            names = [{"symbol": c["symbol"], "thesis": openings.get(c["symbol"]) or summary_parts(c, sectors.get(c["theme_sector"]), sizing["weights"].get(c["security_id"]))["thesis"].split(" — ", 1)[-1]} for c in chosen[:8]]
             ai = [v for k, v in sectors.items() if k.startswith("ai_")]
             en = sectors.get("energy")
             barbell = ("tech end: " + ", ".join(f"{v['label'].split(' — ')[0]} {v['stance']}" for v in ai) + (f"; oil end: Energy {en['stance']}" + (f" — {en['cycle_read']['verdict']}" if en.get("cycle_read") else "") if en else ""))

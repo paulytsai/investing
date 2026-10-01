@@ -133,14 +133,15 @@ def pit_audit(symbol: str, as_of: str) -> None:
 
 @app.command("ideas")
 def ideas(as_of: str = typer.Option(None), top: int = typer.Option(20), region: str = typer.Option("us"),
-          preset: str = typer.Option(None), narrate: bool = typer.Option(False), symbols: str = typer.Option("", help="tickers or a CSV/TXT/XLSX file of codes")) -> None:
+          preset: str = typer.Option(None), narrate: bool = typer.Option(False), symbols: str = typer.Option("", help="tickers or a CSV/TXT/XLSX file of codes"),
+          pitch: bool = typer.Option(True, help="write the sector and stock stories with Claude (cached); --no-pitch = engine prose only")) -> None:
     """Rank ideas and write the board + idea pages under reports/ideas/<run>/."""
     from .screen.run import run_ideas
 
     from .symbols import read_symbols
 
     syms = read_symbols(symbols) or None
-    run_ideas(as_of=as_of, top=top, regions=region.split(","), preset=preset, narrate=narrate, symbols=syms)
+    run_ideas(as_of=as_of, top=top, regions=region.split(","), preset=preset, narrate=narrate, symbols=syms, pitch=pitch)
 
 
 @app.command("drivers")
@@ -217,7 +218,7 @@ def mcp_cmd() -> None:
 def evaluate(symbols: list[str] = typer.Argument(..., help="tickers to evaluate, and/or CSV/TXT/XLSX files of codes (a symbol/ticker/code column, else the first column)"), thesis: str = typer.Option(None, help="Paul's thesis: text, or a markdown file with '## SYM' sections"),
              as_of: str = typer.Option(None), region: str = typer.Option("auto", help="us | jp | auto (4-digit codes are Japanese)"), narrate: bool = typer.Option(False, help="thesis verdict + narrative pages (Claude)"),
              universe: str = typer.Option("latest", help="latest = reuse the last full screen of the date; full = re-score the universe"),
-             top: int = typer.Option(20)) -> None:
+             top: int = typer.Option(20), pitch: bool = typer.Option(True, help="write the stories with Claude (cached); --no-pitch = engine prose only")) -> None:
     """Evaluate Paul's own ideas with the same engine: placement in the scored universe, sector view and bet, gates, Kelly size,
     and (with --narrate) a claim-by-claim verdict on his thesis."""
     from .evaluate.run import run_evaluate
@@ -230,7 +231,7 @@ def evaluate(symbols: list[str] = typer.Argument(..., help="tickers to evaluate,
     by_region = split_regions(syms) if region == "auto" else {region.upper(): syms}
     for reg, ss in by_region.items():
         typer.echo(f"[evaluate] {len(ss)} {reg} names: {' '.join(ss[:15])}{' …' if len(ss) > 15 else ''}")
-        run_evaluate(ss, thesis=thesis, as_of=as_of, region=reg, narrate=narrate, universe=universe, top=top)
+        run_evaluate(ss, thesis=thesis, as_of=as_of, region=reg, narrate=narrate, universe=universe, top=top, pitch=pitch)
 
 
 @app.command("backtest")

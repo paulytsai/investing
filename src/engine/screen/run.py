@@ -93,7 +93,13 @@ def build_candidates(as_of: pd.Timestamp, region: str, hyp: Hypotheses, symbols:
     thr = {k: v["value"] if isinstance(v, dict) else v for k, v in hyp._data.get("thresholds", {}).items()}
     for k in list(thr):
         hyp.get(f"thresholds.{k}")
+    for k in ("cycle_trough_pctile", "cycle_peak_pctile"):
+        thr[k] = hyp.get(f"valuation.{k}")
+    ig_params = {"hurdle_margin_pct": float(hyp.get("thresholds.hurdle_margin_pct")), "years": int(hyp.get("valuation.implied_growth_years")),
+                 "exit_pe_fallback": float(hyp.get("valuation.exit_pe_fallback")), "mature_margin_pct": float(hyp.get("valuation.mature_margin_pct")),
+                 "hypergrowth_min_rev_growth_pct": float(hyp.get("valuation.hypergrowth_min_rev_growth_pct"))}
     rf_pct = rf_on(as_of)
+    from ..frameworks.implied_growth import implied_growth
     # text layer: lexical signals (point-in-time, backtestable) and Claude reads (live-only)
     from ..text.build import signals_for, text_factors
     from ..text.read import reads_for
@@ -142,6 +148,8 @@ def build_candidates(as_of: pd.Timestamp, region: str, hyp: Hypotheses, symbols:
         m["dcf"] = None if m.get("currency_mismatch") else run_dcf(m, snap, at, rf_pct, hyp)
         if m["dcf"] and m["dcf"].get("implied_growth_gap_pp") is not None:
             m["implied_growth_gap"] = m["dcf"]["implied_growth_gap_pp"]
+        # what the price assumes (F-16 / F-91): earnings growth solved backwards from today's multiple — in every thesis
+        m["implied_growth"] = None if m.get("currency_mismatch") else implied_growth(m, rf_pct=rf_pct, **ig_params)
         period_end = m["period_end"].date() if m.get("period_end") is not None else None
         cands.append(IdeaCandidate(
             security_id=sid, symbol=sym, name=(info["name"] if info is not None else None), region=region, as_of=as_of.date(),
@@ -153,7 +161,7 @@ def build_candidates(as_of: pd.Timestamp, region: str, hyp: Hypotheses, symbols:
 
 
 def run_ideas(as_of=None, top: int = 20, regions: list[str] | None = None, preset: str | None = None, narrate: bool = False,
-              symbols: list[str] | None = None, out_dir=None, quiet: bool = False, narrate_symbols: list[str] | None = None) -> dict:
+              symbols: list[str] | None = None, out_dir=None, quiet: bool = False, narrate_symbols: list[str] | None = None, pitch: bool = True) -> dict:
     hyp = Hypotheses.load()
     as_of = last_trading_day(as_of)
     regions = [r.upper() for r in (regions or ["US"])]
@@ -194,7 +202,7 @@ def run_ideas(as_of=None, top: int = 20, regions: list[str] | None = None, prese
                 changes = diff_runs(prev[-1], out)
             except Exception as e:  # noqa: BLE001
                 print(f"[ideas] diff vs previous run failed: {e}")
-    _render(all_cands, chosen, as_of, out, hyp, preset or hyp.get("screen.preset"), regions, top, narrate, narrate_symbols, sector_calls, sizing, changes)
+    _render(all_cands, chosen, as_of, out, hyp, preset or hyp.get("screen.preset"), regions, top, narrate, narrate_symbols, sector_calls, sizing, changes, pitch=pitch)
     con = ledger()
     con.execute("INSERT OR REPLACE INTO runs VALUES (?,?,?,?,?,?)", [run_id, "ideas", as_of.date(), datetime.now(), json.dumps({"top": top, "regions": regions}), str(out)])
     con.close()
@@ -246,7 +254,17 @@ def _view(c: IdeaCandidate) -> dict:
     return d
 
 
-def _render(all_cands, chosen, as_of, out, hyp, preset, regions, top, narrate, narrate_symbols=None, sector_calls=None, sizing=None, changes=None) -> None:
+def _spark(c, px, as_of, chart_id: str) -> str | None:
+    spec = build_price_chart(c.security_id, c.symbol, px, start=as_of - pd.Timedelta(days=3 * 365), end=as_of, overlays={"price"}, compact=True, currency=c.currency)
+    spec["id"] = chart_id
+    return None if spec["empty"] else to_json(spec)
+
+
+def _render(all_cands, chosen, as_of, out, hyp, preset, regions, top, narrate, narrate_symbols=None, sector_calls=None, sizing=None, changes=None,
+            pitch: bool = True, extra_symbols: set[str] | None = None) -> dict:
+    """Write board.html and ideas/*.html. Returns {"sections": [...], "others": [...]} — the sector-grouped pitch sections,
+    reused by the evaluate page. `pitch` = write the stories with Claude for the chosen names (cached by request hash;
+    deterministic prose otherwise)."""
     sizing = sizing or {}
     r = rules()
     angle_keys = list(r["angles"].keys())
@@ -264,18 +282,11 @@ def _render(all_cands, chosen, as_of, out, hyp, preset, regions, top, narrate, n
     for i, c in enumerate(ranked):
         v = _view(c)
         v["kelly_weight"] = (sizing.get("weights") or {}).get(c.security_id)
-        if i < spark_rows:
-            px = px_by.get(c.security_id, prices.iloc[0:0])
-            spec = build_price_chart(c.security_id, c.symbol, px, start=as_of - pd.Timedelta(days=3 * 365), end=as_of, overlays={"price"}, compact=True, currency=c.currency)
-            spec["id"] = v["chart_id"]
-            v["chart_json"] = to_json(spec)
-        else:
-            v["chart_json"] = None
+        v["chart_json"] = _spark(c, px_by.get(c.security_id, prices.iloc[0:0]), as_of, v["chart_id"]) if i < spark_rows else None
         if c.eligible:
             board_rows.append(v)
         else:
             excluded.append(v)
-    tpl = render.env().get_template("board.html.j2")
     scalls = sorted((sector_calls or {}).values(), key=lambda c: -(c.score or 0))
     from ..frameworks.danoff import danoff_sector
     from ..screen.commodity import group_for
@@ -285,29 +296,19 @@ def _render(all_cands, chosen, as_of, out, hyp, preset, regions, top, narrate, n
         reads = [(c.metrics.get("danoff"), c.symbol) for c in all_cands if c.eligible and group_for(c.industry, c.symbol) == g and c.metrics.get("danoff")]
         if reads:
             dgroups[lab] = danoff_sector([r for r, _ in reads], [sy for _, sy in reads])
-    html = tpl.render(title=f"Ideas {as_of.date()}", as_of=as_of.date(), ideas=board_rows[: max(top, len(board_rows))], excluded=excluded, n_scored=len(all_cands),
-                      sector_calls=scalls, sector_map={k: v.model_dump() for k, v in (sector_calls or {}).items()}, changes=changes, danoff_groups=dgroups,
-                      regions=regions, preset=preset, top=top, macro=macro, angle_keys=angle_keys, angle_labels=angle_labels, angle_short=angle_short,
-                      sectors=sorted({c.sector for c in all_cands if c.sector}), asset_types=sorted({c.asset_type for c in all_cands}),
-                      universe_note=f"{hyp.get('universe.kind')} (cap floor ${hyp.get('universe.cap_floor_usd')/1e9:.0f}B, hypothesis D-53)",
-                      winsor=hyp.get("screen.winsor_pct"), cov_min=hyp.get("screen.coverage_min"), generated=render.now(), assets="../../assets/")
-    render.write(out / "board.html", html)
-    itpl = render.env().get_template("idea.html.j2")
-    from ..pit.snapshot import snapshot
-
+    # per-name page data (prices, events, snapshot, phases, story) computed once and shared by the sections and the pages
     from ..drivers.phases import build_phases, phases_to_dicts
+    from ..pit.snapshot import snapshot
+    from ..research.story import build_story
 
     bench = read_df("benchmark_daily", "benchmark_id = 'SPY_TR'")
     bench["date"] = pd.to_datetime(bench["date"])
     bench_s = bench.set_index("date")["level"].sort_index()
-    # pages: the chosen names always (they are the sector-selected book, not necessarily the top-N by rank), then the
-    # ranked tail; with --narrate only the chosen names get pages (each narrative is three Claude calls)
-    chosen_ids = {c.security_id for c in chosen}
-    pages = list(chosen) if narrate else (list(chosen) + [c for c in ranked[: max(top * 5, 100)] if c.security_id not in chosen_ids])
-    if narrate_symbols:   # `engine research SYM`: scored against the whole region, page + narrative for these only
-        want = {x.upper() for x in narrate_symbols}
-        pages = [c for c in all_cands if c.symbol.upper() in want]
-    for c in pages:
+    page_cache: dict[str, dict] = {}
+
+    def page_data(c) -> dict:
+        if c.security_id in page_cache:
+            return page_cache[c.security_id]
         px = prices[prices.security_id == c.security_id]
         ev = events[events.security_id == c.security_id] if not events.empty else pd.DataFrame()
         snap = snapshot(c.security_id, as_of)
@@ -317,24 +318,60 @@ def _render(all_cands, chosen, as_of, out, hyp, preset, regions, top, narrate, n
                                                   float(hyp.get("drivers.zigzag_threshold_pct")), int(hyp.get("drivers.min_phase_weeks")), float(hyp.get("drivers.macro_bench_move_pct"))))
         except Exception:  # noqa: BLE001
             phases = []
-        spec = build_price_chart(c.security_id, c.symbol, px, start=as_of - pd.Timedelta(days=10 * 365), end=as_of,
-                                 overlays={"price", "price_tr", "pe_band", "eps", "drawdown", "events", "phases"}, eps_series=eps, events=ev, phases=phases,
-                                 subtitle="10 years · price, TTM P/E band, TTM EPS, events, phases", currency=c.currency)
-        v = _view(c)
-        from ..research.story import build_story
-
         try:
             story = build_story(c, snap.fy_history, (sector_calls or {}).get(c.theme_sector))
         except Exception as e:  # noqa: BLE001
             print(f"[story] {c.symbol}: {e}")
             story = None
+        page_cache[c.security_id] = {"px": px, "ev": ev, "snap": snap, "eps": eps, "phases": phases, "story": story}
+        return page_cache[c.security_id]
+
+    # the pitch report: one section per sector call that holds a chosen name, each with its stories and charts
+    from ..reports.sections import build_sections, stock_section
+
+    region = (regions or ["US"])[0].upper()
+    sections, others = build_sections(all_cands, chosen, sector_calls or {}, sizing, as_of, out, view_fn=_view, story_fn=lambda c: page_data(c)["story"],
+                                      phases_fn=lambda c: page_data(c)["phases"], use_llm=pitch, region=region, extra_symbols=extra_symbols,
+                                      spark_fn=lambda c: _spark(c, px_by.get(c.security_id, prices.iloc[0:0]), as_of, _view(c)["chart_id"]))
+    section_of = {x["c"]["symbol"]: (sec, x) for sec in sections for x in sec["stocks"]}
+    tpl = render.env().get_template("board.html.j2")
+    html = tpl.render(title=f"Ideas {as_of.date()}", as_of=as_of.date(), ideas=board_rows[: max(top, len(board_rows))], excluded=excluded, n_scored=len(all_cands),
+                      sector_calls=scalls, sector_map={k: v.model_dump() for k, v in (sector_calls or {}).items()}, changes=changes, danoff_groups=dgroups,
+                      sections=sections, other_sectors=others,
+                      regions=regions, preset=preset, top=top, macro=macro, angle_keys=angle_keys, angle_labels=angle_labels, angle_short=angle_short,
+                      sectors=sorted({c.sector for c in all_cands if c.sector}), asset_types=sorted({c.asset_type for c in all_cands}),
+                      universe_note=f"{hyp.get('universe.kind')} (cap floor ${hyp.get('universe.cap_floor_usd')/1e9:.0f}B, hypothesis D-53)",
+                      winsor=hyp.get("screen.winsor_pct"), cov_min=hyp.get("screen.coverage_min"), generated=render.now(), assets="../../assets/")
+    render.write(out / "board.html", html)
+    itpl = render.env().get_template("idea.html.j2")
+    # pages: the chosen names always (they are the sector-selected book, not necessarily the top-N by rank), then the
+    # ranked tail; with --narrate only the chosen names get pages (each narrative is three Claude calls)
+    chosen_ids = {c.security_id for c in chosen}
+    pages = list(chosen) if narrate else (list(chosen) + [c for c in ranked[: max(top * 5, 100)] if c.security_id not in chosen_ids])
+    if narrate_symbols:   # `engine research SYM`: scored against the whole region, page + narrative for these only
+        want = {x.upper() for x in narrate_symbols}
+        pages = [c for c in all_cands if c.symbol.upper() in want]
+    for c in pages:
+        pdata = page_data(c)
+        px, ev, eps, phases, story = pdata["px"], pdata["ev"], pdata["eps"], pdata["phases"], pdata["story"]
+        spec = build_price_chart(c.security_id, c.symbol, px, start=as_of - pd.Timedelta(days=10 * 365), end=as_of,
+                                 overlays={"price", "price_tr", "pe_band", "eps", "drawdown", "events", "phases"}, eps_series=eps, events=ev, phases=phases,
+                                 subtitle="10 years · price, TTM P/E band, TTM EPS, events, phases", currency=c.currency)
+        v = _view(c)
         narrative = None
         if narrate and (c in chosen or (narrate_symbols and c.symbol.upper() in {x.upper() for x in narrate_symbols})):
             from ..research.stages import narrative_html
 
-            narrative = narrative_html(c, snap, phases)
+            narrative = narrative_html(c, pdata["snap"], phases)
+        sec_pair = section_of.get(c.symbol)
+        if sec_pair:
+            section, stock = sec_pair
+        else:   # a page outside the book: the same section, deterministic prose (no model call for the ranked tail)
+            section, stock = None, stock_section(c, v, story=story, sector_call=(sector_calls or {}).get(c.theme_sector),
+                                                 kelly_weight=(sizing.get("weights") or {}).get(c.security_id), phases=phases, use_llm=False)
         html = itpl.render(title=f"{c.symbol} — idea", c=v, m=c.metrics, chart_id=spec["id"], chart_json=to_json(spec), macro=macro,
                            n_scored=len(all_cands), phases=phases, narrative=narrative, dcf=c.metrics.get("dcf"), generated=render.now(), assets="../../../assets/",
                            kelly=(sizing.get("blocks") or {}).get(c.security_id), kelly_weight=(sizing.get("weights") or {}).get(c.security_id), n_top=len(chosen),
-                           sector_call=(sector_calls or {}).get(c.theme_sector), story=story)
+                           sector_call=(sector_calls or {}).get(c.theme_sector), story=story, stock=stock, section=section)
         render.write(out / "ideas" / f"{c.symbol}.html", html)
+    return {"sections": sections, "others": others}

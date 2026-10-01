@@ -245,7 +245,12 @@ def summary_parts(c, sector_call=None, kelly_weight=None) -> dict:
     wc = why_cheap(d, sc)
     if wc.get("cheap"):
         recap.append(wc["sentence"])
-    return {"thesis": thesis, "reasons": [plain_reason(r) for r in ordered], "recap": " ".join(recap), "verdict": verdict}
+    from ..frameworks.implied_growth import plain_sentence as _ig_sentence
+
+    ig_s = _ig_sentence(m.get("implied_growth"))     # what the price assumes — in every thesis summary (F-16)
+    if ig_s:
+        recap.append(ig_s)
+    return {"thesis": thesis, "reasons": [plain_reason(r) for r in ordered], "recap": " ".join(recap), "recap_parts": recap, "verdict": verdict, "implied_growth": ig_s}
 
 
 def plain_summary(c, sector_call=None, kelly_weight=None) -> str:

@@ -1,0 +1,23 @@
+{# one sector call: sec = section dict (call, label, pitch, chart_a_*, chart_b_*, rows, n_members, n_drawn, stocks, window); link = href prefix for stock pages #}
+{% set s = sec.call %}{% set p = sec.pitch %}
+<section class="sector" id="sector-{{ s.sector }}">
+  <h2 style="margin-bottom:2px">{{ s.label }} <span class="badge {{ 'buy' if s.stance=='overweight' else ('excluded' if s.stance in ('avoid','underweight') else '') }}" style="font-size:13px;vertical-align:middle">{{ s.stance }}</span></h2>
+  <div class="small muted" style="margin-bottom:8px">{{ STANCE_WORDS.get(s.stance, s.stance) }}{% if s.bet %} · recommended {{ '%.1f%%'|format(s.bet.recommended_weight*100) }} of the book against {{ '%.1f%%'|format(s.bet.market_weight*100) }} market weight ({{ '%+.1f pp'|format(s.bet.active_bet_pp) }}){% endif %} · {{ s.n_members }} names scored · score {{ '%.0f'|format(s.score) if s.score is not none else '–' }}</div>
+  <div class="card sector-pitch">
+    <p class="opening">{{ p.where_we_are }}</p>
+    <p>{{ p.the_case }}</p>
+    <p><b>The bet.</b> {{ p.the_bet }}</p>
+    <p><b>The names.</b> {{ p.names }}</p>
+    <p class="closing"><b>What would change the call.</b> {{ p.what_would_change_the_call }}</p>
+    <div class="small muted">{% if p.source == 'claude' %}Written by Claude from the engine's sector numbers{% if p.unverified_count %} · {{ p.unverified_count }} figure{{ 's' if p.unverified_count != 1 }} could not be traced{% endif %}{% else %}Assembled by the engine from its sector numbers{% endif %}.
+      {% if s.cycle_read %}Commodity cycle: {{ s.cycle_read.verdict }}{% endif %}{% if s.danoff %} · Danoff on the sector: {{ s.danoff.verdict[12:] }}{% endif %}</div>
+    <details class="small"><summary class="muted">The numbers the call used</summary><ul style="margin:6px 0 0;padding-left:18px">{% for r in s.rationale %}<li>{{ r|plain_sector_line }} <span class="muted">— {{ r }}</span></li>{% endfor %}</ul></details>
+  </div>
+  {% if sec.chart_a_json %}<div class="card"><div id="{{ sec.chart_a_id }}" class="chart" style="height:340px"></div><script type="application/json" id="spec-{{ sec.chart_a_id }}">{{ sec.chart_a_json|safe }}</script></div>{% endif %}
+  {% if sec.chart_b_json %}<details class="card" {% if sec.stocks|length <= 3 %}open{% endif %}><summary>Every {{ sec.label }} name — {{ sec.n_members }} stocks{% if sec.n_drawn < sec.n_members %} ({{ sec.n_drawn }} largest drawn){% endif %}, {{ sec.window }}</summary>
+    <div id="{{ sec.chart_b_id }}" class="chart" style="height:380px"></div><script type="application/json" id="spec-{{ sec.chart_b_id }}">{{ sec.chart_b_json|safe }}</script>
+    <div style="overflow-x:auto;margin-top:8px"><table class="small"><thead><tr><th>Name</th><th class="num">Strength</th><th>Call</th><th class="num">{{ sec.window|capitalize }}</th><th class="num">P/E</th><th class="num">P/E own pct</th><th>Valuation cycle</th><th class="num">In the book</th></tr></thead><tbody>
+    {% for r in sec.rows %}<tr{% if r.weight %} style="font-weight:600"{% endif %}><td>{{ r.symbol }} <span class="muted">{{ (r.name or '')|truncate(32) }}</span></td><td class="num">{{ '%.0f'|format(r.strength) if r.strength is not none else '–' }}</td><td>{{ r.action or '–' }}</td><td class="num">{{ '%+.0f%%'|format(r.ret_window*100) if r.ret_window is not none else '–' }}</td><td class="num">{{ '%.1f'|format(r.pe) if r.pe else '–' }}</td><td class="num">{{ '%.0f'|format(r.pe_pctile) if r.pe_pctile is not none else '–' }}</td><td>{{ r.cycle_phase or '–' }}</td><td class="num">{{ '%.1f%%'|format(r.weight*100) if r.weight else '' }}</td></tr>{% endfor %}
+    </tbody></table></div></details>{% endif %}
+  {% for x in sec.stocks %}{% include "_stock_section.html.j2" %}{% endfor %}
+</section>

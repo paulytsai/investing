@@ -10,7 +10,7 @@ engine test-keys               # FMP, Alpaca data, J-Quants, EDINET, EDGAR, FRED
 engine config check            # the 158 TBD(Paul) parameters and their D-IDs
 engine pull us --pilot         # 60-name pilot (engine pull us = full universe, ~1h)
 engine build pit               # point-in-time tables under data/pit
-engine ideas --top 20          # board + idea pages → reports/ideas/<run>/board.html
+engine ideas --top 20          # the pitch report: sector stories, sector charts, stock stories → reports/ideas/<run>/board.html (--no-pitch = engine prose only)
 engine drivers NVDA            # drivers of past moves
 engine evaluate NVDA ORCL --thesis thesis.md --narrate   # evaluate Paul's own ideas with the same engine
 engine evaluate my_ideas.csv --thesis thesis.md          # …or a CSV/XLSX of codes (symbol/ticker/code column)

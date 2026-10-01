@@ -1,8 +1,8 @@
 {% extends "base.html.j2" %}
 {% block nav %}<a href="../../index.html">runs</a> · ideas board{% endblock %}
 {% block content %}
-<h1>Ideas board — {{ as_of }}</h1>
-<p class="sub">{{ n_scored }} names scored in {{ regions|join(", ") }} · preset <b>{{ preset }}</b> · top {{ top }} shown by Idea Strength · sort and filter with the controls below · every reason cites its spec rule</p>
+<h1>The case for the book — {{ as_of }}</h1>
+<p class="sub">{{ n_scored }} names scored in {{ regions|join(", ") }} · the engine's {{ top }}-name book, told sector by sector: the sector call and its story first, then each name's story, with the numbers behind every claim one click below. The sortable table of every name is at the foot of the page.</p>
 <div class="strip card">
   {% for k, v in macro.items() %}<span>{{ k }}: <b>{{ v }}</b></span>{% endfor %}
   <span class="muted">macro as of formation date (FRED, point-in-time)</span>
@@ -16,24 +16,23 @@
 </div>
 {% endif %}
 {% if sector_calls %}
-<h2 style="margin-top:14px">Stage 1 — the sector call (R-23 / F-39; theme sectors from config/sectors.yaml, AI split by value-chain layer)</h2>
-<div class="sector-grid">
-{% for s in sector_calls %}<div class="card sector-card">
-  <div class="sector-head"><b>{{ s.label }}</b> <span class="badge {{ 'buy' if s.stance=='overweight' else ('excluded' if s.stance in ('avoid','underweight') else '') }}">{{ s.stance }}</span> <span class="muted small">score {{ '%.0f'|format(s.score) if s.score is not none else '–' }} · {{ s.n_members }} members · {{ s.slots }} slots</span></div>
-  {% if s.bet %}<div class="small"><b>Bet:</b> <span class="{{ 'reason-pos' if s.bet.active_bet_pp > 0.5 else ('reason-neg' if s.bet.active_bet_pp < -0.5 else '') }}">{{ '%+.1f pp'|format(s.bet.active_bet_pp) }}</span> → {{ '%.1f%%'|format(s.bet.recommended_weight*100) }} vs {{ '%.1f%%'|format(s.bet.market_weight*100) }} market weight{% if s.bet.kelly_implied_weight %} · picks' Kelly {{ '%.0f%%'|format(s.bet.kelly_implied_weight*100) }}{% endif %}</div>
-  {% if s.bet.cycle %}<div class="small muted">Cycle: {{ s.bet.cycle.phase }} — {{ s.bet.cycle.theme }} in {{ '%.0f%%'|format(s.bet.cycle.breadth_now) }} of calls ({{ s.bet.cycle.quarter }}), peak {{ '%.0f%%'|format(s.bet.cycle.breadth_peak) }}, {{ s.bet.cycle.trend }}{% if s.bet.cycle.cycle_started %}, since {{ s.bet.cycle.cycle_started }}{% endif %}</div>{% endif %}{% endif %}
-  <div class="small muted">{{ STANCE_WORDS.get(s.stance, s.stance) }}.</div>
-  {% if s.cycle_read %}<div class="small"><b>Commodity cycle:</b> {{ s.cycle_read.verdict }}</div>{% endif %}
-  {% if s.danoff %}<div class="small"><b>Danoff:</b> {{ s.danoff.verdict[12:] }}</div>{% endif %}
-  <details class="small"><summary class="muted">Why — the numbers the call used</summary><ul style="margin:6px 0 0;padding-left:18px">{% for r in s.rationale %}<li>{{ r|plain_sector_line }} <span class="muted">— {{ r }}</span></li>{% endfor %}</ul></details>
-</div>{% endfor %}
-</div>
 {% set ai = sector_calls|selectattr('sector', 'in', ['ai_chips','ai_infrastructure','ai_applications','ai_models','ai_energy'])|list %}{% set en = sector_calls|selectattr('sector', 'equalto', 'energy')|list %}
 <div class="card" style="border-left:4px solid var(--s2)"><b>The barbell</b> <span class="muted small">(Paul: oil and tech are the two ends)</span>
   <div class="small" style="margin-top:4px"><b>Tech end:</b> {% for s in ai %}{{ s.label.split(' — ')[0] }} {{ s.stance }}{% if s.bet %} ({{ '%+.1f pp'|format(s.bet.active_bet_pp) }}){% endif %}{% if not loop.last %} · {% endif %}{% endfor %}</div>
   <div class="small" style="margin-top:2px"><b>Oil end:</b> {% for s in en %}Energy {{ s.stance }}{% if s.bet %} ({{ '%+.1f pp'|format(s.bet.active_bet_pp) }}){% endif %}{% if s.cycle_read %} — {{ s.cycle_read.verdict }}{% endif %}{% else %}no energy call{% endfor %}</div>
   {% for lab, g in (danoff_groups or {}).items() %}<div class="small muted" style="margin-top:2px"><b>Danoff on {{ lab|lower }}:</b> {{ g.verdict[12:] }}</div>{% endfor %}
 </div>
+{% if sections %}
+<div class="toc small">Sections: {% for sec in sections %}<a href="#sector-{{ sec.call.sector }}">{{ sec.label }} ({{ sec.stocks|length }})</a>{% if not loop.last %} · {% endif %}{% endfor %}{% if other_sectors %} · <a href="#other-sectors">other sector calls</a>{% endif %} · <a href="#table-view">table view</a></div>
+{% for sec in sections %}{% set link = "ideas/" %}{% include "_sector_section.html.j2" %}{% endfor %}
+{% if other_sectors %}
+<h2 id="other-sectors">The other sector calls — no name made the book</h2>
+<div class="card" style="overflow-x:auto"><table class="small"><thead><tr><th>Theme sector</th><th>Stance</th><th class="num">Score</th><th class="num">Names</th><th class="num">Bet</th><th>In one line</th></tr></thead><tbody>
+{% for o in other_sectors %}<tr><td>{{ o.call.label }}</td><td>{{ o.call.stance }}</td><td class="num">{{ '%.0f'|format(o.call.score) if o.call.score is not none else '–' }}</td><td class="num">{{ o.n }}</td><td class="num">{{ '%+.1f pp'|format(o.call.bet.active_bet_pp) if o.call.bet else '–' }}</td><td>{{ o.line|plain_sector_line }}</td></tr>{% endfor %}
+</tbody></table></div>
+{% endif %}
+{% endif %}
+<h2 id="table-view">Table view — every scored name, sortable</h2>
 <div class="small muted" style="margin:0 0 8px">Stance thresholds and weights are hypotheses (D-58 / D-27). Slots go to sectors by stance first; the best Idea Strength inside each sector fills them; no slot goes to an "avoid" sector. Bet = the sector's share of scored market cap × stance multiplier (overweight 1.5, neutral 1, underweight 0.5, avoid 0), renormalised, minus market weight. Cycle = the sector's theme in transcript breadth (live from 10% of calls; 25% off peak for two quarters is the exit signal, D-24).</div>
 {% endif %}
 <div class="filters">
@@ -85,6 +84,12 @@
 .idea-head .stat { white-space:nowrap; font-variant-numeric: tabular-nums; }
 .summary { margin:6px 0 4px; font-size:15px; line-height:1.5; } .summary .thesis { margin:4px 0; font-weight:600; } .summary ol { margin:2px 0 4px; padding-left:22px; } .summary .recap { margin:2px 0; color:var(--ink2); }
 .evidence summary { cursor:pointer; margin:2px 0 6px; }
+.toc { margin:6px 0 10px; } .toc a { white-space:nowrap; }
+.sector { margin-top:10px; } .sector-pitch p, .pitch p { font-size:16px; line-height:1.6; margin:8px 0; } .pitch ol { font-size:16px; line-height:1.6; margin:2px 0 8px; padding-left:24px; }
+.pitch .opening, .sector-pitch .opening { font-weight:600; font-size:17px; } .pitch .closing, .sector-pitch .closing { color:var(--ink2); } .pitch .assumes { background:var(--page); border-left:3px solid var(--s1); padding:6px 10px; }
+.stock { padding:12px 16px; margin:10px 0; min-width:0; } .stock-head { display:flex; flex-wrap:wrap; gap:6px 16px; align-items:baseline; } .stock-head .name { min-width:200px; } .stock-head .stat { white-space:nowrap; font-variant-numeric: tabular-nums; }
+.stock-body { display:grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 8px 22px; align-items:start; margin-top:4px; } .stock-body .pitch, .stock-body .charts { min-width:0; }
+@media (max-width: 900px) { .stock-body { grid-template-columns: 1fr; } .stock-head .name { min-width:0; } }
 .chips { display:flex; flex-wrap:wrap; gap:4px 6px; margin:6px 0; }
 .chip { font-size:12px; padding:1px 7px; border-radius:6px; background:var(--page); border:1px solid var(--border); white-space:nowrap; }
 .idea-body { display:grid; grid-template-columns: 1fr 260px; gap: 10px 18px; align-items:start; } .idea-body .reasons, .idea-body .spark { min-width:0; }

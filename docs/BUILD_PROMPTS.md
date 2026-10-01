@@ -129,3 +129,18 @@ workflows (W3, W4, W6, W7, M8).
 > EPS, smile or frown, quality over price, listen, write it down, ignore the past price) with a per-name score and verdict and a per-sector
 > view (share smiling, years to double, best of breed). Lead the idea page with the story, put Idea Strength below it, show the Danoff read on
 > the board, sector cards and the evaluator. Keep the lens out of Idea Strength unless Paul chooses to weight it.
+
+## Prompt — the pitch report (2026-10-01)
+
+> Right now everything the engine outputs is a technical cite. I need a narrative — a story, like someone making a presentation and
+> explaining the thesis and trying to convince that person to invest in the stock. The detailed statistics stay as back-up. For each
+> sector call, chart the sector as an equal-weighted index with the stocks' own price lines, then a chart of all the stocks in the
+> sector. Group the report by sector-call section (with a story) and stock section (with a story). Valuation must be part of the story:
+> where is the stock in its own valuation cycle (P/E first; a hyper-growth company without earnings must have very rapid growth, and the
+> pitch must say what growth is priced in). Every thesis summary carries an implied earnings growth solved backwards from the price.
+
+Build: `frameworks/implied_growth.py` (pure, tested), `frameworks/valuation_cycle.py` (pure, tested), `screen/metrics.py` keeps the P/E
+history and the cycle read, `screen/sector_index.py` (equal-weight index from `prices_daily`), `reports/charts.py::build_rebased_chart`
+and `build_valuation_chart`, `research/pitch.py` with `StockPitch` / `SectorPitch` schemas on the existing `parse_structured` cache and
+`verify.py`, `reports/sections.py`, the `_sector_section` / `_stock_section` partials, the board/idea/evaluate/home templates, the MCP
+tools, `config/hypotheses.yaml` `valuation.*` (D-24 / D-25), docs and tests. Deterministic prose when no key: the page always reads.

@@ -34,6 +34,8 @@
   window.renderAllCharts = function(){ document.querySelectorAll('script[id^="spec-"]').forEach(el => window.renderChart(el.id.slice(5))); };
   function ready(){ if (window.Plotly) window.renderAllCharts(); else setTimeout(ready, 150); }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', ready); else ready();
+  document.addEventListener('toggle', function(e){ const d = e.target; if (!d || d.tagName !== 'DETAILS' || !d.open || !window.Plotly) return;
+    d.querySelectorAll('.chart').forEach(function(ch){ if (ch.classList.contains('js-plotly-plot')) Plotly.Plots.resize(ch); else if (window.renderChart) window.renderChart(ch.id); }); }, true);
   const mq = window.matchMedia('(prefers-color-scheme: dark)'); if (mq.addEventListener) mq.addEventListener('change', ()=>window.renderAllCharts());
 })();
 </script>

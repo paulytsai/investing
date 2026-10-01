@@ -142,3 +142,29 @@ class ThesisVerdict(BaseModel):
     checkpoints: list[Checkpoint] = Field(default_factory=list)
     the_tension: str = ""
     unverified_count: int = 0
+
+
+class StockPitch(BaseModel):
+    """The case for one stock, written as a presenter would make it to Paul (plain words, no rule ids). Every figure in the
+    prose must also appear in numbers_used with its source; verify.py checks them and counts what it cannot trace."""
+    opening: str                      # the one idea, two sentences — why this name, why now
+    the_business: str                 # what it does and why the world needs it; the indispensable #1 question
+    why_now: str                      # what changed: demand, numbers, the last move, what management said
+    valuation_in_cycle: str           # where the multiple sits in its own history and why it is there
+    what_the_price_assumes: str       # the implied growth sentence, against delivered growth
+    three_reasons: list[str] = Field(min_length=3, max_length=3)   # strongest, weakest, second-strongest (the sandwich)
+    what_breaks_it: str               # the honest bear case and the sign that would end the thesis
+    closing: str                      # the ask: what to do, how big, and the one thing to watch
+    numbers_used: list[Claim] = Field(default_factory=list)
+    unverified_count: int = 0
+
+
+class SectorPitch(BaseModel):
+    """The case for the sector call: where the cycle is, why the stance, the bet, the names that carry it."""
+    where_we_are: str
+    the_case: str
+    the_bet: str
+    names: str
+    what_would_change_the_call: str
+    numbers_used: list[Claim] = Field(default_factory=list)
+    unverified_count: int = 0
