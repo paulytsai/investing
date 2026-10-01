@@ -37,7 +37,7 @@ deployments can inject secrets without a file.
 | `NEWS_API_KEY` | https://newsapi.org/account |
 | `X_BEARER_TOKEN` | https://developer.x.com/en/portal/dashboard (app > Keys and tokens) |
 | `ALPACA_API_KEY` / `ALPACA_SECRET_KEY` | https://app.alpaca.markets/paper/dashboard/overview |
-| `ANTHROPIC_API_KEY` | https://console.anthropic.com/settings/keys |
+| `ANTHROPIC_KEY` | https://console.anthropic.com/settings/keys (named `ANTHROPIC_KEY`, not `ANTHROPIC_API_KEY`: Claude Code cloud sessions strip `ANTHROPIC_API_KEY`; pass it explicitly via `anthropic.Anthropic(api_key=os.environ["ANTHROPIC_KEY"])`) |
 | `IBKR_*` | Configured in TWS / IB Gateway; no key, uses a local socket |
 
 ## Financial Modeling Prep client
