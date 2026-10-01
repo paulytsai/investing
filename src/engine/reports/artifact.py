@@ -2,6 +2,7 @@
 publisher wraps it in its own skeleton), sub-pages keep their doctype, and the vendored Plotly asset travels along."""
 from __future__ import annotations
 
+import json
 import re
 import shutil
 from pathlib import Path
@@ -81,7 +82,17 @@ def prepare(run_dir: Path, entry: str, title: str, sub_dirs: tuple[str, ...] = (
         if not src.exists():
             continue
         (out / sd).mkdir(exist_ok=True)
-        pages = sorted(src.glob("*.html"), key=lambda p: p.stat().st_size)  # smaller first; the cap keeps the publish under the limit
+        # the book's names first (sizing.json weights), then the rest smallest first; the cap keeps the publish under the limit
+        chosen: set[str] = set()
+        sz = run_dir / "sizing.json"
+        if sz.exists():
+            try:
+                cands = json.loads((run_dir / "candidates.json").read_text()) if (run_dir / "candidates.json").exists() else []
+                sid_sym = {c["security_id"]: c["symbol"] for c in cands}
+                chosen = {sid_sym.get(k, "") for k in (json.loads(sz.read_text()).get("weights") or {})}
+            except Exception:  # noqa: BLE001
+                chosen = set()
+        pages = sorted(src.glob("*.html"), key=lambda p: (0 if p.stem in chosen else 1, p.stat().st_size))
         for p in pages[:max_sub_pages]:
             t = p.read_text(encoding="utf-8").replace(f'src="{asset_rel_sub}plotly.min.js"', f'src="{PLOTLY_CDN}"').replace("../board.html", "../index.html")
             (out / sd / p.name).write_text(t, encoding="utf-8")
