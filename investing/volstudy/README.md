@@ -79,7 +79,7 @@ Median annualized vol across stocks, by sector. Quarterly changes,
 | Utilities | 3 | 0.18 | 0.24 | 0.19 | 0.29 | 0.22 | 0.44 | 0.40 | −0.91 |
 | Energy | 3 | 0.26 | 0.35 | 0.24 | 0.47 | 0.45 | 0.64 | 0.68 | −0.92 |
 
-* **The hypothesis holds**: multiple vol exceeds fundamental vol for every
+* **The hypothesis holds, though partly by construction**: multiple vol exceeds fundamental vol for every
   stock on revenue (100%) and for about 95% of stocks on EBITDA or net income
   at the quarterly horizon. Staples have the most stable fundamentals
   (revenue vol 4%, EBITDA 12%). Energy and Utilities are the exceptions,
@@ -97,23 +97,25 @@ Median annualized vol across stocks, by sector. Quarterly changes,
   rates, which is Shiller's excess-volatility result. For an options trader
   this means the driver of day-to-day vol is the multiple, i.e. sentiment and
   discount rate. Realized fundamentals matter mainly as the jump on
-  announcement days.
+  announcement days. Because fundamentals barely move with price, multiple
+  vol ≈ price vol (P/S vol 0.31 vs price vol 0.30), so "multiple vol >
+  fundamental vol" mostly restates "price vol > fundamental vol".
 
-### 2. The split improves vol forecasts, but only the daily version
+### 2. The split helps forecasts a little; the earnings calendar does most of the work
 
 Out-of-sample R² of log forward realized vol, 2008-2026, ~21.6k
 stock-months:
 
-| Horizon | HAR (total vol) | SPLIT (multiple vol + scheduled earnings jump) | FUND (SPLIT + accounting vol, P/S z-score) |
-|:--|--:|--:|--:|
-| 21 days | 0.477 | **0.522** | 0.522 |
-| 63 days | 0.469 | **0.481** | 0.474 |
+| Horizon | HAR (total vol) | HAR + earnings calendar & jump size (no split) | SPLIT (multiple vol + earnings jump) | FUND (SPLIT + accounting vol, P/S z-score) |
+|:--|--:|--:|--:|--:|
+| 21 days | 0.477 | 0.510 | **0.522** | 0.522 |
+| 63 days | 0.469 | 0.478 | **0.481** | 0.474 |
 
-Gains at 21 days by sector: Tech +8 pts, Comm Services +8, Consumer Cyclical
-+7, Staples +6, Industrials +5, Healthcare +5. Financials, Energy and
-Utilities gain about 0-1. Treating earnings days as scheduled jumps and the
-rest as multiple vol is a real improvement. Trailing accounting-fundamental
-vol (revenue/operating-income vol, P/S stretch) adds **nothing** beyond that.
+Of the +0.045 gain at 21 days, +0.033 comes from knowing an earnings date
+falls in the window and how big the stock usually moves on earnings. That
+needs no split. Separating ex-earnings ("multiple") vol from earnings-day
+vol adds the remaining +0.012. At 63 days the split adds +0.003. Trailing
+accounting-fundamental vol adds **nothing**.
 
 ### 3. Real option prices: the signal works as a timing tool, not as a better forecast
 
@@ -126,22 +128,25 @@ CBOE 30-day implied vol, five names, 2011-2026, 940 name-months:
   versus IV − realized = +2.9 pts. But **IV is the better forecaster**
   (R² 0.49 vs 0.34). In an encompassing regression the model adds nothing
   (t = 0.7). The market already prices what the decomposition knows.
-* **The decomposition does tell you *when* the premium is rich.** Same-month
-  top-minus-bottom tercile spread of short-variance P&L:
+* **Ranking by IV vs. a forecast tells you *when* the premium is rich, but
+  the split isn't what does it.** Short-variance P&L, top minus bottom
+  tercile:
 
-  | Signal | Top − bottom (vol pts/mo) | t | Spearman(signal, P&L) |
-  |:--|--:|--:|--:|
-  | Naive: IV / trailing 63d RV | 2.8 | 1.7 | −0.00 |
-  | IV / model total-vol forecast | 4.2 | 3.0 | 0.07 |
-  | **Implied multiple vol / forecast multiple vol** | **4.2** | **3.2** | **0.10** |
+  | Signal | Same-month spread (vol pts/mo) | t | Pooled spread | Pooled ex-2020 |
+  |:--|--:|--:|--:|--:|
+  | Naive: IV / trailing 63d RV | 2.8 | 1.7 | −1.5 | 0.2 |
+  | Simple: IV / (trailing ex-earnings vol + typical earnings jump), no model | 3.3 | 3.0 | 0.7 | 2.4 |
+  | IV / model total-vol forecast | 4.2 | 3.0 | 0.6 | 2.1 |
+  | Implied multiple vol / forecast multiple vol | 4.2 | 3.2 | 1.1 | 2.7 |
 
-  The result holds ex-2020 (4.2, t = 3.1). The spread uses only the ~67 of
-  188 months in which the five names fill both a top and a bottom tercile.
-  **The caveat**: on *absolute* thresholds (signal > 0 vs ≤ 0) the edge
-  disappears, and the naive signal's top tercile gets crushed in crashes.
-  High IV relative to trailing vol often marks the *start* of a vol regime
-  (Feb 2020). Stripping the earnings jump and comparing with forecast
-  multiple vol is what turns the signal positive.
+  The multiple-vol signal is 0.86 correlated with the plain forecast signal
+  and performs about the same, so the edge comes from comparing IV with a
+  sensible forecast that knows the earnings calendar. The same-month spread
+  uses only the ~60 of 188 months where the five names fill both terciles.
+  Over all months (pooled) the spread is about 1 vol pt and depends on
+  2020, when the "rich" tercile lost 12.5 vol pts in the crash. Top beat
+  bottom in 11 of 15 years. Four signals were tried on five names, so treat
+  this as suggestive.
 * **Stable vs. volatile fundamentals**: with five names this can't be
   tested reliably. For what it's worth, the most stable-revenue names (IBM,
   GOOGL) earned the *smallest* premium (0.7, 1.0 pts) and GS/AAPL the largest
@@ -181,19 +186,20 @@ forward-tracked log.
 
 ## Bottom line
 
-* **"The fundamental is less volatile than the multiple"**: yes, strongly,
-  for revenue and EBITDA in every sector except Energy and Utilities, and
-  most strongly in staples. GAAP net income is a poor anchor: it is noisier
-  than price, and the market looks through it.
-* **Forecasting**: treating announcement days as fundamental jumps and
-  everything else as multiple vol improves 1-month vol forecasts
-  meaningfully (R² 0.48 → 0.52). Accounting fundamental vol adds nothing.
-* **Arbitrage**: not an arbitrage in the strict sense. The underlying edge
-  is the variance risk premium, which is risk compensation with crash tails.
-  The decomposition improves *timing* of that premium (top-minus-bottom
-  +4.2 vol pts/month, t ≈ 3, five names). The "stable earnings → richer
-  options" link is weak in the reversion data and untested on real staples
-  option prices.
+* **"The fundamental is less volatile than the multiple"**: yes, but it is
+  close to automatic. Price moves are barely correlated with changes in
+  trailing fundamentals, so multiple vol is essentially price vol under a
+  new name. The split relabels the variance; it does not explain it.
+* **Where the split helps**: knowing that fundamentals change only on
+  earnings days lets you treat those days as scheduled jumps. That improves
+  1-month forecasts (R² 0.48 → 0.52), but three quarters of the gain needs
+  only the earnings calendar. The split itself adds about 1 point.
+  Accounting fundamental vol adds nothing.
+* **Arbitrage**: none. The edge is the variance risk premium, which is pay
+  for crash risk. Comparing IV with a good forecast helps time it modestly,
+  and the multiple-specific version does no better than a simple one. The
+  "stable earnings → richer options" link is weak and untested on real
+  staples option prices.
 
 ## Next steps
 

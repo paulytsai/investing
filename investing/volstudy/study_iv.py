@@ -87,6 +87,7 @@ def build() -> pd.DataFrame:
     d = pd.DataFrame(rows)
     d["pnl"] = (d["iv"] ** 2 - d["rv_fwd"] ** 2) / (2 * d["iv"])  # short var, vega units
     d["sig_naive"] = d["iv"] / d["dv63"] - 1           # IV vs trailing RV
+    d["sig_simple"] = d["iv"] / np.sqrt(d["dv63"] ** 2 + d["jump_vol"] ** 2) - 1  # no model, no split
     d["sig_model"] = d["iv"] / d["f_tot"] - 1          # IV vs SPLIT forecast
     d["sig_mult"] = d["iv_mult"] / d["f_mult"] - 1     # implied vs forecast multiple vol
     d["fair_iv"] = np.sqrt(d["f_mult"] ** 2 + d["jump_vol"] ** 2)
@@ -130,7 +131,7 @@ def spreads(d: pd.DataFrame) -> pd.DataFrame:
     """Same-month top-minus-bottom tercile P&L per signal, with sub-periods."""
     d = d.sort_values("date").copy()
     out = []
-    for sig in ("sig_naive", "sig_model", "sig_mult"):
+    for sig in ("sig_naive", "sig_simple", "sig_model", "sig_mult"):
         rk = d.groupby("sym")[sig].transform(
             lambda s: s.expanding().apply(lambda w: (w[:-1] < w[-1]).mean() if len(w) > 12 else np.nan, raw=True)
         )
@@ -139,8 +140,9 @@ def spreads(d: pd.DataFrame) -> pd.DataFrame:
             top = g[rk[keep] > 2 / 3].groupby("date")["pnl"].mean()
             bot = g[rk[keep] < 1 / 3].groupby("date")["pnl"].mean()
             ls = (top - bot).dropna()
+            pooled = g.loc[rk[keep] > 2 / 3, "pnl"].mean() - g.loc[rk[keep] < 1 / 3, "pnl"].mean()
             out.append({"signal": sig, "sample": label, "months": len(ls), "top_minus_bottom_volpts": 100 * ls.mean(),
-                        "t": _t(ls), "spearman_signal_pnl": g[sig].corr(g["pnl"], method="spearman")})
+                        "t": _t(ls), "pooled_top_minus_bottom_volpts": 100 * pooled, "spearman_signal_pnl": g[sig].corr(g["pnl"], method="spearman")})
     return pd.DataFrame(out).set_index(["signal", "sample"])
 
 

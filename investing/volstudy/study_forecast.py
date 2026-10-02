@@ -6,6 +6,7 @@ before the test year begins, test on that year).
 
 Models (h = forecast horizon in trading days):
   HAR   log RV_fwd ~ log rv21 + log rv63 + log rv252           (total vol)
+  HAR_EARN  HAR + earn_h + log sqrt(rv63^2 + earn_h * J^2 / h)   (calendar only)
   SPLIT log RV_fwd ~ log dv21 + log dv63 + log dv252            (multiple vol)
                      + log sqrt(dv63^2 + earn_h * J^2 / h)      (+ scheduled
                      + earn_h                                     earnings jump)
@@ -41,6 +42,8 @@ def panel(h: int) -> pd.DataFrame:
         df[c] = lg(me[c])
     df["earn"] = me[f"earn{h}"]
     df["struct"] = 0.5 * np.log(me["dv63"] ** 2 + me[f"earn{h}"] * me["jv"] ** 2 / h)
+    # same jump term built from total vol, i.e. earnings calendar without the split
+    df["struct_tot"] = 0.5 * np.log(me["rv63"] ** 2 + me[f"earn{h}"] * me["jv"] ** 2 / h)
     df["mz"] = me["mz"].clip(-4, 4)
     df["y"] = lg(me[f"y{h}"])
     # date the target window ends (for leakage-free training sets)
@@ -50,6 +53,8 @@ def panel(h: int) -> pd.DataFrame:
 
 MODELS = {
     "HAR": ["rv21", "rv63", "rv252"],
+    # control: HAR plus the earnings calendar and typical jump size, no split
+    "HAR_EARN": ["rv21", "rv63", "rv252", "earn", "struct_tot"],
     "SPLIT": ["dv21", "dv63", "dv252", "struct", "earn"],
     "FUND": ["dv21", "dv63", "dv252", "struct", "earn", "sf_rev", "sf_oi", "sm_rev", "mz"],
 }
