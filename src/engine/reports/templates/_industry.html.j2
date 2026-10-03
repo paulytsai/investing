@@ -25,7 +25,7 @@
       {% if ia.pools %}<div style="overflow-x:auto"><table class="small"><thead><tr><th>Segment</th><th class="num">Margin</th><th class="num">Growth</th><th>Imperative</th></tr></thead><tbody>
       {% for r in ia.pools.rows %}<tr><td>{{ r.segment }}</td><td class="num">{{ '%.0f%%'|format(r.margin*100) }}</td><td class="num">{{ '%+.0f%%'|format(r.growth*100) if r.growth is not none else '–' }}</td><td>{{ r.imperative }}</td></tr>{% endfor %}</tbody></table></div>{% endif %}
       {% if ia.line_chart_json %}<div id="{{ ia.line_chart_id }}" class="chart" style="height:320px;margin-top:8px"></div><script type="application/json" id="spec-{{ ia.line_chart_id }}">{{ ia.line_chart_json|safe }}</script>{% endif %}
-      {% if ia.gap and ia.gap.items %}<div style="overflow-x:auto;margin-top:6px"><table class="small"><thead><tr><th>Gap to {{ ia.gap.best }} by spine stage</th><th class="num">Points</th><th class="num">Share of gap</th><th>Kind</th></tr></thead><tbody>
+      {% if ia.gap and ia.gap.get('items') %}<div style="overflow-x:auto;margin-top:6px"><table class="small"><thead><tr><th>Gap to {{ ia.gap.best }} by spine stage</th><th class="num">Points</th><th class="num">Share of gap</th><th>Kind</th></tr></thead><tbody>
       {% for it in ia.gap['items'] %}<tr><td>{{ it.stage }}</td><td class="num">{{ '%+.1f'|format(it.gap_pp) }}</td><td class="num">{{ '%.0f%%'|format((ia.gap.derivative_spine.get(it.stage) or 0)*100) }}</td><td>{{ it.kind }}</td></tr>{% endfor %}</tbody></table></div>{% endif %}
     </div>
   </div>

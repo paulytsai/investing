@@ -28,6 +28,39 @@ def _sym(c):
     return c.symbol if not isinstance(c, dict) else c.get("symbol")
 
 
+def _attr(c, k):
+    return getattr(c, k, None) if not isinstance(c, dict) else c.get(k)
+
+
+def peer_filter(members: list) -> list:
+    """Comparable members only: one reporting currency (the group's modal one) and no ADR whose statements the engine voided for a
+    currency mismatch — a revenue in dong or yen beside dollars would make the share line meaningless."""
+    ok = [c for c in members if not _m(c, "currency_mismatch") and (_m(c, "revenue_ttm") or 0) > 0]
+    if not ok:
+        return []
+    curs = {}
+    for c in ok:
+        cur = _attr(c, "currency") or "USD"
+        curs[cur] = curs.get(cur, 0) + 1
+    modal = max(curs, key=curs.get)
+    return [c for c in ok if (_attr(c, "currency") or "USD") == modal]
+
+
+def peer_group(c, all_cands: list, sector_members: list, min_peers: int = MIN_PEERS) -> tuple[list, str]:
+    """The battlefield's peers (§2): the same GICS industry first — the companies it actually meets — falling back to the theme
+    sector when the industry is too thin. Returns (members, label)."""
+    ind = _attr(c, "industry") or ""
+    same = [p for p in all_cands if ind and _attr(p, "industry") == ind]
+    if len(peer_filter(same)) >= min_peers:
+        return same, f"the {ind} industry"
+    family = ind.split(" - ")[0].strip() if " - " in ind else None      # "Apparel - Footwear & Accessories" → the apparel family
+    if family:
+        fam = [p for p in all_cands if (_attr(p, "industry") or "").split(" - ")[0].strip() == family]
+        if len(peer_filter(fam)) >= min_peers:
+            return fam, f"the {family.lower()} industries"
+    return sector_members, "its theme sector"
+
+
 # ---------------------------------------------------------------- sector-level: the share line (§6.3) and environments (§6.4)
 def sector_share_line(members: list, cfg: dict | None = None) -> dict | None:
     """Across a theme sector's scored members: relative share = TTM revenue ÷ the largest member's revenue; ROS = operating margin.
@@ -35,7 +68,7 @@ def sector_share_line(members: list, cfg: dict | None = None) -> dict | None:
     revenue growth. Returns None with fewer than MIN_PEERS usable members."""
     cfg = cfg or fw.DEFAULTS
     rows = []
-    for c in members:
+    for c in peer_filter(members):
         rev, om, g = _m(c, "revenue_ttm"), _m(c, "operating_margin"), _m(c, "rev_growth_ttm")
         if rev and rev > 0 and om is not None and -1 < om < 1:
             rows.append({"symbol": _sym(c), "revenue": float(rev), "ros": float(om), "growth": g})
@@ -58,7 +91,7 @@ def sector_share_line(members: list, cfg: dict | None = None) -> dict | None:
     env_mix = {}
     for r in rows:
         env_mix[r["environment"]] = env_mix.get(r["environment"], 0) + 1
-    return {"n": len(rows), "a_ros_at_parity": line["a_ros_at_parity"], "ros_gain_per_doubling": line["ros_gain_per_doubling"], "sector_growth": med_growth,
+    return {"n": len(rows), "a_ros_at_parity": line["a_ros_at_parity"], "b_per_log_ratio": line["b_per_log_ratio"], "ros_gain_per_doubling": line["ros_gain_per_doubling"], "sector_growth": med_growth,
             "rows": sorted(rows, key=lambda r: -r["revenue"]), "environment_mix": env_mix, "leader": srt[0]["symbol"],
             "over_earners": [r["symbol"] for r in sorted(rows, key=lambda r: -r["residual"])[:max(3, len(rows) // 5)] if r["residual"] > 0],
             "under_earners": [r["symbol"] for r in sorted(rows, key=lambda r: r["residual"])[:max(3, len(rows) // 5)] if r["residual"] < 0]}
@@ -67,8 +100,10 @@ def sector_share_line(members: list, cfg: dict | None = None) -> dict | None:
 def share_line_sentences(sl: dict, symbol: str | None = None) -> list[str]:
     if not sl:
         return []
-    out = [f"Across the {sl['n']} names the engine scored in this sector, operating margin rises {sl['ros_gain_per_doubling']*100:.1f} points for every doubling of relative "
-           f"share (the share line; {sl['a_ros_at_parity']*100:.0f}% at parity with the main competitor). {sl['leader']} is the leader."]
+    group = sl.get("group_label", "this group")
+    gain = sl["ros_gain_per_doubling"] * 100
+    out = [f"Across the {sl['n']} names the engine scored in {group}, operating margin {'rises' if gain >= 0 else 'falls'} {abs(gain):.1f} points for every doubling of relative "
+           f"share (the share line; {sl['a_ros_at_parity']*100:.0f}% at parity with the main competitor). {sl['leader']} is the largest."]
     out.append("Earning more than their share predicts: " + ", ".join(sl["over_earners"][:4]) + "; less: " + ", ".join(sl["under_earners"][:4]) + ".")
     if symbol:
         r = next((x for x in sl["rows"] if x["symbol"] == symbol), None)
@@ -118,10 +153,12 @@ def peer_gap(c, members: list, structural_ratio: float = 2.0) -> dict | None:
     me = {"gross_margin": _m(c, "gross_margin"), "operating_margin": _m(c, "operating_margin"), "rd_pct": _m(c, "rd_pct") or 0.0}
     if me["gross_margin"] is None or me["operating_margin"] is None:
         return None
-    peers = [p for p in members if _sym(p) != _sym(c) and (_m(p, "revenue_ttm") or 0) >= rev / 4 and _m(p, "operating_margin") is not None and _m(p, "gross_margin") is not None
-             and -1 < _m(p, "operating_margin") < 1 and _m(p, "operating_margin") > me["operating_margin"]]
+    def cands(min_ratio):
+        return [p for p in peer_filter(members) if _sym(p) != _sym(c) and (_m(p, "revenue_ttm") or 0) >= rev * min_ratio and _m(p, "operating_margin") is not None
+                and _m(p, "gross_margin") is not None and -1 < _m(p, "operating_margin") < 1 and _m(p, "operating_margin") > me["operating_margin"]]
+    peers = cands(0.25) or cands(0.10)      # comparable size: a quarter of the company's revenue, else a tenth
     if not peers:
-        return {"note": "no larger-margin peer of comparable size in the sector", "best": None}
+        return {"note": "no larger-margin peer of comparable size in the group", "best": None}
     best = max(peers, key=lambda p: _m(p, "operating_margin"))
     pd_ = {"gross_margin": _m(best, "gross_margin"), "operating_margin": _m(best, "operating_margin"), "rd_pct": _m(best, "rd_pct") or 0.0}
     br = fw.spine_gap_bridge(me, pd_, scale_ratio=(_m(best, "revenue_ttm") or 0) / rev, structural_ratio=structural_ratio)
@@ -187,9 +224,10 @@ def industry_read(c, docs: list[str], phases=None) -> dict:
             "gaps in PeerGap, ShareLine and Diagnosis as structural (outside management control: scale, location, technology, factor costs) or operational "
             "(closable), with reasons. insights: 3 to 6, each in the template — observation (one sentence with the number and period), evidence, driver, "
             "type, event_link (the business event behind it, or 'unexplained'), implication (a resource realignment: scope, efficiency, offence or defence, "
-            "target), confidence with reason, caveats (disclosure limits). Plain English, no rule ids, no parenthetical citations in prose; every number "
-            "from the documents, listed in numbers_used with period and source. Diagnostic only: no trade instruction.")})
-        r = parse_structured(SYSTEM, msgs, IndustryRead, cache_key=f"industry:{c.symbol}:{c.as_of}", max_tokens=9000)
+            "target), confidence with reason, caveats (disclosure limits). Plain English, no rule ids, no parenthetical citations in prose; at most 4 "
+            "battlefields and 4 insights, each field at most 60 words; every number from the documents, listed in numbers_used (at most 15 claims) with period "
+            "and source. Diagnostic only: no trade instruction.")})
+        r = parse_structured(SYSTEM, msgs, IndustryRead, cache_key=f"industry:{c.symbol}:{c.as_of}", max_tokens=12000)
         from .pitch import _check_prose
 
         from types import SimpleNamespace
@@ -208,12 +246,17 @@ def industry_read(c, docs: list[str], phases=None) -> dict:
 
 
 def build_industry_analysis(c, members: list, *, rev: pd.DataFrame | None = None, ebit: pd.DataFrame | None = None, share_line: dict | None = None,
-                            use_llm: bool = True, phases=None, cfg: dict | None = None, structural_ratio: float = 2.0) -> dict:
-    """The whole read for one name. `members` = the scored candidates of its theme sector (dicts or objects); `rev`/`ebit` = the
-    segment frames from the product lens when available; `share_line` = the sector's line if already computed."""
+                            use_llm: bool = True, phases=None, cfg: dict | None = None, structural_ratio: float = 2.0, group_label: str = "its theme sector",
+                            gap_members: list | None = None) -> dict:
+    """The whole read for one name. `members` = its peer group (the same industry when thick enough, else the theme sector; dicts or
+    objects); `rev`/`ebit` = the segment frames from the product lens when available; `share_line` = the group's line if already computed."""
     sl = share_line if share_line is not None else sector_share_line(members, cfg)
+    if sl is not None:
+        sl["group_label"] = group_label
     pools = segment_profit_pools(rev, ebit)
-    gap = peer_gap(c, members, structural_ratio)
+    gap = peer_gap(c, gap_members or members, structural_ratio)     # the gap against the companies it actually meets, when there are any
+    if gap_members and (not gap or gap.get("best") is None):
+        gap = peer_gap(c, members, structural_ratio)
     diag = diagnosis(c, sl, members)
     sentences = []
     if pools:

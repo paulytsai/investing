@@ -27,6 +27,10 @@ def test_sector_share_line_and_environments():
     s = share_line_sentences(sl, "P2")
     assert "P2 runs at 0.25×" in s[-1] and "sub-scale" in s[-1]
     assert sector_share_line(_members()[:3]) is None
+    from engine.reports.charts import build_share_line_chart, to_json
+
+    spec = build_share_line_chart("t", "Test", sl, highlight="P2")
+    assert not spec["empty"] and len(spec["traces"]) == 2 and to_json(spec)
 
 
 def test_segment_profit_pools_and_imperatives():
