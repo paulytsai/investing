@@ -277,6 +277,7 @@ def compute_metrics(inp: Inputs, as_of: pd.Timestamp, hyp_thresholds: dict) -> d
 
     # --- misc for gates / tags -----------------------------------------------------------------------
     out["pbr"] = fw.safe_div(mcap, equity) if equity and equity > 0 and mcap else None
+    out["asset_turns"] = fw.safe_div(rev, _v(m, "total_assets")) if (_v(m, "total_assets") or 0) > 0 else None   # §5.5 asset utilisation
     out["ps_ttm"] = fw.safe_div(mcap, rev) if rev and rev > 0 and mcap else None
     out["loss_making"] = bool((ni is not None and ni < 0) and (ocf is not None and ocf < 0))
     out["debt_funded_negative_fcf"] = bool(fcf is not None and fcf < 0 and (_v(m, "debt_issued_net") or 0) > 0)

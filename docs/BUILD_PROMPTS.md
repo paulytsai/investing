@@ -155,3 +155,14 @@ tools, `config/hypotheses.yaml` `valuation.*` (D-24 / D-25), docs and tests. Det
 Build: `research/segments.py` (10-K XBRL segment history, member discovery), `frameworks/product_lens.py` (bridge, channel mix, sales quality,
 baseline vs required, pure and tested), `research/product_lens.py` (orchestration, price language from the calls, `ValueChainRead`, the regions
 chart), two lexical categories, the `_product_lens.html.j2` block inside the stock story, the pitch instruction, docs and tests.
+
+## Prompt — the Industry and Company Analysis framework (2026-10-03)
+
+> Add this business analysis framework (industry-company-analysis-framework.html: Mars & Co strategic segmentation, the strategic spine,
+> slopes, competitor economics and gap bridges, cost histograms, the share line and market environments, demand levers and price zones,
+> new markets; §10 applying it to public companies; §11 reference implementation and test cases).
+
+Build: `docs/frameworks/INDUSTRY_COMPANY_ANALYSIS.md` (private reference, cited by section), `frameworks/industry.py` (the reference code as
+pure functions, its 13 test cases verbatim, plus brand-map imperatives, spine gap bridge, performance-gap diagnosis), `research/industry.py`
+(sector share line, segment profit pools, peer gap, diagnosis, `IndustryRead` by Claude), the story's log-trend growth sentence, the brand-map
+and share-line charts, the `_industry.html.j2` block and the sector share line, `industry:` hypotheses, docs and tests.

@@ -226,7 +226,7 @@ def build_product_lens(c, fy: pd.DataFrame | None, implied_growth: dict | None, 
     chain = value_chain_read(c, docs, phases) if use_llm else {"source": "engine", "note": "narrative layer off"}
     chart = build_segment_chart(f"seg-{c.symbol.replace('.', '_')}", c.symbol, rev, ebit, cur)
     return {"applies": True, "bridge": bridge, "mix": mix, "quality": quality, "language": lang, "reach": reach, "score": score, "sentences": sentences,
-            "value_chain": chain, "chart": chart, "docs": docs, "labels": labels,
+            "value_chain": chain, "chart": chart, "docs": docs, "labels": labels, "frames": {"rev": rev, "ebit": ebit},
             "history": {"revenue": {str(k): {kk: (None if pd.isna(vv) else float(vv)) for kk, vv in v.items()} for k, v in rev.iterrows()} if not rev.empty else {},
                         "ebit": {str(k): {kk: (None if pd.isna(vv) else float(vv)) for kk, vv in v.items()} for k, v in ebit.iterrows()} if not ebit.empty else {}}}
 

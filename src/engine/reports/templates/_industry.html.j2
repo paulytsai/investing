@@ -1,0 +1,34 @@
+{# industry and company analysis for one stock: ia = dict (share_line, pools, gap, diagnosis, sentences, read, company_row, map_chart_id/json, line_chart_id/json) #}
+{% if ia %}
+<div class="lens industry">
+  <h3 style="margin:10px 0 4px">Industry and company analysis <span class="muted small" style="font-weight:400">— battlefields, profit pools, the share line, the gap to the best peer (Mars & Co framework)</span></h3>
+  <div class="lens-body">
+    <div class="lens-text">
+      {% set rd = ia.read or {} %}
+      {% if rd.source == 'claude' %}
+      <p><b>Battlefields.</b> {% for b in rd.battlefields %}<b>{{ b.name }}</b> — meets {{ b.competitors_met|join(', ') if b.competitors_met else 'no named competitor' }}; customers buy on {{ b.key_purchase_criteria }}; {{ b.position }} Route: {{ b.route_to_customer }}{% if not loop.last %} · {% endif %}{% endfor %}</p>
+      <p><b>Profit sanctuaries.</b> {{ rd.profit_sanctuaries }}</p>
+      {% endif %}
+      {% for s in ia.sentences %}<p>{{ s }}</p>{% endfor %}
+      {% if rd.source == 'claude' %}
+      <p><b>Structural or operational.</b> {{ rd.structural_vs_operational }}</p>
+      <p style="margin-bottom:2px"><b>Insights.</b></p>
+      {% for i in rd.insights %}<div class="insight"><div><b>{{ i.observation }}</b> <span class="badge {{ 'gate' if i.type == 'structural' else '' }}">{{ i.type }}</span></div>
+        <div class="small"><b>Evidence:</b> {{ i.evidence }} <b>Driver:</b> {{ i.driver }} <b>Event:</b> {{ i.event_link }}</div>
+        <div class="small"><b>Implication:</b> {{ i.implication }} <span class="muted">Confidence {{ i.confidence }}. {{ i.caveats }}</span></div></div>{% endfor %}
+      <div class="small muted">Read written by Claude from the filings, the call and the engine's numbers{% if rd.unverified_count %} · {{ rd.unverified_count }} figure{{ 's' if rd.unverified_count != 1 }} could not be traced{% else %} · every figure traced{% endif %}. Diagnostic only.</div>
+      {% else %}<div class="small muted">Battlefield read not generated{% if rd.note %}: {{ rd.note }}{% endif %}.</div>{% endif %}
+    </div>
+    <div class="lens-charts">
+      {% if ia.map_chart_json %}<div id="{{ ia.map_chart_id }}" class="chart" style="height:320px"></div><script type="application/json" id="spec-{{ ia.map_chart_id }}">{{ ia.map_chart_json|safe }}</script>
+      <div class="small muted" style="margin:-4px 0 8px">The brand map: margin across, growth up, bubble = revenue, dotted lines at the portfolio averages.</div>{% endif %}
+      {% if ia.pools %}<div style="overflow-x:auto"><table class="small"><thead><tr><th>Segment</th><th class="num">Margin</th><th class="num">Growth</th><th>Imperative</th></tr></thead><tbody>
+      {% for r in ia.pools.rows %}<tr><td>{{ r.segment }}</td><td class="num">{{ '%.0f%%'|format(r.margin*100) }}</td><td class="num">{{ '%+.0f%%'|format(r.growth*100) if r.growth is not none else '–' }}</td><td>{{ r.imperative }}</td></tr>{% endfor %}</tbody></table></div>{% endif %}
+      {% if ia.line_chart_json %}<div id="{{ ia.line_chart_id }}" class="chart" style="height:320px;margin-top:8px"></div><script type="application/json" id="spec-{{ ia.line_chart_id }}">{{ ia.line_chart_json|safe }}</script>{% endif %}
+      {% if ia.gap and ia.gap.items %}<div style="overflow-x:auto;margin-top:6px"><table class="small"><thead><tr><th>Gap to {{ ia.gap.best }} by spine stage</th><th class="num">Points</th><th class="num">Share of gap</th><th>Kind</th></tr></thead><tbody>
+      {% for it in ia.gap['items'] %}<tr><td>{{ it.stage }}</td><td class="num">{{ '%+.1f'|format(it.gap_pp) }}</td><td class="num">{{ '%.0f%%'|format((ia.gap.derivative_spine.get(it.stage) or 0)*100) }}</td><td>{{ it.kind }}</td></tr>{% endfor %}</tbody></table></div>{% endif %}
+    </div>
+  </div>
+</div>
+<style>.insight { margin:6px 0 8px; padding:6px 10px; border-left:3px solid var(--s3); background:var(--page); }</style>
+{% endif %}

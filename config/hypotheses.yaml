@@ -58,6 +58,15 @@ valuation:   # what the price assumes (F-16 / F-91 / R-24): earnings growth solv
   cycle_trough_pctile: {value: 20, decision_id: D-25, note: "own-history P/E percentile at or below which the valuation cycle reads 'trough'"}
   cycle_peak_pctile: {value: 80, decision_id: D-25, note: "own-history P/E percentile at or above which the valuation cycle reads 'peak'"}
 
+industry:   # Industry and Company Analysis framework (docs/frameworks/INDUSTRY_COMPANY_ANALYSIS.md §0.5); SRC values are stated, the rest are hypotheses
+  subscale_share_index: {value: 0.4, decision_id: none, note: "stated (Mars & Co p.154): below about 1:2.5 of the main competitor is sub-scale"}
+  dominant_share_index: {value: 1.5, decision_id: D-25, note: "INTERP of the p.154 axis: above about 1.5:1 is dominant"}
+  high_growth: {value: 0.12, decision_id: none, note: "stated (Mars & Co p.154): market growth above 12% a year"}
+  inelastic_max: {value: 0.3, decision_id: D-25, note: "ADAPT: |arc elasticity| below this is a volume-inelastic price zone"}
+  plateau_low: {value: 0.7, decision_id: D-25, note: "ADAPT: revenue-plateau band, lower bound of |arc elasticity|"}
+  plateau_high: {value: 1.3, decision_id: D-25, note: "ADAPT: revenue-plateau band, upper bound"}
+  scale_structural_ratio: {value: 2.0, decision_id: D-25, note: "ADAPT: a margin gap to a peer at least this many times larger is tagged structural (scale related), else closable"}
+
 dcf:
   erp_pct: {value: 5.0, decision_id: D-25, note: "equity risk premium over 10Y UST"}
   beta_floor: {value: 0.8, decision_id: D-25}

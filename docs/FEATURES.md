@@ -153,6 +153,31 @@ show up as channel inventory and receivables, account-level profit). The engine 
   pushed, and whether the price asks more than the regions deliver. Applies when `sells_product()` is true (consumer, industrial, hardware,
   materials, energy, healthcare products; never banks, REITs, software, media, services).
 
+## Industry and company analysis — the Mars & Co framework (2026-10-03)
+
+Paul supplied a paraphrased working framework derived from Mars & Co's strategic cost analysis decks (kept private at
+`docs/frameworks/INDUSTRY_COMPANY_ANALYSIS.md`, cited by section; never copied into reports or artifacts). It is the cost-and-structure
+half of the consulting method: strategic segmentation into battlefields, the strategic spine, cost drivers and slopes, competitor
+economics and gap bridges, industry pricing and the share line, demand levers, new markets. The engine carries it two ways.
+
+- **The math, verbatim** (`frameworks/industry.py`): the framework's reference implementation ported as pure functions — log-trend growth
+  and the split at an inflection, cost curves and slope fitting, competitor cost positions and the derivative spine, whale curves, gap
+  bridges, cost-histogram price bands, the share/profit line, market environments, price-response zones, demand-lever regression, volume
+  gaps — with its thirteen test cases passing exactly (`tests/unit/test_industry.py`). Added: the brand-map imperatives, a spine gap bridge
+  from an income statement by nature, the §5.5 performance-gap diagnosis. Defaults in `config/hypotheses.yaml → industry` (the stated ones
+  marked as such; the interpreted ones under D-25).
+- **Applied to every stock in the book and to Paul's names** (`research/industry.py`, live layer): the segment profit pools and brand map
+  (margin × growth, bubble = revenue, imperatives: drive / maintain / stop the decline / radical solution) from the 10-K segment note; the
+  sector share line (operating margin against relative share across every scored member, who earns more or less than share predicts, the
+  market environment: sub-scale, critical mass, dominant, high-growth open); the operating-margin gap to the best-margin peer of comparable
+  size bridged by spine stage and tagged structural (scale related) or closable; the performance-gap diagnosis; and a Claude `IndustryRead` —
+  the battlefields (competitors met, key purchase criteria, position, route to customer), profit sanctuaries, the structural/operational
+  classification, and three to six insights in the framework's template (observation, evidence, driver, type, event link, implication,
+  confidence, caveats), figures traced. The story's growth sentences now follow the framework's trend rule (least squares on the logs; two
+  rates when the series bends). On the page: an "Industry and company analysis" block in every stock story and the share line in every
+  sector section. Modules that need data public filings do not give (cost histograms, slopes, price-response zones, demand levers, share
+  gaps by region × industry) are available as functions for Paul's own inputs.
+
 ## Backtest evidence so far (US, 2016-03-31 → 2024-09-30, top 20, cap-floor universe with delisted and acquired names)
 - **Cycle-rule exits + Kelly weights, five AI layers, per-sector angle weights, share-count and ADR fixes** (run 4, 2026-09-30): 22 cohorts closed
   under the cycle rule (formations to 2021; later cohorts still hold open positions marked at the last close), mean hold 3.6 years, mean cohort

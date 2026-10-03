@@ -333,7 +333,7 @@ def _render(all_cands, chosen, as_of, out, hyp, preset, regions, top, narrate, n
     sections, others = build_sections(all_cands, chosen, sector_calls or {}, sizing, as_of, out, view_fn=_view, story_fn=lambda c: page_data(c)["story"],
                                       phases_fn=lambda c: page_data(c)["phases"], use_llm=pitch, region=region, extra_symbols=extra_symbols,
                                       spark_fn=lambda c: _spark(c, px_by.get(c.security_id, prices.iloc[0:0]), as_of, _view(c)["chart_id"]),
-                                      fy_fn=lambda c: page_data(c)["snap"].fy_history)
+                                      fy_fn=lambda c: page_data(c)["snap"].fy_history, hyp=hyp)
     section_of = {x["c"]["symbol"]: (sec, x) for sec in sections for x in sec["stocks"]}
     tpl = render.env().get_template("board.html.j2")
     html = tpl.render(title=f"Ideas {as_of.date()}", as_of=as_of.date(), ideas=board_rows[: max(top, len(board_rows))], excluded=excluded, n_scored=len(all_cands),

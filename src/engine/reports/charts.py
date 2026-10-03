@@ -291,3 +291,44 @@ def build_valuation_chart(chart_id: str, symbol: str, history: list[list], cycle
     return {"id": chart_id, "empty": False, "title": f"{symbol} — {label}, own history", "subtitle": sub,
             "panels": [{"id": "main", "height": 1.0, "title": label, "log": False}], "traces": traces, "shapes": shapes, "annotations": annotations,
             "compact": False, "height": height, "x_range": [xs[0], xs[-1]], "meta": {"basis": basis, "sources": ["fmp", "engine"]}}
+
+
+def build_bubble_chart(chart_id: str, title: str, points: list[dict], *, x_key: str = "x", y_key: str = "y", size_key: str = "size", label_key: str = "label",
+                       x_title: str = "", y_title: str = "", x_ref: float | None = None, y_ref: float | None = None, highlight: str | None = None,
+                       height: int = 320, subtitle: str = "", color_key: str | None = None) -> dict:
+    """A product/brand map or a share line: one panel, bubbles sized by `size_key`, reference lines at the portfolio averages,
+    the highlighted name in the accent colour, direct labels on every point (identity never by colour alone)."""
+    pts = [p for p in points if p.get(x_key) is not None and p.get(y_key) is not None]
+    if not pts:
+        return {"id": chart_id, "empty": True, "title": title, "subtitle": subtitle, "panels": [], "traces": [], "shapes": [], "annotations": [], "compact": False, "height": height, "x_range": None, "meta": {}}
+    sizes = [abs(float(p.get(size_key) or 0)) for p in pts]
+    smax = max(sizes) or 1.0
+    scaled = [8 + 32 * (s / smax) ** 0.5 for s in sizes]
+    colors = ["var(--s2)" if highlight and p.get(label_key) == highlight else "var(--s1)" for p in pts]
+    traces = [{"panel": "main", "overlay": "points", "type": "scatter", "mode": "markers+text", "name": title, "x": [p[x_key] for p in pts], "y": [p[y_key] for p in pts],
+               "text": [str(p.get(label_key, "")) for p in pts], "textposition": "top center", "textfont": {"size": 10, "color": "var(--ink2)"},
+               "marker": {"size": scaled, "color": colors, "opacity": 0.75, "line": {"width": 1, "color": "var(--surface)"}},
+               "hovertemplate": "%{text}<br>" + (x_title or "x") + " %{x:.1f}<br>" + (y_title or "y") + " %{y:.1f}<extra></extra>", "showlegend": False}]
+    shapes = []
+    if x_ref is not None:
+        shapes.append({"type": "line", "xref": "x", "yref": "paper", "x0": x_ref, "x1": x_ref, "y0": 0, "y1": 1, "panel": "main", "absolute_y": True, "line": {"width": 1, "color": "var(--ink2)", "dash": "dot"}})
+    if y_ref is not None:
+        shapes.append({"type": "line", "xref": "paper", "yref": "y", "x0": 0, "x1": 1, "y0": y_ref, "y1": y_ref, "panel": "main", "absolute_y": True, "line": {"width": 1, "color": "var(--ink2)", "dash": "dot"}})
+    return {"id": chart_id, "empty": False, "title": title, "subtitle": subtitle, "panels": [{"id": "main", "height": 1.0, "title": y_title, "log": False}],
+            "traces": traces, "shapes": shapes, "annotations": [], "compact": False, "height": height, "x_range": None, "x_title": x_title, "meta": {"sources": ["engine"]}}
+
+
+def build_share_line_chart(chart_id: str, label: str, sl: dict, highlight: str | None = None, height: int = 320) -> dict:
+    """The share/profit line (§6.3): x = ln(relative share) shown as the share index, y = operating margin %, the fitted line, members as bubbles by revenue."""
+    import math
+
+    rows = sl.get("rows") or []
+    pts = [{"x": math.log(r["share_index"]), "y": r["ros"] * 100, "size": r["revenue"], "label": r["symbol"]} for r in rows if r.get("share_index", 0) > 0]
+    spec = build_bubble_chart(chart_id, f"{label}: margin against relative share", pts, x_title="ln(relative share)", y_title="operating margin %", highlight=highlight, height=height,
+                              subtitle=f"operating margin rises {sl['ros_gain_per_doubling']*100:.1f} points per doubling of share; {sl['n']} names, bubble = revenue")
+    if not spec["empty"] and pts:
+        xs = sorted(p["x"] for p in pts)
+        a, b = sl["a_ros_at_parity"], sl["b_per_log_ratio"]
+        spec["traces"].append({"panel": "main", "overlay": "fit", "type": "scatter", "mode": "lines", "name": "share line", "x": [xs[0], xs[-1]], "y": [(a + b * xs[0]) * 100, (a + b * xs[-1]) * 100],
+                               "line": {"width": 2, "color": "var(--ink2)", "dash": "dash"}, "hoverinfo": "skip", "showlegend": False})
+    return spec

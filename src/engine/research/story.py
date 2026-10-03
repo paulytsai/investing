@@ -59,6 +59,28 @@ def earnings_table(fy: pd.DataFrame | None, currency: str = "USD", years: int = 
     return rows
 
 
+def trend_sentence(fy: pd.DataFrame | None, field_: str = "revenue", years: int = 8) -> str | None:
+    """Growth by the framework's rule (INDUSTRY_COMPANY_ANALYSIS §0.4): a least-squares fit on the log of the values, and two
+    rates when the series has an inflection (the split lowers the fitting error by at least a fifth)."""
+    from ..frameworks.industry import log_trend_cagr, split_trend
+
+    if fy is None or fy.empty or field_ not in fy.columns:
+        return None
+    s = fy[field_].dropna().astype(float).tail(years)
+    if len(s) < 4 or (s <= 0).any():
+        return None
+    vals = s.tolist()
+    years_ = [pd.Timestamp(i).year for i in s.index]
+    whole = log_trend_cagr(vals)
+    sp = split_trend(vals) if len(vals) >= 7 else {}
+    noun = "Revenue" if field_ == "revenue" else field_.replace("_", " ").capitalize()
+    if sp and sp.get("cagr_before") is not None and sp.get("cagr_after") is not None and abs(sp["cagr_before"] - sp["cagr_after"]) >= 0.04:
+        b = sp["break_index"]
+        return (f"{noun} grew {_pct(sp['cagr_before'])} a year from FY{years_[0]} to FY{years_[b]}, then {_pct(sp['cagr_after'])} a year to FY{years_[-1]} "
+                f"(trend fitted on the logs, two periods because the series bends)")
+    return f"{noun} has grown {_pct(whole)} a year over FY{years_[0]}–FY{years_[-1]} on a fitted trend" if whole is not None else None
+
+
 def build_story(c, fy: pd.DataFrame | None = None, sector_call=None) -> dict:
     """Sections of prose plus the earnings table and the Danoff read. `c` is an IdeaCandidate or its dict."""
     d = c if isinstance(c, dict) else c.model_dump()
@@ -76,7 +98,10 @@ def build_story(c, fy: pd.DataFrame | None = None, sector_call=None) -> dict:
     # how the earnings have grown
     rows = earnings_table(fy, cur)
     grow = []
-    if m.get("rev_cagr_3y") is not None:
+    trend = trend_sentence(fy, "revenue") if fy is not None else None
+    if trend:
+        grow.append(trend)
+    elif m.get("rev_cagr_3y") is not None:
         grow.append(f"Revenue has compounded at {_pct(m['rev_cagr_3y'])} a year over three years")
     if m.get("rev_growth_ttm") is not None:
         grow.append(f"{'and ' if grow else ''}grew {_pct(m['rev_growth_ttm'])} over the last 12 months")
