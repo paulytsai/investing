@@ -66,6 +66,13 @@ def fetch_symbol(sym: str) -> None:
     _cached_json(f"prof_{sym}", lambda: fmp.get("profile", symbol=sym))
 
 
+def fetch_consensus(sym: str) -> None:
+    """Extra data for the consensus / implied-trajectory work."""
+    _cached_json(f"pxs_{sym}", lambda: _daily_chunks("historical-price-eod/full", sym))
+    _cached_json(f"est_{sym}", lambda: fmp.get("analyst-estimates", symbol=sym, period="annual", limit=40))
+    _cached_json(f"cf_{sym}", lambda: fmp.get("cash-flow-statement", symbol=sym, period="annual", limit=10))
+
+
 def fetch_all(symbols: list[str] = SP100, workers: int = 8) -> None:
     with ThreadPoolExecutor(workers) as ex:
         for sym, err in zip(symbols, ex.map(_safe_fetch, symbols)):
@@ -76,25 +83,55 @@ def fetch_all(symbols: list[str] = SP100, workers: int = 8) -> None:
 def _safe_fetch(sym: str) -> str | None:
     try:
         fetch_symbol(sym)
+        fetch_consensus(sym)
     except Exception as e:  # noqa: BLE001 - report and continue
         return str(e)[:200]
     return None
 
 
 def prices(sym: str) -> pd.Series:
-    df = pd.DataFrame(_cached_json(f"px_{sym}", lambda: []))
+    df = pd.DataFrame(_cached_json(f"px_{sym}", lambda: _daily_chunks("historical-price-eod/dividend-adjusted", sym)))
     s = df.set_index(pd.to_datetime(df["date"]))["adjClose"].sort_index()
     return s[~s.index.duplicated()].astype(float)
 
 
+def split_adj_close(sym: str) -> pd.Series:
+    """Split-adjusted (not dividend-adjusted) close: the right price for P/E levels."""
+    df = pd.DataFrame(_cached_json(f"pxs_{sym}", lambda: _daily_chunks("historical-price-eod/full", sym)))
+    s = df.set_index(pd.to_datetime(df["date"]))["close"].sort_index()
+    return s[~s.index.duplicated()].astype(float)
+
+
+def street_eps(sym: str) -> pd.DataFrame:
+    """Per-report street (adjusted) EPS and the consensus just before the report."""
+    rows = _cached_json(f"earn_{sym}", lambda: fmp.get("earnings", symbol=sym, limit=300))
+    df = pd.DataFrame(rows)
+    df["date"] = pd.to_datetime(df["date"])
+    df = df.dropna(subset=["epsActual"]).sort_values("date").drop_duplicates("date")
+    return df[["date", "epsActual", "epsEstimated"]].reset_index(drop=True)
+
+
+def estimates(sym: str) -> pd.DataFrame:
+    """Current consensus by fiscal year (FMP keeps one row per fiscal year)."""
+    df = pd.DataFrame(_cached_json(f"est_{sym}", lambda: fmp.get("analyst-estimates", symbol=sym, period="annual", limit=40)))
+    df["date"] = pd.to_datetime(df["date"])
+    return df.sort_values("date").reset_index(drop=True)
+
+
+def cash_flow(sym: str) -> pd.DataFrame:
+    df = pd.DataFrame(_cached_json(f"cf_{sym}", lambda: fmp.get("cash-flow-statement", symbol=sym, period="annual", limit=10)))
+    df["date"] = pd.to_datetime(df["date"])
+    return df.sort_values("date").reset_index(drop=True)
+
+
 def market_cap(sym: str) -> pd.Series:
-    df = pd.DataFrame(_cached_json(f"mcap_{sym}", lambda: []))
+    df = pd.DataFrame(_cached_json(f"mcap_{sym}", lambda: _daily_chunks("historical-market-capitalization", sym)))
     s = df.set_index(pd.to_datetime(df["date"]))["marketCap"].sort_index()
     return s[~s.index.duplicated()].astype(float)
 
 
 def income(sym: str) -> pd.DataFrame:
-    df = pd.DataFrame(_cached_json(f"inc_{sym}", lambda: []))
+    df = pd.DataFrame(_cached_json(f"inc_{sym}", lambda: fmp.get("income-statement", symbol=sym, period="quarter", limit=200)))
     df["date"] = pd.to_datetime(df["date"])
     df["filingDate"] = pd.to_datetime(df["filingDate"])
     return df.sort_values("date").drop_duplicates("date").reset_index(drop=True)
@@ -102,13 +139,13 @@ def income(sym: str) -> pd.DataFrame:
 
 def earnings_dates(sym: str) -> pd.DatetimeIndex:
     """Historical earnings-announcement dates (only those with a reported EPS)."""
-    rows = _cached_json(f"earn_{sym}", lambda: [])
+    rows = _cached_json(f"earn_{sym}", lambda: fmp.get("earnings", symbol=sym, limit=300))
     dates = [r["date"] for r in rows if r.get("epsActual") is not None]
     return pd.DatetimeIndex(sorted(set(pd.to_datetime(dates))))
 
 
 def sector(sym: str) -> str:
-    rows = _cached_json(f"prof_{sym}", lambda: [])
+    rows = _cached_json(f"prof_{sym}", lambda: fmp.get("profile", symbol=sym))
     return rows[0].get("sector") or "Unknown" if rows else "Unknown"
 
 
