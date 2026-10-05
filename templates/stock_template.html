@@ -196,7 +196,7 @@ footer.foot { color: var(--muted); font-size: 12px; line-height: 1.5; display: g
         <button type="button" data-y="30" aria-pressed="false">30y</button>
       </div>
       <button type="button" class="btn" id="xlsx" disabled hidden>Download Excel</button>
-      <button type="button" class="btn" id="pdf" disabled hidden>Download 2-page PDF</button>
+      <button type="button" class="btn" id="pdf" disabled hidden>Download PDF</button>
     </form>
   </header>
 
@@ -311,6 +311,43 @@ function buildActuals(raw) {
       if (!qA[k]) qE[k] = { ...Q_CTX, kind: "C", label: "Q" + q + " FY" + yy(fy), i: estToI(e), date: e.date };
     });
   }
+  // Regions from the latest 10-K (EDGAR XBRL): the filing's own labels and restated comparatives replace
+  // FMP's for those years; earlier FMP years with the same region set are relabeled by matching values
+  // (FMP can carry a stale label forward, e.g. NVIDIA's "Other Countries" shown as "Other Americas").
+  const eg = (raw.edgarGeo?.groups || []).find((g) => /sums_to_total/.test(g.check || "")) || (raw.edgarGeo?.groups || [])[0];
+  const geoNote = { years: [], renamed: {} };
+  if (eg && Array.isArray(eg.members)) {
+    const fyByDate = (d) => Object.values(fyA).find((c) => Math.abs(Date.parse(c.date) - Date.parse(d)) < 20 * 864e5);
+    const periods = [...new Set(eg.members.flatMap((mb) => Object.keys(mb.values || {})))];
+    const fmpOrig = {};
+    periods.forEach((d) => {
+      const c = fyByDate(d); if (!c) return;
+      const map = {};
+      eg.members.forEach((mb) => { const v = mb.values?.[d]; if (isNum(v) && !mb.overlaps) map[mb.name] = v; });
+      if (!Object.keys(map).length) return;
+      fmpOrig[c.fy] = c.geo; c.geo = map; c.geoSrc = "10-K"; geoNote.years.push(c.fy);
+    });
+    // relabel FMP names by value in the latest overlapping year
+    const ref = geoNote.years.slice().sort((a, b) => b - a).find((fy) => fmpOrig[fy]);
+    if (ref) {
+      const f0 = fmpOrig[ref], e0 = fyA[ref].geo, rename = {};
+      Object.entries(f0).forEach(([k, v]) => { if (!isNum(v)) return; const hit = Object.entries(e0).find(([, ev]) => Math.abs(ev - v) <= 0.01 * Math.abs(ev)); if (hit && hit[0] !== k) rename[k] = hit[0]; });
+      const keySet = (o) => Object.keys(o || {}).sort().join("|");
+      const refSet = keySet(f0);
+      // a single country means the same thing in every year; a catch-all bucket only where the region set matches
+      const catchAll = (nm) => /other|rest of|non[- ]?u\.?s|international|elsewhere/i.test(nm);
+      const relabel = (c) => {
+        if (!c.geo || c.geoSrc) return;
+        const same = keySet(c.geo) === refSet;
+        const g = {};
+        Object.entries(c.geo).forEach(([k, v]) => { const to = rename[k]; g[to && (same || (!catchAll(k) && !catchAll(to))) ? to : k] = v; });
+        c.geo = g; c.geoRelabeled = true;
+      };
+      if (Object.keys(rename).length) { Object.values(fyA).forEach(relabel); Object.values(qA).forEach(relabel); geoNote.renamed = rename; }
+    }
+    geoNote.years.sort((a, b) => a - b);
+  }
+
   // Overlay segment detail read from SEC earnings releases (keyed by quarter-end date)
   const sec = raw.secSeg || {};
   const secFor = (date) => { const t = Date.parse(date); const k = Object.keys(sec).find((d) => Math.abs(Date.parse(d) - t) < 8 * 864e5); return k ? sec[k] : null; };
@@ -378,7 +415,7 @@ function buildActuals(raw) {
     : fyA[+lastA.fiscalYear];
   const latestShares = n(lastQ?.weightedAverageShsOutDil) ?? n(lastA.weightedAverageShsOutDil);
 
-  return { fyA, hist: incA.map((r) => fyA[+r.fiscalYear]), drill, drillPrev, cons, consFy, curFY, ltm, lastA, lastQ, latestShares, nReportedQ: cq.filter((c) => c.kind === "A").length };
+  return { geoNote, fyA, hist: incA.map((r) => fyA[+r.fiscalYear]), drill, drillPrev, cons, consFy, curFY, ltm, lastA, lastQ, latestShares, nReportedQ: cq.filter((c) => c.kind === "A").length };
 }
 
 // ---------- regression: operating profit on revenue ----------
@@ -1225,6 +1262,14 @@ function runDcf(mdl, mkt, setIn, shift, basis) {
   }
   const dol = (e1, e0, r1, r0) => { const ge = growth(e1, e0), gr = growth(r1, r0); return isNum(ge) && isNum(gr) && Math.abs(gr) > 0.001 ? ge / gr : null; };
 
+  function geoRows(cols) {
+    const rows = segmentRows(cols, "geo"); if (!rows) return rows;
+    const gn = state.act.geoNote;
+    if (!gn || !gn.years.length) return rows;
+    const ren = Object.entries(gn.renamed || {});
+    const note = "FY" + gn.years[0] + "–FY" + gn.years[gn.years.length - 1] + " use the latest 10-K's regions and labels (with any restatements). " + (ren.length ? "Earlier FMP years are relabeled to match: " + ren.map(([a, b]) => "“" + a + "” → “" + b + "”").join(", ") + ". Single countries are relabeled in every year; catch-all buckets (“Other …”) only in years with the same set of regions, since before a change in the company's regions they covered something else." : "");
+    return [{ note }, ...rows];
+  }
   function segmentRows(cols, field, profit) {
     // current lines first (by latest value), then lines the company stopped reporting
     const latest = {}, lastIx = {};
@@ -1337,7 +1382,7 @@ function runDcf(mdl, mkt, setIn, shift, basis) {
     const secs = [
       ...driverSections(),
       { title: "Revenue by segment (reported)", rows: segmentRows(cols, "prod"), empty: state.segErr || "No product or segment breakdown reported for this company." },
-      { title: "Revenue by region (reported)", rows: segmentRows(cols, "geo"), empty: state.segErr || "No geographic breakdown reported for this company." },
+      { title: "Revenue by region (reported)", rows: geoRows(cols), empty: state.segErr || "No geographic breakdown reported for this company." },
       ...(cols.some((c) => c.segEbit) ? [{ title: "Segment operating profit (SEC earnings releases)", rows: segmentRows(cols, "segEbit", true) }] : []),
       ...SECTIONS(),
     ];
@@ -1917,6 +1962,7 @@ Rules:
       prof: call(mcp, "company", { endpoint: "profile-symbol", symbol: t }),
       tsy: call(mcp, "economics", { endpoint: "treasury-rates", from_date: from }),
       mrp: call(mcp, "economics", { endpoint: "market-risk-premium" }),
+      edgarGeo: call(mcp, "financial_statements", { company: t, statement: "breakdown:geography", period: "annual" }, false, EDGAR),
       inp: loadInputs(t),
       secSeg: loadSec(t),
     };
@@ -2036,7 +2082,7 @@ Rules:
     const tot = (c) => { const v = Object.values(c[field] || {}).filter(isNum); return v.length ? v.reduce((a, b) => a + b, 0) : null; };
     return { names, rows: names.map((nm) => ({ name: nm, vals: cols.map((c) => nn(c[field]?.[nm])), yoy: cols.map((c) => growth(nn(c[field]?.[nm]), nn(c.p?.[field]?.[nm]))), mix: cols.map((c) => div(nn(c[field]?.[nm]), tot(c))) })), total: cols.map(tot) };
   }
-  const exportGuides = () => (state.act ? guidePeriods().map(guideCtx).filter((c) => Object.values(c.i || {}).some(isNum)) : []);
+  const exportGuides = () => (state.act ? guidePeriods().filter((k) => Object.values(state.inp.guide.periods?.[k] || {}).some(isNum)).map(guideCtx) : []);
 
   async function exportXlsx(btn) {
     await loadScript(LIBS.excel);
@@ -2220,7 +2266,8 @@ Rules:
     const A = state.act, M = state.mdl, mk = state.mkt, R = state.dcf, prof = state.prof || {};
     const cur = A.lastA.reportedCurrency || prof.currency || "USD";
     const ink = [22, 32, 44], muted = [91, 102, 118], band = [233, 238, 245], tE = [238, 243, 250], tC = [243, 240, 250], tG = [251, 243, 227];
-    const f = (v, k) => (isNum(v) ? fmt(v, k) ?? "–" : "–");
+    // the PDF's standard font has no U+2212 minus sign; use a hyphen
+    const f = (v, k) => (isNum(v) ? (fmt(v, k) ?? "–").replace(/\u2212/g, "-") : "–");
     const header = (title) => {
       doc.setFont("helvetica", "bold"); doc.setFontSize(15); doc.setTextColor(...ink);
       doc.text((prof.companyName || state.ticker) + " (" + state.ticker + ")", m, m + 8);
@@ -2278,9 +2325,31 @@ Rules:
     let x = m; strip.forEach(([k, v]) => { doc.setFont("helvetica", "normal"); doc.setTextColor(...muted); doc.text(k.toUpperCase(), x, m + 40); doc.setFont("helvetica", "bold"); doc.setTextColor(...ink); doc.text(v, x, m + 52); x += (W - 2 * m) / strip.length; });
     table(["", ...cols.map((c) => c.label + " " + c.kind)], body, m + 62, kinds, { fs: cols.length > 11 ? 8 : 8.6, w0: 160 });
 
-    // ---- page 2: quarters, cost structure, DCF
+    // ---- page 2: segments and regions, full width
     doc.addPage();
-    header("Quarters, cost structure and valuation");
+    header("Revenue by segment and by region");
+    const segCols = [...A.hist.slice(-5), ...(M ? M.fys.slice(0, 3).map((fy) => M.out[fy].ctx) : [])];
+    let ys = m + 34;
+    const gn = A.geoNote;
+    [["prod", "Revenue by segment"], ["geo", "Revenue by region"]].forEach(([field, title]) => {
+      const t = segTable(field, segCols, 12);
+      const body = [];
+      t.rows.forEach((row) => {
+        body.push(mkRow(row.name, row.vals.map((v) => f(v, "usd")), "key"));
+        body.push(mkRow("  % yoy", row.yoy.map((v) => f(v, "yoy")), "sub"));
+        body.push(mkRow("  % of total", row.mix.map((v) => f(v, "pct")), "sub"));
+      });
+      if (t.rows.length) body.push(mkRow("Total", t.total.map((v) => f(v, "usd")), "key"));
+      table([title, ...segCols.map((c) => c.label + " " + c.kind)], body.length ? body : [mkRow("Not reported for this company", segCols.map(() => ""))], ys, segCols.map((c) => c.kind), { fs: 7.4, w0: 190 });
+      ys = doc.lastAutoTable.finalY + 14;
+    });
+    doc.setFontSize(7); doc.setTextColor(...muted);
+    const segNote = "Forecast columns show the split only for the basis the revenue build uses (" + (M ? M.basis : "–") + ")." + (gn && gn.years.length ? " Regions for FY" + gn.years[0] + "–FY" + gn.years[gn.years.length - 1] + " come from the latest 10-K (company labels, restated)." : "");
+    doc.text(doc.splitTextToSize(segNote, W - 2 * m), m, Math.min(ys, doc.internal.pageSize.getHeight() - 30));
+
+    // ---- page 3: quarters, guidance, cost structure, DCF
+    doc.addPage();
+    header("Quarters, guidance, cost structure and valuation");
     const q = [...A.drillPrev, ...A.drill];
     const curRef = M ? M.out[A.curFY].ctx : A.cons[0];
     const share = (fn, c, ref) => { const t = ref ? fn(ref) : null, v = fn(c || {}); return isNum(v) && isNum(t) && t > 0 ? v / t : null; };
@@ -2294,24 +2363,6 @@ Rules:
     table(["FY" + (A.curFY - 1) + " / FY" + A.curFY + " by quarter", ...q.map((c) => c.label + " " + c.kind)], qBody, m + 34, q.map((c) => c.kind), { fs: 7, w0: 120 });
     let y = doc.lastAutoTable.finalY + 10;
     const half = (W - 2 * m - 16) / 2;
-    // segment and region revenue: last 4 reported years and our first 2 forecast years
-    const segCols = [...A.hist.slice(-4), ...(M ? M.fys.slice(0, 2).map((fy) => M.out[fy].ctx) : [])];
-    const segBlock = (field, title, left) => {
-      const t = segTable(field, segCols, 7);
-      const body = [];
-      t.rows.forEach((row) => { const a = [row.name, ...row.vals.map((v) => f(v, "usd"))]; body.push(a); const b2 = ["  % yoy", ...row.yoy.map((v) => f(v, "yoy"))]; b2._style = "sub"; body.push(b2); });
-      if (t.rows.length) { const tt = ["Total", ...t.total.map((v) => f(v, "usd"))]; tt._style = "key"; body.push(tt); }
-      doc.autoTable({ head: [[title, ...segCols.map((c) => c.label.replace("FY", "") + c.kind)]], body: body.length ? body : [["Not reported", ...segCols.map(() => "")]], startY: y,
-        margin: left ? { left: m, right: m + half + 16 } : { left: m + half + 16, right: m }, theme: "plain",
-        styles: { font: "helvetica", fontSize: 6.4, cellPadding: 1.1, halign: "right", textColor: ink, overflow: "ellipsize" }, headStyles: { fontStyle: "bold", fillColor: band }, columnStyles: { 0: { halign: "left", cellWidth: 104 } },
-        didParseCell: (d) => {
-          if (d.section === "head") d.cell.styles.halign = d.column.index === 0 ? "left" : "right";
-          if (d.section === "body") { const k = segCols[d.column.index - 1]?.kind; if (k && k !== "A") d.cell.styles.fillColor = tE; const st = d.row.raw?._style; if (st === "sub") { d.cell.styles.textColor = muted; d.cell.styles.fontStyle = "italic"; d.cell.styles.fontSize = 5.8; } if (st === "key") d.cell.styles.fontStyle = "bold"; }
-        } });
-      return doc.lastAutoTable.finalY;
-    };
-    const ySeg = Math.max(segBlock("prod", "Revenue by segment", true), segBlock("geo", "Revenue by region", false));
-    y = ySeg + 10;
     // guidance and cost structure side by side
     const gRows = exportGuides().map((c) => { const o = state.inp.guide.periods[c.gkey] || {}; return [c.label, f(o.rev, "usd") + (isNum(o.revLo) ? " (" + f(o.revLo, "usd") + "–" + f(o.revHi, "usd") + ")" : ""), f(o.gm, "pct"), f(o.opex, "usd"), f(ebit(c), "usd"), f(o.tax, "pct"), f(o.eps, "eps"), f(growth(rev(c), rev(c.cons || {})), "yoy")]; });
     const gSrc = state.inp.guide?.src;

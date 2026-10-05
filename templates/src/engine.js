@@ -83,6 +83,43 @@ function buildActuals(raw) {
       if (!qA[k]) qE[k] = { ...Q_CTX, kind: "C", label: "Q" + q + " FY" + yy(fy), i: estToI(e), date: e.date };
     });
   }
+  // Regions from the latest 10-K (EDGAR XBRL): the filing's own labels and restated comparatives replace
+  // FMP's for those years; earlier FMP years with the same region set are relabeled by matching values
+  // (FMP can carry a stale label forward, e.g. NVIDIA's "Other Countries" shown as "Other Americas").
+  const eg = (raw.edgarGeo?.groups || []).find((g) => /sums_to_total/.test(g.check || "")) || (raw.edgarGeo?.groups || [])[0];
+  const geoNote = { years: [], renamed: {} };
+  if (eg && Array.isArray(eg.members)) {
+    const fyByDate = (d) => Object.values(fyA).find((c) => Math.abs(Date.parse(c.date) - Date.parse(d)) < 20 * 864e5);
+    const periods = [...new Set(eg.members.flatMap((mb) => Object.keys(mb.values || {})))];
+    const fmpOrig = {};
+    periods.forEach((d) => {
+      const c = fyByDate(d); if (!c) return;
+      const map = {};
+      eg.members.forEach((mb) => { const v = mb.values?.[d]; if (isNum(v) && !mb.overlaps) map[mb.name] = v; });
+      if (!Object.keys(map).length) return;
+      fmpOrig[c.fy] = c.geo; c.geo = map; c.geoSrc = "10-K"; geoNote.years.push(c.fy);
+    });
+    // relabel FMP names by value in the latest overlapping year
+    const ref = geoNote.years.slice().sort((a, b) => b - a).find((fy) => fmpOrig[fy]);
+    if (ref) {
+      const f0 = fmpOrig[ref], e0 = fyA[ref].geo, rename = {};
+      Object.entries(f0).forEach(([k, v]) => { if (!isNum(v)) return; const hit = Object.entries(e0).find(([, ev]) => Math.abs(ev - v) <= 0.01 * Math.abs(ev)); if (hit && hit[0] !== k) rename[k] = hit[0]; });
+      const keySet = (o) => Object.keys(o || {}).sort().join("|");
+      const refSet = keySet(f0);
+      // a single country means the same thing in every year; a catch-all bucket only where the region set matches
+      const catchAll = (nm) => /other|rest of|non[- ]?u\.?s|international|elsewhere/i.test(nm);
+      const relabel = (c) => {
+        if (!c.geo || c.geoSrc) return;
+        const same = keySet(c.geo) === refSet;
+        const g = {};
+        Object.entries(c.geo).forEach(([k, v]) => { const to = rename[k]; g[to && (same || (!catchAll(k) && !catchAll(to))) ? to : k] = v; });
+        c.geo = g; c.geoRelabeled = true;
+      };
+      if (Object.keys(rename).length) { Object.values(fyA).forEach(relabel); Object.values(qA).forEach(relabel); geoNote.renamed = rename; }
+    }
+    geoNote.years.sort((a, b) => a - b);
+  }
+
   // Overlay segment detail read from SEC earnings releases (keyed by quarter-end date)
   const sec = raw.secSeg || {};
   const secFor = (date) => { const t = Date.parse(date); const k = Object.keys(sec).find((d) => Math.abs(Date.parse(d) - t) < 8 * 864e5); return k ? sec[k] : null; };
@@ -150,7 +187,7 @@ function buildActuals(raw) {
     : fyA[+lastA.fiscalYear];
   const latestShares = n(lastQ?.weightedAverageShsOutDil) ?? n(lastA.weightedAverageShsOutDil);
 
-  return { fyA, hist: incA.map((r) => fyA[+r.fiscalYear]), drill, drillPrev, cons, consFy, curFY, ltm, lastA, lastQ, latestShares, nReportedQ: cq.filter((c) => c.kind === "A").length };
+  return { geoNote, fyA, hist: incA.map((r) => fyA[+r.fiscalYear]), drill, drillPrev, cons, consFy, curFY, ltm, lastA, lastQ, latestShares, nReportedQ: cq.filter((c) => c.kind === "A").length };
 }
 
 // ---------- regression: operating profit on revenue ----------
