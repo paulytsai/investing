@@ -34,6 +34,7 @@ deployments can inject secrets without a file.
 | `EODHD_API_KEY` | https://eodhd.com/cp/settings/api |
 | `JQUANTS_API_KEY` | https://jpx-jquants.com/ (dashboard, API key) |
 | `FRED_API_KEY` | https://fred.stlouisfed.org/docs/api/api_key.html |
+| `EDGAR_TOOLS_API_KEY` | https://app.edgar.tools (account > API keys) |
 | `NEWS_API_KEY` | https://newsapi.org/account |
 | `X_BEARER_TOKEN` | https://developer.x.com/en/portal/dashboard (app > Keys and tokens) |
 | `ALPACA_API_KEY` / `ALPACA_SECRET_KEY` | https://app.alpaca.markets/paper/dashboard/overview |
@@ -89,4 +90,22 @@ search_recent("$AAPL lang:en -is:retweet", max_results=50)
 u = user_by_username("XDevelopers")
 user_tweets(u["id"], max_results=10)
 get("tweets/counts/recent", query="$NVDA", granularity="day")
+```
+
+## edgar.tools client
+
+`investing/edgartools.py` wraps the edgar.tools REST API and reads `EDGAR_TOOLS_API_KEY` from `.env`.
+Functions accept a ticker or a CIK.
+
+```sh
+python -m investing.edgartools AAPL    # prints the company profile as JSON
+```
+
+```python
+from investing.edgartools import company, filings, search, cik, get
+
+company("AAPL")["entity"]["company"]["sic_description"]
+filings("AAPL", form="10-K", limit=5)
+search("nvidia")
+get(f"companies/{cik('AAPL')}/holders")
 ```
