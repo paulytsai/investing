@@ -98,6 +98,7 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .sheet { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; overflow: auto; max-height: calc(100vh - 32px); overscroll-behavior: contain; }
 #tbl thead { position: sticky; top: 0; z-index: 3; }
 #tbl thead td { background-color: var(--surface); }
+#tbl thead tr.yrs td .pm { display: block; font-family: var(--body); font-size: 10px; font-weight: 400; color: var(--muted); letter-spacing: 0; text-transform: none; white-space: nowrap; margin-top: 1px; }
 #tbl thead tr.yrs td { background-color: var(--band); font-family: var(--display); font-weight: 600; font-size: 12px; padding-top: 5px; padding-bottom: 5px; border-bottom: 1px solid var(--faint); }
 #tbl thead td:first-child { z-index: 4; }
 #tbl thead tr.groups td:first-child { white-space: normal; overflow: visible; }
@@ -1174,6 +1175,25 @@ const I0 = (mdl, k, fy) => mdl.I(k, fy) ?? 0;
     yrs0: (v) => v.toFixed(2),
   };
   const fmt = (v, f) => (isNum(v) && (Math.abs(v) > 1e-12 || f === "yrs0") ? FMT[f](v) : null);
+  // Calendar months a quarter or half covers, since fiscal years differ by company. A period ending in the first
+  // week of a month (52/53-week years) counts as ending the month before.
+  const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  function periodMonths(c, short) {
+    const A = state.act;
+    if (!A || !c || !(c.type === "Q" || c.type === "H") || !isNum(c.fy)) return "";
+    const absMonth = (dt) => { const d = new Date(String(dt).slice(0, 10) + "T00:00:00"); return d.getFullYear() * 12 + d.getMonth() - (d.getDate() <= 7 ? 1 : 0); };
+    const fyEnd = absMonth(A.lastA.date) + (c.fy - +A.lastA.fiscalYear) * 12;
+    const n = +(String(c.label).match(/^[QH](\d)/) || [])[1];
+    if (!n) return "";
+    let end = c.type === "Q" ? fyEnd - 3 * (4 - n) : fyEnd - (n === 1 ? 6 : 0);
+    const dt = c.type === "Q" && c.kind === "A" ? c.i?.date || c.date : null;
+    if (dt) end = absMonth(dt); // the reported period end, when there is one
+    const start = end - (c.type === "Q" ? 2 : 5);
+    const nm = (a) => MON[((a % 12) + 12) % 12], yr = (a) => Math.floor(a / 12);
+    const y2 = (a) => String(yr(a)).slice(-2);
+    if (yr(start) !== yr(end)) return nm(start) + " " + y2(start) + "–" + nm(end) + " " + y2(end);
+    return nm(start) + "–" + nm(end) + " " + (short ? y2(end) : yr(end));
+  }
   const fmtDate = (d) => (d ? new Date(String(d).slice(0, 10) + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "–");
   const P = (c) => c.p || {};
   const pctRev = (fn) => (c) => div(fn(c), rev(c));
@@ -1590,7 +1610,7 @@ const I0 = (mdl, k, fy) => mdl.I(k, fy) ?? 0;
       ...SECTIONS(),
     ];
     const blanks = cols.map((c, j) => '<td class="' + cc[j] + '"></td>').join("");
-    const headCells = cols.map((c, j) => '<td class="' + cc[j] + '">' + esc(c.label) + '<span class="chip k' + c.kind + '">' + c.kind + "</span></td>").join("");
+    const headCells = cols.map((c, j) => { const pm = periodMonths(c); return '<td class="' + cc[j] + '">' + esc(c.label) + '<span class="chip k' + c.kind + '">' + c.kind + "</span>" + (pm ? '<span class="pm">' + pm + "</span>" : "") + "</td>"; }).join("");
     // frozen header: group row + year labels stay at the top of the table while scrolling down
     head.push('<tr class="yrs"><td>Line item</td>' + headCells + "</tr>");
     secs.forEach((s) => {
@@ -1651,7 +1671,7 @@ const I0 = (mdl, k, fy) => mdl.I(k, fy) ?? 0;
       });
     });
     $("tbl").innerHTML = "<thead>" + head.join("") + "</thead><tbody>" + outAll.join("") + "</tbody>";
-    state.xrows = xrows; state.xcols = cols.map((c) => ({ label: c.label, kind: c.kind, type: c.type }));
+    state.xrows = xrows; state.xcols = cols.map((c) => ({ label: c.label, kind: c.kind, type: c.type, months: periodMonths(c) }));
     $("xlsx").disabled = false; $("pdf").disabled = false;
     renderReg(); renderSettings(); renderPe(); renderDcf(); renderHeader();
     renderNotes();
@@ -2947,11 +2967,12 @@ Rules:
     cols.forEach((c, j) => {
       const grp = c.type !== "FY" && c.kind !== "G" ? "By quarter" : KIND_NAME[c.kind];
       if (grp !== prevKind) { const cell = ws.getCell(5, j + 2); cell.value = grp; cell.font = { ...base, size: 9, bold: true, color: { argb: ARGB.muted } }; prevKind = grp; }
-      const h = ws.getCell(6, j + 2); h.value = c.label + " " + c.kind;
-      h.font = { ...base, bold: true }; h.alignment = { horizontal: "right" };
+      const h = ws.getCell(6, j + 2); h.value = c.label + " " + c.kind + (c.months ? "\n" + c.months : "");
+      h.font = { ...base, bold: true }; h.alignment = { horizontal: "right", vertical: "bottom", wrapText: true };
       h.fill = { type: "pattern", pattern: "solid", fgColor: { argb: c.kind === "A" ? ARGB.band : ARGB[c.kind] } };
       h.border = { bottom: { style: "thin", color: { argb: ARGB.ink } } };
     });
+    if (cols.some((c) => c.months)) ws.getRow(6).height = 30;
     ws.getCell(6, 1).value = "Line item"; ws.getCell(6, 1).font = { ...base, bold: true }; ws.getCell(6, 1).border = { bottom: { style: "thin", color: { argb: ARGB.ink } } };
     let r = 7;
     state.xrows.forEach((x) => {
@@ -3225,7 +3246,7 @@ Rules:
       mkRow("EBIT", q.map((c) => f(ebit(c), "usd")), "key"), mkRow("  EBIT margin", q.map((c) => f(pctRev(ebit)(c), "pct")), "sub"),
       mkRow("Diluted EPS", q.map((c) => f(nn(c.i?.epsDiluted), "eps")), "key"),
     ];
-    table(["FY" + (A.curFY - 1) + " / FY" + A.curFY + " by quarter", ...q.map((c) => c.label + " " + c.kind)], qBody, m + 34, q.map((c) => c.kind), { fs: 7, w0: 120 });
+    table(["FY" + (A.curFY - 1) + " / FY" + A.curFY + " by quarter", ...q.map((c) => c.label + " " + c.kind + (periodMonths(c, true) ? "\n" + periodMonths(c, true) : ""))], qBody, m + 34, q.map((c) => c.kind), { fs: 7, w0: 120 });
     let y = doc.lastAutoTable.finalY + 10;
     const half = (W - 2 * m - 16) / 2;
     // guidance and cost structure side by side
