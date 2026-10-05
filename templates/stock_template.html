@@ -913,7 +913,7 @@ function runDcf(mdl, mkt, setIn, shift) {
 (function () {
   const $ = (id) => document.getElementById(id);
   const SERVER = "FMP";
-  const state = { sec: {}, secStatus: "", sampleOk: false, ticker: "", years: 15, drill: true, raw: null, act: null, prof: null, mkt: null, inp: null, mdl: null, dcf: null, busy: false, matrix: null, segErr: null, uid: null };
+  const state = { showFc: true, sec: {}, secStatus: "", sampleOk: false, ticker: "", years: 15, drill: true, raw: null, act: null, prof: null, mkt: null, inp: null, mdl: null, dcf: null, busy: false, matrix: null, segErr: null, uid: null };
   const use = (name) => { try { return window.claude?.use ? window.claude.use(name) : Promise.resolve(null); } catch (e) { return Promise.resolve(null); } };
   const mcpP = use("mcp"), dlP = use("downloads"), dbP = use("db"), userP = use("user"), sampleP = use("sample");
   const EDGAR = "Edgar Tools";
@@ -1244,7 +1244,7 @@ function runDcf(mdl, mkt, setIn, shift) {
       c.fyRef = c.drillFy === A.curFY ? curRef : A.fyA[c.drillFy];
       if (c.p && !c.p.fyRef) c.p.fyRef = A.fyA[c.drillFy - 1];
     });
-    const model = M ? M.fys.map((fy) => M.out[fy].ctx) : [];
+    const model = M && state.showFc ? M.fys.map((fy) => M.out[fy].ctx) : [];
     const guide = [guideCtx()];
     const cons = A.cons;
     // forward links for PEG
@@ -1293,11 +1293,12 @@ function runDcf(mdl, mkt, setIn, shift) {
     const out = [], matrix = [];
     const span = (n, cls, html) => (n ? '<td colspan="' + n + '" class="' + cls + '">' + html + "</td>" : "");
     const drillBtn = '<button type="button" class="mini" data-act="drill" aria-pressed="' + state.drill + '">' + (state.drill ? "Hide quarters" : "Show Q1–Q4, H1, H2") + "</button>";
-    out.push('<tr class="groups"><td>' + esc(state.ticker) + (state.drill ? "" : drillBtn) + "</td>" +
+    const fcBtn = M ? '<button type="button" class="mini" data-act="fc" aria-pressed="' + state.showFc + '">' + (state.showFc ? "Collapse" : "Show our forecast") + "</button>" : "";
+    out.push('<tr class="groups"><td>' + esc(state.ticker) + (state.drill ? "" : drillBtn) + (state.showFc ? "" : fcBtn) + "</td>" +
       span(hist.length, "", "Reported · " + hist.length + " years") +
       span(drill.length ? A.drillPrev.length : 0, "bnd", "FY" + (A.curFY - 1) + " by quarter · reported " + drillBtn + secBtn()) +
       span(drill.length ? A.drill.length : 0, "kC bnd", "FY" + A.curFY + " by quarter · " + A.nReportedQ + " of 4 reported") +
-      span(model.length, "kE bnd", "Our forecast") +
+      span(model.length, "kE bnd", "Our forecast " + fcBtn) +
       span(guide.length, "kG bnd", "Guidance") +
       span(cons.length, "kC bnd", "Consensus") + "</tr>");
 
@@ -1888,6 +1889,7 @@ Rules:
     if (!b || !state.inp) return;
     const act = b.dataset.act, v = b.dataset.v;
     if (act === "secfill") { secFill(); return; }
+    if (act === "fc") { state.showFc = !state.showFc; store.set("tmpl.fc", state.showFc ? "1" : "0"); render(); return; }
     if (act === "drill") { state.drill = !state.drill; store.set("tmpl.drill", state.drill ? "1" : "0"); render(); return; }
     if (act === "regn") state.inp.reg = { ...(state.inp.reg || {}), n: +v };
     else if (act === "regt") { const r = { n: 10, icpt: false, robust: true, afterBreak: true, ...(state.inp.reg || {}) }; r[v] = !r[v]; state.inp.reg = r; }
@@ -1937,6 +1939,7 @@ Rules:
   document.querySelectorAll("#yrs button").forEach((b) => b.addEventListener("click", () => setYears(+b.dataset.y)));
   const sy = +store.get("tmpl.years"); if ([10, 15, 20, 30].includes(sy)) setYears(sy);
   if (store.get("tmpl.drill") === "0") state.drill = false;
+  if (store.get("tmpl.fc") === "0") state.showFc = false;
   const start = store.get("tmpl.ticker") || "MSFT";
   $("ticker").value = start;
   render();
