@@ -90,3 +90,16 @@ u = user_by_username("XDevelopers")
 user_tweets(u["id"], max_results=10)
 get("tweets/counts/recent", query="$NVDA", granularity="day")
 ```
+
+## Company model template
+
+`templates/stock_template.html` is a single-page, ticker-driven company model published as a
+claude.ai artifact. It pulls data live through the FMP connector. Edit the sources, then rebuild:
+
+```sh
+python templates/build.py   # inlines templates/src/engine.js into templates/src/page.html
+```
+
+- `templates/src/engine.js` is the pure model engine (actuals, consensus mapping, the
+  P&L → cash flow → balance sheet forecast and the FCFF DCF). It has no DOM code, so it can be tested with Node.
+- `templates/src/page.html` holds the layout, rendering, inputs and connector calls.
