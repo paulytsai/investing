@@ -158,6 +158,9 @@ td.flag { color: var(--muted); }
 .flags { display: grid; gap: 6px; margin: 0; padding-left: 18px; color: var(--muted); }
 .flags li.warn { color: var(--neg); }
 .save { color: var(--muted); font-size: 12px; }
+.btnrow { display: flex; flex-wrap: wrap; gap: 8px; }
+.saved { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; color: var(--muted); font-size: 12.5px; }
+.saved .mini { margin-left: 0; }
 .verdict { color: var(--ink) !important; background: var(--band); border-radius: 6px; padding: 10px 12px; max-width: none !important; }
 svg.scatter { width: 100%; height: auto; display: block; overflow: visible; }
 svg.scatter text { fill: var(--muted); font: 11px var(--body); }
@@ -843,7 +846,8 @@ footer.foot .fine { font-size: 11px; max-width: 110ch; }
     el.hidden = false;
     const row = (label, k, u, src) => '<span>' + label + "</span><b>" + inputHTML("s", k, "", u) + "</b>" + (src ? '<span class="src">' + src + "</span>" : "");
     const pct = (v) => (isNum(v) ? (v * 100).toFixed(1) + "%" : "–");
-    el.innerHTML = '<header><h2>Model settings</h2><span><button type="button" class="btn" data-act="reset">Reset all inputs</button></span></header>' +
+    el.innerHTML = '<header><h2>Model settings</h2><span class="btnrow"><button type="button" class="btn" data-act="backup"' + (state.dlOk ? "" : " hidden") + '>Back up all models</button><button type="button" class="btn" data-act="restore">Restore from backup</button><input type="file" id="restoreFile" accept=".json,application/json" hidden><button type="button" class="btn" data-act="reset">Reset this model</button></span></header>' +
+      '<div class="saved" id="savedList">' + savedListHTML() + "</div>" +
       '<div class="grid3">' +
       '<div class="kv"><h3 style="grid-column:1/-1">D&amp;A schedule</h3>' +
       row("Useful life of new capex (years)", "life", "num", "Default " + M.dflt.life + " years, the life implied by today's D&amp;A rate") +
@@ -1162,6 +1166,75 @@ Rules:
     }
   }
 
+  // ---------- all saved models: list, back up, restore ----------
+  // Saved records live in this page's data store under the viewer's private area (model-<TICKER>,
+  // sec-<TICKER>), with a copy in this browser.
+  async function listSaved() {
+    const out = {};
+    try {
+      const db = await dbP, u = await userP, uid = u ? await u.id() : null;
+      if (db && uid) {
+        const snap = await db.collection("data/users/" + uid).get();
+        snap.docs.forEach((d) => {
+          const m = /^(model|sec)-(.+)$/.exec(d.id); if (!m) return;
+          const data = d.data() || {}, t = data.ticker || m[2];
+          try { (out[t] = out[t] || {})[m[1] === "model" ? "inputs" : "sec"] = JSON.parse(data.json); out[t].updatedAt = Math.max(out[t].updatedAt || 0, data.updatedAt || 0); } catch (e) {}
+        });
+      }
+    } catch (e) {}
+    try {
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i), m = /^tmpl\.(inp|sec)\.(.+)$/.exec(k || ""); if (!m) continue;
+        const t = m[2], o = (out[t] = out[t] || {}), key = m[1] === "inp" ? "inputs" : "sec";
+        if (!o[key]) { try { o[key] = JSON.parse(localStorage.getItem(k)); } catch (e) {} }
+      }
+    } catch (e) {}
+    return out;
+  }
+  function savedListHTML() {
+    const names = state.savedNames || [];
+    if (!names.length) return "Saved models: none yet. Changing any input saves the model for that ticker.";
+    return "Saved models (" + names.length + "): " + names.map((t) => '<button type="button" class="mini" data-act="open" data-v="' + esc(t) + '"' + (t === state.ticker ? ' aria-pressed="true"' : "") + ">" + esc(t) + "</button>").join("");
+  }
+  async function refreshSaved() {
+    const all = await listSaved();
+    state.savedNames = Object.keys(all).filter((t) => all[t].inputs).sort();
+    const el = $("savedList"); if (el) el.innerHTML = savedListHTML();
+  }
+  async function backupAll() {
+    const dl = await dlP; if (!dl) return;
+    const all = await listSaved();
+    if (state.ticker && state.inp) (all[state.ticker] = all[state.ticker] || {}).inputs = state.inp; // include unsaved latest
+    const file = { format: "company-model-backup", version: 1, exportedAt: new Date().toISOString(), models: all };
+    const n = Object.keys(all).filter((t) => all[t].inputs).length;
+    try {
+      await dl.save({ filename: "company_models_backup_" + new Date().toISOString().slice(0, 10) + ".json", data: JSON.stringify(file, null, 1) });
+      setNotice("Backed up " + n + " model" + (n === 1 ? "" : "s") + ".");
+    } catch (e) { if (!e || e.code !== "declined") setNotice("Couldn't save the backup (" + esc(e?.message || e?.code || "error") + ")."); }
+  }
+  async function restoreFrom(fileObj) {
+    let data;
+    try { data = JSON.parse(await fileObj.text()); } catch (e) { return setNotice("That file isn't a model backup (it isn't valid JSON)."); }
+    if (!data || data.format !== "company-model-backup" || !data.models) return setNotice("That file isn't a model backup from this page.");
+    const db = await dbP, u = await userP, uid = u ? await u.id() : null;
+    let n = 0;
+    for (const [t, o] of Object.entries(data.models)) {
+      if (!/^[A-Za-z0-9.\-_]{1,16}$/.test(t)) continue;
+      if (o.inputs) {
+        const json = JSON.stringify(o.inputs); store.set("tmpl.inp." + t, json);
+        try { if (db && uid) await db.collection("data/users/" + uid).doc(docId(t)).set({ json, ticker: t, updatedAt: Date.now() }); } catch (e) {}
+        n++;
+      }
+      if (o.sec) {
+        const json = JSON.stringify(o.sec); store.set("tmpl.sec." + t, json);
+        try { if (db && uid) await db.collection("data/users/" + uid).doc(secDoc(t)).set({ json, ticker: t, updatedAt: Date.now() }); } catch (e) {}
+      }
+    }
+    await refreshSaved();
+    if (state.ticker && data.models[state.ticker]) await load(state.ticker);
+    setNotice("Restored " + n + " model" + (n === 1 ? "" : "s") + " from the backup (same tickers were replaced).");
+  }
+
   let saveTimer = null, saving = Promise.resolve();
   function scheduleSave() {
     const t = state.ticker, json = JSON.stringify(state.inp);
@@ -1173,6 +1246,7 @@ Rules:
         try {
           const db = await dbP;
           if (db && state.uid) { await db.collection("data/users/" + state.uid).doc(docId(t)).set({ json, ticker: t, updatedAt: Date.now() }); $("saveState").textContent = "Inputs saved to your account"; }
+          if (!(state.savedNames || []).includes(t)) refreshSaved();
           else $("saveState").textContent = "Inputs saved in this browser";
         } catch (e) { $("saveState").textContent = "Inputs saved in this browser only (account save failed)"; }
       });
@@ -1312,6 +1386,7 @@ Rules:
     $("saveState").textContent = "";
     render();
     sampleP.then((x) => { if (x && state.ticker === t) ensureGuidance(); }).catch(() => {});
+    refreshSaved();
     scrollToForecast();
   }
   // Like a frozen pane: show the last few reported years next to the forecast
@@ -1344,6 +1419,9 @@ Rules:
       render(); scheduleSave();
     }
   });
+  document.addEventListener("change", (e) => {
+    if (e.target && e.target.id === "restoreFile" && e.target.files && e.target.files[0]) { restoreFrom(e.target.files[0]); e.target.value = ""; }
+  });
   document.addEventListener("keydown", (e) => {
     if (e.key === "Enter" && e.target.matches && e.target.matches("input.in")) { e.preventDefault(); e.target.blur(); }
   });
@@ -1352,6 +1430,9 @@ Rules:
     if (!b || !state.inp) return;
     const act = b.dataset.act, v = b.dataset.v;
     if (act === "secfill") { secFill(); return; }
+    if (act === "backup") { backupAll(); return; }
+    if (act === "restore") { $("restoreFile").click(); return; }
+    if (act === "open") { load(v); window.scrollTo({ top: 0 }); return; }
     if (act === "guidefill") { guideFill(); return; }
     if (act === "dcfbasis") { state.inp.dcfBasis = v; render(); scheduleSave(); return; }
     if (act === "fc") { state.showFc = !state.showFc; store.set("tmpl.fc", state.showFc ? "1" : "0"); render(); return; }
@@ -1731,11 +1812,12 @@ Rules:
   }
   dlP.then((dl) => {
     if (!dl) return;
+    state.dlOk = true; if (state.mdl) renderSettings();
     $("xlsx").hidden = false; $("pdf").hidden = false;
     $("xlsx").addEventListener("click", () => runExport($("xlsx"), exportXlsx));
     $("pdf").addEventListener("click", () => runExport($("pdf"), exportPdf));
   }).catch(() => {});
-  window.__exports = { exportXlsx, exportPdf }; // used by tests
+  window.__exports = { exportXlsx, exportPdf, listSaved, restoreFrom }; // used by tests
 
   // ---------- wiring ----------
   $("form").addEventListener("submit", (e) => { e.preventDefault(); load($("ticker").value); });
