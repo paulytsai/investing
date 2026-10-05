@@ -488,7 +488,7 @@ function costFit(pts) {
   return { n: k, v, b0: bta[0], b1: bta[1], seV: se(2), vLo: tc && se(2) != null ? v - tc * se(2) : null, vHi: tc && se(2) != null ? v + tc * se(2) : null, drift, seDrift: se(1) != null ? se(1) * S : null, r2: sst > 0 ? 1 - ssr / sst : null, df };
 }
 
-// ---------- Mars & Co scale slopes ----------
+// ---------- scale slopes (cost curves) ----------
 // A cost line's slope is the multiplier on its unit cost each time the volume driver doubles:
 //   ln(unit cost) = a + b ln(driver),  slope = 2^b,  cost(x) = cost(x0) * (x/x0)^log2(slope)
 // With public data, revenue stands in for volume, so unit cost = cost / revenue. Each P&L cost line
@@ -668,7 +668,7 @@ function runModel(m, inp, opts) {
   // ----- cost method -----
   const regCfg = { n: 10, icpt: false, robust: true, afterBreak: true, ...(inp.reg || {}) };
   const reg = regressIncr(m, regCfg.n, regCfg.icpt, regCfg.robust);
-  // Mars & Co slopes: each cost line follows its own scale curve against revenue
+  // Scale slopes: each cost line follows its own scale curve against revenue
   const sl = scaleSlopes(m, regCfg.n, regCfg.robust, regCfg.afterBreak);
   reg.slopes = sl;
   const slopeOk = (L) => L.usable && L.fit && L.fit.r2 >= 0.3;
@@ -1154,14 +1154,14 @@ function runDcf(mdl, mkt, setIn, shift) {
     const costRows = [];
     const prof = M.reg.cost.profile;
     const profTxt = { high: "high fixed costs", mid: "mixed fixed and variable costs", low: "mostly variable costs", unclear: "a cost structure history can't pin down" }[prof];
-    const mName = { incr: "incremental margin", regress: "Mars & Co scale slopes", fixvar: "fixed + variable costs", segment: "segment EBIT" };
+    const mName = { incr: "incremental margin", regress: "scale slopes", fixvar: "fixed + variable costs", segment: "segment EBIT" };
     const why = M.autoMethod === "regress" ? "cost lines track revenue along clear scale curves (cost-weighted R² " + M.slopeR2.toFixed(2) + ")" : "scale curves don't fit well (cost-weighted R² " + M.slopeR2.toFixed(2) + ") and the fixed/variable regression shows " + profTxt + (isNum(M.reg.cost.dol) && M.reg.cost.valid ? " (operating leverage " + M.reg.cost.dol.toFixed(1) + "×)" : "");
     costRows.push({ note: (M.methodAuto ? "Chosen automatically: " : "You chose " + mName[M.method] + ". Suggested: ") + (M.methodAuto ? mName[M.method] : mName[M.autoMethod]) + ", because " + why + ". Details are in the panel below the table." + (M.methodAuto ? "" : ' <button type="button" class="mini" data-act="method" data-v="auto">Let the cost structure decide</button>'), html: true });
     if (M.method === "incr") {
       costRows.push({ l: "Incremental EBIT margin (ΔEBIT ÷ Δrevenue)", hv: (c) => div(sub(ebit(c), ebit(c.p || {})), sub(rev(c), rev(c.p || {}))), inp: { k: "incr", u: "pct" }, f: "pct", ratio: true });
     } else if (M.method === "regress") {
       const sl = M.reg.slopes;
-      costRows.push({ note: "Mars & Co scale slopes: each cost line's cost per dollar of revenue is multiplied by its slope every time revenue doubles. 90% means 10% lower unit cost per doubling (scale economies); 100% means the line stays a constant share of revenue. Fitted on FY" + sl.years[0] + "–FY" + sl.years[sl.years.length - 1] + (sl.usedBreak ? " (after the FY" + sl.brk.fy + " break in the revenue trend)" : "") + ". Lines without a reliable fit (R² below 0.3) default to 100%. Cost of revenue follows its curve through the gross margin row." });
+      costRows.push({ note: "Scale slopes: each cost line's cost per dollar of revenue is multiplied by its slope every time revenue doubles. 90% means 10% lower unit cost per doubling (scale economies); 100% means the line stays a constant share of revenue. Fitted on FY" + sl.years[0] + "–FY" + sl.years[sl.years.length - 1] + (sl.usedBreak ? " (after the FY" + sl.brk.fy + " break in the revenue trend)" : "") + ". Lines without a reliable fit (R² below 0.3) default to 100%. Cost of revenue follows its curve through the gross margin row." });
       M.costLines.forEach((L) => {
         const lineCost = (fy) => (L.key === "cogs" ? M.out[fy].ctx.i.costOfRevenue : M.slopeCost[L.key][fy]);
         costRows.push({ l: L.label, hv: L.get, mv: lineCost, f: "usd" });
@@ -1204,7 +1204,7 @@ function runDcf(mdl, mkt, setIn, shift) {
 
     return [
       { title: "Forecast drivers · revenue build", ctl: " " + bb("segment", "By segment", M.basis === "segment", !hasProd) + bb("geo", "By region", M.basis === "geo", !hasGeo) + bb("total", "Total", M.basis === "total", false), rows: revRows, driver: true },
-      { title: "Forecast drivers · operating profit", ctl: " " + mb("incr", "Incremental margin") + mb("regress", "Scale slopes (Mars & Co)") + mb("fixvar", "Fixed + variable costs") + mb("segment", "Segment EBIT"), rows: costRows, driver: true },
+      { title: "Forecast drivers · operating profit", ctl: " " + mb("incr", "Incremental margin") + mb("regress", "Scale slopes") + mb("fixvar", "Fixed + variable costs") + mb("segment", "Segment EBIT"), rows: costRows, driver: true },
     ];
   }
   const dol = (e1, e0, r1, r0) => { const ge = growth(e1, e0), gr = growth(r1, r0); return isNum(ge) && isNum(gr) && Math.abs(gr) > 0.001 ? ge / gr : null; };
@@ -1397,7 +1397,7 @@ function runDcf(mdl, mkt, setIn, shift) {
       low: "<b>Mostly variable costs.</b> Only about " + pct(cr.fixedShare, 0) + " of costs are fixed, so each extra dollar of sales earns a fairly steady margin.",
       unclear: "<b>History can't separate fixed from variable costs</b>" + (cf ? " (variable ratio comes out at " + pct(cf.v, 0) + " with negative fixed costs)" : "") + ". That usually means the business changed underneath the numbers: asset sales or refranchising, a big mix shift, or one-off charges inside reported EBIT. Try a window that starts after the change, use segment EBIT from SEC releases, or set the variable-cost ratio by judgment.",
     }[cr.profile];
-    const mNames = { incr: "incremental margin", regress: "Mars &amp; Co scale slopes", fixvar: "fixed + variable costs" };
+    const mNames = { incr: "incremental margin", regress: "scale slopes", fixvar: "fixed + variable costs" };
     const verdict = slopeLead + verdict0 + " Suggested method: <b>" + mNames[M.autoMethod] + "</b>" + (M.method !== M.autoMethod ? " (you are using " + (mNames[M.method] || "segment EBIT") + ")" : "") + ".";
     const dropTxt = (d) => (d && d.length ? "Excluded as outliers: FY" + d.join(", FY") : "No years excluded");
     const sl = rg.slopes;
@@ -1408,7 +1408,7 @@ function runDcf(mdl, mkt, setIn, shift) {
     const brkTxt = sl.brk ? "Revenue trend breaks at FY" + sl.brk.fy + ": " + pct(sl.brk.before) + " a year before, " + pct(sl.brk.after) + " after (log-linear fits). " + (sl.usedBreak ? "Slopes use FY" + sl.brk.fy + " onward." : cfg.afterBreak ? "Too few years after the break to fit on, so the whole window is used." : "The whole window is used; turn on “Fit after break” to use only the recent regime.") + " Look for the business event behind it (disposals, refranchising, acquisitions, a new channel)." : "No break in the revenue trend over FY" + sl.years[0] + "–FY" + sl.years[sl.years.length - 1] + (isNum(sl.cagr) ? " (" + pct(sl.cagr) + " a year)" : "") + ".";
     el.innerHTML = '<header><h2>How costs and operating profit respond to revenue</h2><span>' + win + tog("robust", "Exclude outlier years") + tog("afterBreak", "Fit after break") + tog("icpt", "Cost drift (intercept)") + "</span></header>" +
       '<p class="verdict">' + verdict + "</p>" +
-      "<h3>Scale slopes (Mars &amp; Co) · ln(cost ÷ revenue) on ln(revenue), slope = 2<sup>b</sup></h3>" +
+      "<h3>Scale slopes · ln(cost ÷ revenue) on ln(revenue), slope = 2<sup>b</sup></h3>" +
       "<p>" + brkTxt + " Revenue stands in for volume, so price and mix changes blur the curves: treat them as directional. " + use("regress", "Use scale slopes") + "</p>" + slTable +
       '<div class="multiples">' + slopeCharts(sl) + "</div>" +
       '<div class="grid3">' +

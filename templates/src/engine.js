@@ -260,7 +260,7 @@ function costFit(pts) {
   return { n: k, v, b0: bta[0], b1: bta[1], seV: se(2), vLo: tc && se(2) != null ? v - tc * se(2) : null, vHi: tc && se(2) != null ? v + tc * se(2) : null, drift, seDrift: se(1) != null ? se(1) * S : null, r2: sst > 0 ? 1 - ssr / sst : null, df };
 }
 
-// ---------- Mars & Co scale slopes ----------
+// ---------- scale slopes (cost curves) ----------
 // A cost line's slope is the multiplier on its unit cost each time the volume driver doubles:
 //   ln(unit cost) = a + b ln(driver),  slope = 2^b,  cost(x) = cost(x0) * (x/x0)^log2(slope)
 // With public data, revenue stands in for volume, so unit cost = cost / revenue. Each P&L cost line
@@ -440,7 +440,7 @@ function runModel(m, inp, opts) {
   // ----- cost method -----
   const regCfg = { n: 10, icpt: false, robust: true, afterBreak: true, ...(inp.reg || {}) };
   const reg = regressIncr(m, regCfg.n, regCfg.icpt, regCfg.robust);
-  // Mars & Co slopes: each cost line follows its own scale curve against revenue
+  // Scale slopes: each cost line follows its own scale curve against revenue
   const sl = scaleSlopes(m, regCfg.n, regCfg.robust, regCfg.afterBreak);
   reg.slopes = sl;
   const slopeOk = (L) => L.usable && L.fit && L.fit.r2 >= 0.3;
