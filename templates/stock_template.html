@@ -134,8 +134,9 @@ input.in { width: 76px; border: 1px solid transparent; background: var(--in-bg);
 input.in.ov { font-weight: 700; border-color: var(--in-ink); }
 input.in:focus { outline: 2px solid var(--accent); outline-offset: 0; }
 tr.chk td.bad { color: var(--neg); font-weight: 700; }
-td.flag { color: var(--neg); }
-td.flag span { cursor: help; }
+td.flag { color: var(--muted); }
+.na-flag { cursor: help; text-decoration: underline dotted var(--faint); text-underline-offset: 3px; }
+.na-flag:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 
 .panels { display: grid; gap: 16px; }
 .panel { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding-inline: 16px; padding-block: 14px 16px; display: grid; gap: 12px; min-width: 0; }
@@ -1282,7 +1283,7 @@ function runDcf(mdl, mkt, setIn, shift, basis) {
     if (profit) return rows;
     rows.push({ l: "Segments as % of revenue", v: (c) => div(tot(c), rev(c)), f: "pct", ratio: true, ind: 1, flagF: field });
     rows.push({ grp: "Mix (% of segment total)" });
-    names.forEach((nm) => rows.push({ l: nm, v: (c) => div(nn(c[field]?.[nm]), tot(c)), f: "pct", ratio: true, ind: 1 }));
+    names.forEach((nm) => rows.push({ l: nm, v: (c) => div(nn(c[field]?.[nm]), tot(c)), f: "pct", ratio: true, ind: 1, flagF: field }));
     return rows;
   }
 
@@ -1400,7 +1401,14 @@ function runDcf(mdl, mkt, setIn, shift, basis) {
         const cells = cols.map((c, j) => {
           if (s.fyOnly && c.type !== "FY") return cellOut(null);
           if (r.drillOnly && !c.drill) return cellOut(null);
-          if (r.flagF && c.segBad?.[r.flagF]) { const o = cellOut(r.v(c), r.f); const b = c.segBad[r.flagF]; o.cls = "flag"; o.html = '<span title="Segments add up to ' + Math.round(b.q * 100) + "% of this period's revenue versus " + Math.round(b.norm * 100) + '% normally. The upstream figure is probably wrong.">⚠ ' + o.html + "</span>"; return o; }
+          if (r.flagF && c.segBad?.[r.flagF]) {
+            // unreliable split: show n/a (blank in exports) with the reason on hover
+            const bd = c.segBad[r.flagF];
+            const why = isNum(bd.q)
+              ? "n/a: in the source data these segments add up to " + Math.round(bd.q * 100) + "% of this period's revenue, against " + Math.round(bd.norm * 100) + "% normally, so the split is wrong. This usually happens when a fourth quarter is derived as the full year minus the first three quarters after the company changed how it reports segments. Revenue, profit and the other lines for this period are unaffected."
+              : "n/a: this half-year includes a quarter whose segment data is unreliable (see that quarter). Revenue, profit and the other lines are unaffected.";
+            return { html: '<span class="na-flag" tabindex="0" title="' + esc(why) + '">n/a</span>', cls: "flag", val: "" };
+          }
           if (c.model) {
             if (r.inp) return { html: inputHTML("m", r.inp.k, c.fy, r.inp.u), cls: "in", val: inVal("m", r.inp.k, c.fy) };
             if (r.mv) return cellOut(r.mv(c.fy), r.f, r.sign || r.chk);
@@ -1428,6 +1436,7 @@ function runDcf(mdl, mkt, setIn, shift, basis) {
         if (r.yoy && r.v) {
           const yc = cols.map((c) => {
             if (s.fyOnly && c.type !== "FY") return cellOut(null);
+            if (r.flagF && (c.segBad?.[r.flagF] || c.p?.segBad?.[r.flagF])) return { html: '<span class="na-flag" title="n/a: this period or the one a year earlier has unreliable segment data.">n/a</span>', cls: "flag", val: "" };
             return c.p ? cellOut(growth(r.v(c), r.pv ? r.pv(c) : r.v(c.p)), "yoy", true) : cellOut(null);
           });
           out.push('<tr class="sub"><td>% yoy</td>' + yc.map((x, j) => '<td class="' + (cc[j] + " " + x.cls).trim() + '">' + x.html + "</td>").join("") + "</tr>");
