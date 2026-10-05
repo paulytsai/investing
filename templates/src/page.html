@@ -345,7 +345,7 @@ footer.foot { color: var(--muted); font-size: 12px; line-height: 1.5; display: g
       { l: "Net income", v: (c) => nn(c.i?.netIncome), f: "usd", yoy: true, key: true },
       ...seasonRows((c) => nn(c?.i?.netIncome)),
       { l: "Net margin", v: pctRev((c) => nn(c.i?.netIncome)), f: "pct", ratio: true },
-      { l: "Diluted shares (mm)", v: (c) => nn(c.i?.weightedAverageShsOutDil), f: "sh", yoy: true, g: { k: "sh", u: "sh" } },
+      { l: "Diluted shares (mm)", v: (c) => nn(c.i?.weightedAverageShsOutDil), f: "sh", yoy: true, g: { k: "sh", u: "sh" }, inp: { k: "sh", u: "sh" } },
       { l: "Diluted EPS", v: (c) => nn(c.i?.epsDiluted), f: "eps", yoy: true, key: true, g: { k: "eps", u: "eps" } },
       { l: "high (consensus / guidance range)", v: (c) => (c.kind === "C" || c.kind === "G" ? nn(c.i?._epsHi) : null), f: "eps", ind: 1, ratio: true, g: { k: "epsHi", u: "eps" } },
       { l: "low (consensus / guidance range)", v: (c) => (c.kind === "C" || c.kind === "G" ? nn(c.i?._epsLo) : null), f: "eps", ind: 1, ratio: true, g: { k: "epsLo", u: "eps" } },
@@ -476,10 +476,12 @@ footer.foot { color: var(--muted); font-size: 12px; line-height: 1.5; display: g
     const costRows = [];
     const prof = M.reg.cost.profile;
     const profTxt = { high: "high fixed costs", mid: "mixed fixed and variable costs", low: "mostly variable costs", unclear: "a cost structure history can't pin down" }[prof];
-    const mName = { incr: "incremental margin", regress: "scale slopes", fixvar: "fixed + variable costs", segment: "segment EBIT" };
-    const why = M.autoMethod === "regress" ? "cost lines track revenue along clear scale curves (cost-weighted R² " + M.slopeR2.toFixed(2) + ")" : "scale curves don't fit well (cost-weighted R² " + M.slopeR2.toFixed(2) + ") and the fixed/variable regression shows " + profTxt + (isNum(M.reg.cost.dol) && M.reg.cost.valid ? " (operating leverage " + M.reg.cost.dol.toFixed(1) + "×)" : "");
+    const mName = { cons: "consensus EBIT margin", incr: "incremental margin", regress: "scale slopes", fixvar: "fixed + variable costs", segment: "segment EBIT" };
+    const why = M.consAnchored ? "defaults follow consensus: revenue, EBIT margin, net income and EPS match it for the years it covers, and later years carry the last consensus year forward. Consensus is often on an adjusted basis while history is reported (GAAP), so the first forecast year can step up or down. The cost-structure analysis would pick " + mName[M.costSuggest] + "; switch to it for our own view of operating leverage" : M.autoMethod === "regress" ? "cost lines track revenue along clear scale curves (cost-weighted R² " + M.slopeR2.toFixed(2) + ")" : "scale curves don't fit well (cost-weighted R² " + M.slopeR2.toFixed(2) + ") and the fixed/variable regression shows " + profTxt + (isNum(M.reg.cost.dol) && M.reg.cost.valid ? " (operating leverage " + M.reg.cost.dol.toFixed(1) + "×)" : "");
     costRows.push({ note: (M.methodAuto ? "Chosen automatically: " : "You chose " + mName[M.method] + ". Suggested: ") + (M.methodAuto ? mName[M.method] : mName[M.autoMethod]) + ", because " + why + ". Details are in the panel below the table." + (M.methodAuto ? "" : ' <button type="button" class="mini" data-act="method" data-v="auto">Let the cost structure decide</button>'), html: true });
-    if (M.method === "incr") {
+    if (M.method === "cons") {
+      costRows.push({ l: "EBIT margin (default: consensus)", hv: pctRev(ebit), inp: { k: "em", u: "pct" }, f: "pct", ratio: true });
+    } else if (M.method === "incr") {
       costRows.push({ l: "Incremental EBIT margin (ΔEBIT ÷ Δrevenue)", hv: (c) => div(sub(ebit(c), ebit(c.p || {})), sub(rev(c), rev(c.p || {}))), inp: { k: "incr", u: "pct" }, f: "pct", ratio: true });
     } else if (M.method === "regress") {
       const sl = M.reg.slopes;
@@ -526,7 +528,7 @@ footer.foot { color: var(--muted); font-size: 12px; line-height: 1.5; display: g
 
     return [
       { title: "Forecast drivers · revenue build", ctl: " " + bb("segment", "By segment", M.basis === "segment", !hasProd) + bb("geo", "By region", M.basis === "geo", !hasGeo) + bb("total", "Total", M.basis === "total", false), rows: revRows, driver: true },
-      { title: "Forecast drivers · operating profit", ctl: " " + mb("incr", "Incremental margin") + mb("regress", "Scale slopes") + mb("fixvar", "Fixed + variable costs") + mb("segment", "Segment EBIT"), rows: costRows, driver: true },
+      { title: "Forecast drivers · operating profit", ctl: " " + mb("cons", "Consensus margin") + mb("incr", "Incremental margin") + mb("regress", "Scale slopes") + mb("fixvar", "Fixed + variable costs") + mb("segment", "Segment EBIT"), rows: costRows, driver: true },
     ];
   }
   const dol = (e1, e0, r1, r0) => { const ge = growth(e1, e0), gr = growth(r1, r0); return isNum(ge) && isNum(gr) && Math.abs(gr) > 0.001 ? ge / gr : null; };
@@ -752,7 +754,7 @@ footer.foot { color: var(--muted); font-size: 12px; line-height: 1.5; display: g
       low: "<b>Mostly variable costs.</b> Only about " + pct(cr.fixedShare, 0) + " of costs are fixed, so each extra dollar of sales earns a fairly steady margin.",
       unclear: "<b>History can't separate fixed from variable costs</b>" + (cf ? " (variable ratio comes out at " + pct(cf.v, 0) + " with negative fixed costs)" : "") + ". That usually means the business changed underneath the numbers: asset sales or refranchising, a big mix shift, or one-off charges inside reported EBIT. Try a window that starts after the change, use segment EBIT from SEC releases, or set the variable-cost ratio by judgment.",
     }[cr.profile];
-    const mNames = { incr: "incremental margin", regress: "scale slopes", fixvar: "fixed + variable costs" };
+    const mNames = { cons: "consensus EBIT margin", incr: "incremental margin", regress: "scale slopes", fixvar: "fixed + variable costs" };
     const verdict = slopeLead + verdict0 + " Suggested method: <b>" + mNames[M.autoMethod] + "</b>" + (M.method !== M.autoMethod ? " (you are using " + (mNames[M.method] || "segment EBIT") + ")" : "") + ".";
     const dropTxt = (d) => (d && d.length ? "Excluded as outliers: FY" + d.join(", FY") : "No years excluded");
     const sl = rg.slopes;
@@ -964,7 +966,8 @@ footer.foot { color: var(--muted); font-size: 12px; line-height: 1.5; display: g
       ["P/E FY" + (y2 ? y2.fy : "") + "E", fmtX(div(mk.price, y2?.eps))],
       ["EV/EBITDA FY" + (y1 ? y1.fy : "") + "E", fmtX(div(mk.ev, y1 ? y1.ebit + y1.da : null))],
       ["FCF yield LTM", (() => { const y = div(fcf(L), mk.mcap); return isNum(y) ? FMT.pct(y) : null; })()],
-      ["DCF / share" + (R?.basis === "cons" ? " (consensus)" : ""), R && isNum(R.perShare) ? R.perShare.toFixed(2) : null, R && isNum(R.upside) ? (R.upside >= 0 ? "pos" : "neg") : ""],
+      ["DCF / share" + (R?.basis === "cons" ? " (consensus)" : ""), R && isNum(R.perShare) ? R.perShare.toFixed(2) : null],
+      ["Upside to current price", R && isNum(R.upside) ? FMT.yoy(R.upside) : null, R && isNum(R.upside) ? (R.upside >= 0 ? "pos" : "neg") : ""],
     ];
     strip.innerHTML = items.map(([k, v, cls]) => "<div><span>" + esc(k) + '</span><b class="' + (cls || "") + '">' + (v ?? "–") + "</b></div>").join("");
   }

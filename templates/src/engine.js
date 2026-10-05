@@ -417,7 +417,8 @@ function runModel(m, inp, opts) {
     let prev = L.base, prevU = ov["u0:" + L.name + "|" + B.fy], prevDg = null;
     fys.forEach((fy) => {
       // consensus growth while it exists, then carry the last year's default forward
-      const dg = L.name === RECON ? 0 : consG(fy) ?? prevDg ?? lineCagr(L.name) ?? 0.04;
+      // consensus growth for every line (the total then matches consensus), carried forward after year 3
+      const dg = consG(fy) ?? prevDg ?? (L.name === RECON ? 0 : lineCagr(L.name) ?? 0.04);
       prevDg = dg;
       setD("g:" + L.name, fy, dg); setD("ug:" + L.name, fy, dg); setD("pg:" + L.name, fy, 0);
       let g;
@@ -447,16 +448,24 @@ function runModel(m, inp, opts) {
   const intExpB = n(B.i.interestExpense) ?? 0, intIncB = n(B.i.interestIncome) ?? 0;
   const othB = (n(B.i.incomeBeforeTax) ?? ebitB) - ebitB + intExpB - intIncB;
   const histIncr = (() => { const h = hist3(B.fy - 3); const r = h ? div(sub(ebitB, ebit(h)), sub(revB, rev(h))) : null; return isNum(r) ? clamp(r, -0.5, 0.9) : div(ebitB, revB); })();
+  // incremental margin that reproduces consensus EBIT exactly (unclamped)
   const consIncr = (fy) => {
     const ce = ebit(m.consFy[fy] || {}), pe = fy === m.curFY ? ebitB : ebit(m.consFy[fy - 1] || {});
-    const r = div(sub(ce, pe), sub(consRev(fy), fy === m.curFY ? revB : consRev(fy - 1)));
-    return isNum(r) ? clamp(r, -1, 1.5) : null;
+    const dr = sub(consRev(fy), fy === m.curFY ? revB : consRev(fy - 1));
+    return isNum(dr) && Math.abs(dr) > 0.001 * Math.abs(revB) ? div(sub(ce, pe), dr) : null;
   };
+  const consYears = fys.filter((fy) => isNum(ebit(m.consFy[fy] || {})) && isNum(consRev(fy)));
+  const lastConsFy = consYears.length ? Math.max(...consYears) : null;
+  const lastConsMargin = lastConsFy ? ebit(m.consFy[lastConsFy]) / consRev(lastConsFy) : null;
   fys.forEach((fy) => {
     setD("gm", fy, gmB); setD("tax", fy, taxB); setD("sbc", fy, sbcB); setD("capex", fy, capexPct);
     setD("pay", fy, payB); setD("bb", fy, bbB); setD("acq", fy, 0); setD("dIss", fy, 0); setD("oth", fy, 0);
     setD("dso", fy, dso0); setD("dio", fy, dio0); setD("dpo", fy, dpo0); setD("dr", fy, drp0);
-    setD("incr", fy, consIncr(fy) ?? D["incr|" + (fy - 1)] ?? histIncr);
+    // after consensus ends, an incremental margin equal to the last consensus EBIT margin keeps that margin
+    setD("incr", fy, consIncr(fy) ?? (lastConsFy && fy > lastConsFy ? lastConsMargin : null) ?? D["incr|" + (fy - 1)] ?? histIncr);
+    // consensus EBIT margin, carried forward after the last consensus year
+    const cm = isNum(ebit(m.consFy[fy] || {})) && consRev(fy) > 0 ? ebit(m.consFy[fy]) / consRev(fy) : null;
+    setD("em", fy, cm ?? D["em|" + (fy - 1)] ?? div(ebitB, revB));
   });
 
   // ----- scalar settings -----
@@ -507,8 +516,11 @@ function runModel(m, inp, opts) {
   // Method follows the cost structure unless the user picked one: high fixed costs -> fixed + variable
   // (incremental margins swing with growth); mostly variable -> regression slope; unclear -> consensus-led
   const slopesUsable = hasCogsLine && slopeR2 >= 0.5;
-  const autoMethod = slopesUsable ? "regress" : costOk && cost.profile !== "low" ? "fixvar" : "incr";
-  let method = ["incr", "regress", "fixvar", "segment"].includes(inp.costMethod) ? inp.costMethod : autoMethod;
+  // Defaults follow consensus whenever it covers EBIT; otherwise the cost structure picks the method
+  const costSuggest = slopesUsable ? "regress" : costOk && cost.profile !== "low" ? "fixvar" : "incr";
+  const consAnchored = consYears.includes(fys[0]);
+  const autoMethod = consAnchored ? "cons" : costSuggest;
+  let method = ["cons", "incr", "regress", "fixvar", "segment"].includes(inp.costMethod) ? inp.costMethod : autoMethod;
   if (method === "regress" && !hasCogsLine) method = "incr";
   // under the slope method the gross margin default follows the cost-of-revenue curve
   if (method === "regress") fys.forEach((fy) => { const c = slopeCost.cogs?.[fy]; if (isNum(c)) setD("gm", fy, 1 - c / R[fy]); });
@@ -554,7 +566,8 @@ function runModel(m, inp, opts) {
     const daV = daExist + daNew;
 
     let ebitV, fixedV = null, varV = null, segE = null, uaV = null;
-    if (method === "incr") ebitV = prev.ebit + I("incr", fy) * dRev;
+    if (method === "cons") ebitV = I("em", fy) * r;
+    else if (method === "incr") ebitV = prev.ebit + I("incr", fy) * dRev;
     else if (method === "regress") {
       // revenue less cost of revenue (from the gross margin, which defaults to its slope curve) and the other lines' curves
       const opLines = costLines.filter((L) => L.key !== "cogs").reduce((a, L) => a + slopeCost[L.key][fy], 0);
@@ -570,6 +583,12 @@ function runModel(m, inp, opts) {
       ebitV = Object.values(segE).reduce((a, b) => a + b, 0) + uaV;
     }
     const intExp = scal.kd * prev.debt, intInc = scal.ky * Math.max(prev.cash, 0);
+    // default non-operating items close the gap to consensus net income (at consensus EBIT and default tax),
+    // so net income matches consensus until EBIT, tax or this line is changed
+    const cy = m.consFy[fy], niC = n(cy?.i?.netIncome), ebitC = ebit(cy || {});
+    const tD = D["tax|" + fy];
+    if (isNum(niC) && isNum(ebitC) && tD < 0.95) setD("oth", fy, niC / (1 - tD) - (ebitC - intExp + intInc));
+    else if (lastConsFy && fy > lastConsFy) setD("oth", fy, D["oth|" + (fy - 1)] ?? 0);
     const pretax = ebitV - intExp + intInc + I("oth", fy);
     const taxV = pretax * I("tax", fy);
     const ni = pretax - taxV;
@@ -585,8 +604,15 @@ function runModel(m, inp, opts) {
     const debtV = prev.debt + dIss;
     const depBaseV = prev.depBase + capexV - daV;
     const gwV = prev.gw + acqV;
-    const sharesEnd = isNum(prev.shares) ? prev.shares + (sbc - bbV) / scal.px : null;
-    const sharesAvg = isNum(sharesEnd) ? (prev.shares + sharesEnd) / 2 : null;
+    // Diluted shares: consensus share count (net income / EPS) while consensus lasts, so EPS matches it;
+    // afterwards stock comp issues shares and buybacks retire them at the buyback price
+    const mechEnd = isNum(prev.shares) ? prev.shares + (sbc - bbV) / scal.px : null;
+    const epsC = n(cy?.i?.epsDiluted), shC = isNum(niC) && isNum(epsC) && epsC > 0 ? niC / epsC : null;
+    const shCok = isNum(shC) && isNum(prev.shares) && Math.abs(shC / prev.shares - 1) < 0.25;
+    setD("sh", fy, shCok ? shC : isNum(mechEnd) ? (prev.shares + mechEnd) / 2 : null);
+    const sharesAvg = I("sh", fy);
+    const fixedShares = shCok || isNum(ov["sh|" + fy]);
+    const sharesEnd = fixedShares ? sharesAvg : mechEnd;
     equity = equity + ni - divV - bbV + sbc;
     const tca = cash + arV + invV + otherCA;
     const ta = tca + depBaseV + gwV + otherNCA;
@@ -609,7 +635,7 @@ function runModel(m, inp, opts) {
   // chain YoY: first model year compares with the last reported year
   let pc = B;
   fys.forEach((fy) => { out[fy].ctx.p = pc; pc = out[fy].ctx; });
-  return { consFy: m.consFy, fys, B, basis, field, lines, R, out, I, D, ov, method, slopeCost, costLines, slopeR2, slopesUsable, reconB, autoMethod, methodAuto: !["incr", "regress", "fixvar", "segment"].includes(inp.costMethod), vEst, reg, regCfg, scal, dflt, fixed0, fixedNeg, uaBase, segE0, histLine, consRev };
+  return { consAnchored, costSuggest, consFy: m.consFy, fys, B, basis, field, lines, R, out, I, D, ov, method, slopeCost, costLines, slopeR2, slopesUsable, reconB, autoMethod, methodAuto: !["cons", "incr", "regress", "fixvar", "segment"].includes(inp.costMethod), vEst, reg, regCfg, scal, dflt, fixed0, fixedNeg, uaBase, segE0, histLine, consRev };
 }
 
 // ---------- DCF (Damodaran-style FCFF) ----------
