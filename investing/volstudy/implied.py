@@ -72,8 +72,9 @@ def leg_iv(leg: dict, asof: pd.Timestamp, r: float = RF_1Y) -> dict:
 def fit_term_structure(row: dict, asof: pd.Timestamp, extra_legs: list[dict] | None = None) -> dict:
     """Implied earnings move from the expiries either side of the report.
 
-    w_POST = s^2 * T_POST + J^2 with s = the pre-earnings expiry's vol, so
-    J^2 = T_POST * (iv_POST^2 - iv_PRE^2). The ~1y expiry gives total 1y vol;
+    w_POST = w_PRE + s^2 * (T_POST - T_PRE) + J^2, where s is the forward
+    vol between the last two pre-earnings expiries (or, with only one, the
+    PRE expiry's own vol, giving J^2 = T_POST * (iv_POST^2 - iv_PRE^2)). The ~1y expiry gives total 1y vol;
     removing its n earnings jumps leaves the implied normal-day vol. If no
     pre-earnings quote exists, fall back to a least-squares fit across all
     expiries (flagged).
@@ -92,15 +93,26 @@ def fit_term_structure(row: dict, asof: pd.Timestamp, extra_legs: list[dict] | N
     pts = pd.DataFrame(pts).sort_values("T")
     pre = pts[(pts["n"] == 0)]
     post = pts[(pts["n"] == 1)].head(1)
-    long = pts.iloc[-1]
+    # ~1y leg: the LONG tag if present, else the expiry closest to one year
+    long = pts[pts["tag"] == "LONG"].iloc[0] if (pts["tag"] == "LONG").any() else pts.iloc[(pts["T"] - 1).abs().argmin()]
     if len(pre) and len(post):
-        p0, p1 = pre.iloc[-1], post.iloc[0]
-        j2 = max(p1["T"] * (p1["iv"] ** 2 - p0["iv"] ** 2), 0.0)
-        method, short_vol = "pre/post", p0["iv"]
+        p1 = post.iloc[0]
+        w = lambda x: x["iv"] ** 2 * x["T"]
+        if len(pre) >= 2:
+            # normal-day vol for the PRE->POST window = forward vol between the
+            # last two pre-earnings expiries (handles a still-elevated front end)
+            a, b = pre.iloc[-2], pre.iloc[-1]
+            fwd_var = max((w(b) - w(a)) / (b["T"] - a["T"]), 0.0)
+            j2 = max(w(p1) - w(b) - fwd_var * (p1["T"] - b["T"]), 0.0)
+            method, short_vol = "forward", math.sqrt(fwd_var)
+        else:
+            p0 = pre.iloc[-1]
+            j2 = max(p1["T"] * (p1["iv"] ** 2 - p0["iv"] ** 2), 0.0)
+            method, short_vol = "pre/post", p0["iv"]
     else:
         A = pts[["T", "n"]].values
-        (a, j2), _ = nnls(A, (pts["iv"] ** 2 * pts["T"]).values)
-        method, short_vol = "term fit", math.sqrt(a)
+        (a_, j2), _ = nnls(A, (pts["iv"] ** 2 * pts["T"]).values)
+        method, short_vol = "term fit", math.sqrt(a_)
     sd_long = math.sqrt(max(long["iv"] ** 2 * long["T"] - long["n"] * j2, 0.0) / long["T"])
     return {
         "jump": math.sqrt(j2), "short_vol": short_vol, "vol_1y": long["iv"], "T_long": long["T"],

@@ -166,3 +166,76 @@ if __name__ == "__main__":
     pd.set_option("display.width", 250)
     c, s = run()
     print(c.round(3).T.to_string()); print(s.round(3).to_string())
+
+
+# ---------- single-name deep dive ----------
+
+def consensus_value(eps: list[float], r: float, payout: float) -> float:
+    """Value if EPS follows consensus, its growth fades to 3% by year 10, and
+    the investor earns r."""
+    g0 = float(np.clip((eps[-1] / eps[0]) ** (1 / max(len(eps) - 1, 1)) - 1 if len(eps) > 1 else 0.06, -0.05, 0.25))
+    path = list(eps)
+    n_fade = im.HORIZON - len(path)
+    for k in range(1, n_fade + 1):
+        path.append(path[-1] * (1 + g0 + (im.G_TERMINAL - g0) * k / n_fade))
+    return im.dcf_value(path, im.G_TERMINAL, r, payout)
+
+
+def price_attribution(sym: str, years: tuple[int, ...] = (1, 2, 5, 10)) -> pd.DataFrame:
+    """Split the price change over each window into P/E change and EPS change
+    (TTM street EPS)."""
+    p = cs.street_panel(sym).dropna()
+    end = p.index[-1]
+    rows = []
+    for y in years:
+        past = p[p.index <= end - pd.DateOffset(years=y)]
+        if past.empty:
+            continue
+        a, b = past.iloc[-1], p.iloc[-1]
+        rows.append({"years": y, "price_from": np.exp(a["v"]), "price_to": np.exp(b["v"]),
+                     "eps_from": np.exp(a["f_st"]), "eps_to": np.exp(b["f_st"]),
+                     "pe_from": np.exp(a["m_st"]), "pe_to": np.exp(b["m_st"]),
+                     "price_chg": np.exp(b["v"] - a["v"]) - 1,
+                     "from_eps": b["f_st"] - a["f_st"], "from_pe": b["m_st"] - a["m_st"]})
+    return pd.DataFrame(rows)
+
+
+def deep_dive(sym: str, quotes: dict | None, asof: pd.Timestamp) -> dict:
+    price = float(quotes["spot"]) if quotes else float(data.split_adj_close(sym).iloc[-1])
+    cons = im.consensus_path(sym, asof)
+    eps = im.annual_path(cons, asof)
+    b = im.beta(sym)
+    r = im.RF_10Y + b * im.ERP
+    po = im.payout_ratio(sym)
+    out = {
+        "sym": sym, "price": price, "consensus": cons, "eps_path": eps, "ntm_eps": eps[0], "fwd_pe": price / eps[0],
+        "beta": b, "r_capm": r, "payout": po,
+        "consensus_growth": (eps[-1] / eps[0]) ** (1 / (len(eps) - 1)) - 1 if len(eps) > 1 else float("nan"),
+        "hist_eps_growth_10y": im.hist_eps_cagr(sym), "hist_eps_growth_5y": im.hist_eps_cagr(sym, 5),
+        "implied_growth": im.implied_growth(price, eps, r, po), "implied_return": implied_return(price, eps, po),
+        "value_consensus_capm": consensus_value(eps, r, po),
+        "attribution": price_attribution(sym), "eps_growth_vol": street_growth_vol(sym),
+    }
+    # history of earnings-day moves and surprises
+    rx = cs.reactions(sym)
+    px = data.prices(sym)
+    lr = np.log(px).diff()
+    raw = []
+    for d in rx["date"]:
+        i = lr.index.searchsorted(d)
+        raw.append(lr.iloc[i : i + 2].sum() if 1 <= i and i + 2 <= len(lr) else np.nan)
+    rx["raw_move"] = raw
+    out["recent_reports"] = rx.tail(8)[["date", "act", "est", "surprise_pct", "raw_move", "react"]]
+    out.update(realized_moves(sym))
+    erc = pd.read_csv(OUT / "erc_by_sector.csv").set_index("group")["move_per_1pct_beat"]
+    out["move_per_1pct_beat"] = erc.get(data.sector(sym), erc["ALL"])
+    nxt = cons.iloc[1] if len(cons) > 1 else cons.iloc[0]
+    out["analyst_disp_next_fy"] = (np.log(nxt["epsHigh"]) - np.log(nxt["epsLow"])) / 2
+    if quotes:
+        ts = im.fit_term_structure(quotes, asof)
+        T, v = ts["T_long"], ts["vol_1y"]
+        lo, hi = price * np.exp(-v * np.sqrt(T)), price * np.exp(v * np.sqrt(T))
+        out.update({"ts": ts, "price_lo_1y": lo, "price_hi_1y": hi,
+                    "implied_growth_lo": im.implied_growth(lo, eps, r, po),
+                    "implied_growth_hi": im.implied_growth(hi, eps, r, po)})
+    return out

@@ -224,7 +224,9 @@ For 16 names, `study_fit.py` builds one card from three independent views.
   follows consensus and fades to 3%.
 * **Options** (IBKR quotes, 2026-10-02 close): implied vol is computed from
   call/put mids. The earnings move comes from the expiries either side of
-  the next report, J² = T_post·(IV_post² − IV_pre²). The ~1-year expiry
+  the next report: J² = T_post·(IV_post² − IV_pre²), or with two
+  pre-earnings expiries, the post-earnings variance minus the forward
+  normal-day variance. The ~1-year expiry
   gives 1-year vol; removing its four earnings jumps leaves normal-day
   ("multiple") vol.
 * **History and analysts**: past earnings-day moves, typical EPS surprise,
@@ -240,14 +242,14 @@ For 16 names, `study_fit.py` builds one card from three independent views.
 | UNH | 17.0 | 16.1% | 11.2% | 0.9% | 10.5% | 7.5% | 12.0% | 1.1% | 34% | 14% |
 | JPM | 13.2 | 6.4% | 15.4% | 8.2% | 8.7% | 3.9% | 3.3% | 1.2% | 26% | 21% |
 | GS | 12.7 | 6.4% | 15.7% | 7.2% | 9.7% | 4.9% | 4.2% | 1.7% | 34% | 48% |
-| AAPL | 34.7 | 11.1% | 15.1% | **24.8%** | **4.5%** | 3.8% | 4.1% | 0.4% | 28% | 25% |
-| MSFT | 25.1 | 22.0% | 20.1% | 18.3% | 8.5% | 6.2% | 6.6% | 0.6% | 32% | 11% |
+| AAPL | 34.7 | 11.1% | 15.1% | **24.8%** | **4.5%** | 3.6% | 4.1% | 0.4% | 28% | 25% |
+| MSFT | 25.1 | 22.0% | 20.1% | 18.3% | 8.5% | 6.1% | 6.6% | 0.6% | 32% | 11% |
 | NVDA | 17.6 | 16.2% | 67.6% | 22.2% | 9.3% | 6.3% | 5.8% | 0.7% | 38% | 84% |
 | GOOGL | 21.0 | 13.7% | 29.3% | 18.5% | 7.7% | 6.4% | 6.5% | 1.1% | 35% | 22% |
 | META | 21.9 | 17.1% | 24.0% | 19.5% | 8.3% | 7.6% | 9.9% | 1.2% | 42% | 37% |
 | XOM | 14.4 | −7.2% | 12.6% | 4.9% | 5.7% | 4.0% | 1.9% | 0.8% | 29% | 150% |
 | CAT | 27.3 | 19.3% | 22.0% | 18.4% | 7.2% | n/a† | 5.3% | 1.8% | 40% | 40% |
-| AMZN | 22.6 | 19.3% | 51.1% | 21.3% | 8.3% | 7.9% | 8.1% | 3.2% | 36% | 78% |
+| AMZN | 22.6 | 19.3% | 51.1% | 21.3% | 8.3% | 7.7% | 8.1% | 3.2% | 36% | 78% |
 
 \* PEP reports before any pricable expiry; move from a fit across expiries.
 † CAT's pre/post quotes are too wide to separate an earnings move.
