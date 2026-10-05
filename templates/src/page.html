@@ -52,49 +52,53 @@
   color-scheme: dark;
 }
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 body { background: var(--bg); color: var(--ink); font-family: var(--body); font-size: 14px; }
-.wrap { max-width: none; margin: 0; padding-inline: 16px; padding-block: 20px 48px; display: grid; gap: 16px; }
+.wrap { max-width: none; margin: 0; padding-inline: 16px; padding-block: 10px 48px; display: grid; gap: 8px; }
 h2 { font-family: var(--display); font-weight: 700; font-size: 17px; margin: 0; }
 h3 { font-family: var(--display); font-weight: 600; font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin: 0; }
 
-header.top { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 12px 24px; }
-.co { min-width: 0; display: grid; gap: 2px; }
-.co .eyebrow { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
-.co h1 { margin: 0; font-family: var(--display); font-weight: 700; font-size: 24px; line-height: 1.15; text-wrap: balance; }
-.co .meta { color: var(--muted); font-size: 13px; }
+header.top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 20px; }
+.co { min-width: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 2px 14px; }
+.co .cometa { display: grid; gap: 1px; min-width: 0; }
+.co .eyebrow { font-size: 10.5px; letter-spacing: .07em; text-transform: uppercase; color: var(--muted); }
+.co h1 { margin: 0; font-family: var(--display); font-weight: 700; font-size: 20px; line-height: 1.15; text-wrap: balance; }
+.co .meta { color: var(--muted); font-size: 12px; }
 
 form.controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .tick { display: flex; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); overflow: hidden; }
-.tick input { border: 0; background: transparent; color: var(--ink); font: 600 15px var(--body); text-transform: uppercase; letter-spacing: .04em; width: 110px; padding: 8px 10px; }
+.tick input { border: 0; background: transparent; color: var(--ink); font: 600 14px var(--body); text-transform: uppercase; letter-spacing: .04em; width: 100px; padding: 5px 9px; }
 .tick input:focus { outline: none; }
 .tick:focus-within { outline: 2px solid var(--accent); outline-offset: 1px; }
 .tick button { border: 0; background: var(--accent); color: var(--accent-ink); font: 600 13px var(--body); padding: 0 14px; cursor: pointer; }
 .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; background: var(--surface); }
-.seg button { border: 0; background: transparent; color: var(--muted); font: 600 13px var(--body); padding: 8px 12px; cursor: pointer; }
+.seg button { border: 0; background: transparent; color: var(--muted); font: 600 12.5px var(--body); padding: 5px 10px; cursor: pointer; }
+form.controls .btn { padding: 5px 10px; font-size: 12.5px; }
 .seg button[aria-pressed="true"] { background: var(--band); color: var(--ink); }
 .seg button:disabled { opacity: .4; cursor: default; }
 .btn { border: 1px solid var(--line); background: var(--surface); color: var(--ink); font: 600 13px var(--body); padding: 8px 12px; border-radius: 6px; cursor: pointer; }
 button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .btn:disabled, .tick button:disabled { opacity: .5; cursor: default; }
 
-.strip { display: grid; grid-template-columns: repeat(auto-fit, minmax(118px, 1fr)); background: var(--surface); border: 1px solid var(--line); border-radius: 8px; }
-.strip div { padding: 10px 14px; border-right: 1px solid var(--line); display: grid; gap: 2px; min-width: 0; }
+.strip { display: grid; grid-template-columns: repeat(auto-fit, minmax(104px, 1fr)); background: var(--surface); border: 1px solid var(--line); border-radius: 8px; }
+.strip div { padding: 4px 10px 5px; border-right: 1px solid var(--line); display: grid; gap: 0; min-width: 0; }
 .strip div:last-child { border-right: 0; }
-.strip span { font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.strip b { font-family: var(--display); font-weight: 600; font-size: 17px; font-variant-numeric: tabular-nums; }
+.strip span { font-size: 10px; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.strip b { font-family: var(--display); font-weight: 600; font-size: 15px; font-variant-numeric: tabular-nums; }
 .strip b.pos { color: var(--pos); } .strip b.neg { color: var(--neg); }
 
-.notice { padding: 10px 14px; border-radius: 8px; background: var(--warn-bg); color: var(--warn-ink); line-height: 1.45; }
+.notice { padding: 7px 12px; border-radius: 8px; background: var(--warn-bg); color: var(--warn-ink); line-height: 1.45; }
 .notice button { margin-left: 8px; }
 
-.legend { display: flex; flex-wrap: wrap; gap: 6px 18px; align-items: center; color: var(--muted); font-size: 12px; }
+.tabbar { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 2px 16px; border-bottom: 1px solid var(--line); }
+.legend { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: center; color: var(--muted); font-size: 11px; padding-bottom: 6px; }
 .legend .chip { margin-right: 4px; }
 .legend .sw { display: inline-block; width: 26px; height: 14px; vertical-align: -3px; margin-right: 5px; border: 1px solid var(--line); background: var(--in-bg); color: var(--in-ink); font-size: 10px; text-align: center; line-height: 12px; font-weight: 700; }
 
 .sheet { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; overflow: auto; max-height: calc(100vh - 32px); overscroll-behavior: contain; }
 #tbl thead { position: sticky; top: 0; z-index: 3; }
 #tbl thead td { background-color: var(--surface); }
-#tbl thead tr.yrs td { background-color: var(--band); font-family: var(--display); font-weight: 600; font-size: 12px; padding-top: 7px; padding-bottom: 7px; border-bottom: 1px solid var(--faint); }
+#tbl thead tr.yrs td { background-color: var(--band); font-family: var(--display); font-weight: 600; font-size: 12px; padding-top: 5px; padding-bottom: 5px; border-bottom: 1px solid var(--faint); }
 #tbl thead td:first-child { z-index: 4; }
 #tbl thead tr.groups td:first-child { white-space: normal; overflow: visible; }
 #tbl thead tr.groups td:first-child .mini { margin: 2px 6px 2px 0; }
@@ -131,7 +135,7 @@ td.h { font-weight: 600; }
 .chip.kE { color: var(--est-ink); border-color: var(--est-ink); }
 .chip.kG { color: var(--gd-ink); border-color: var(--gd-ink); }
 .chip.kC { color: var(--cs-ink); border-color: var(--cs-ink); }
-tr.groups td { border-bottom: 0; padding-top: 8px; padding-bottom: 4px; font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); text-align: left; font-weight: 600; }
+tr.groups td { border-bottom: 0; padding-top: 5px; padding-bottom: 3px; font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); text-align: left; font-weight: 600; }
 tr.groups td.kE { color: var(--est-ink); } tr.groups td.kG { color: var(--gd-ink); } tr.groups td.kC { color: var(--cs-ink); }
 .mini { border: 1px solid var(--line); background: var(--surface); color: var(--ink); font: 600 11px var(--body); text-transform: none; letter-spacing: .01em; padding: 2px 7px; border-radius: 4px; cursor: pointer; margin-left: 6px; }
 .mini[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
@@ -162,15 +166,25 @@ td.flag { color: var(--muted); }
 .dcf tr.key td { font-weight: 700; }
 .dcf td.fade { background-image: linear-gradient(var(--cs), var(--cs)); }
 .sens td.mid { font-weight: 700; outline: 2px solid var(--accent); outline-offset: -2px; }
+.chg td:nth-child(-n+3) { text-align: left; }
+.chg td:nth-child(2) { color: var(--ink); }
+.chg td { white-space: nowrap; }
+.sens .up { font-size: 10.5px; font-weight: 600; margin-left: 6px; }
+.sens .up.pos { color: var(--pos); }
+.sens .up.neg { color: var(--neg); }
 .flags { display: grid; gap: 6px; margin: 0; padding-left: 18px; color: var(--muted); }
 .flags li.warn { color: var(--neg); }
 .save { color: var(--muted); font-size: 12px; }
 .btnrow { display: flex; flex-wrap: wrap; gap: 8px; }
-#notesText { width: 100%; min-height: 60vh; resize: vertical; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); color: var(--ink); font: 14px/1.55 var(--body); padding: 12px 14px; }
-#notesText:focus { outline: 2px solid var(--accent); outline-offset: 0; }
+.notes2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(380px, 100%), 1fr)); gap: 16px; align-items: start; }
+.notes2 > div { display: grid; gap: 6px; min-width: 0; }
+.notes2 .nh { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 12px; }
+.notes2 textarea { width: 100%; min-height: 62vh; resize: vertical; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); color: var(--ink); font: 14px/1.55 var(--body); padding: 12px 14px; }
+#notesDraftText { background: var(--est); }
+.notes2 textarea:focus { outline: 2px solid var(--accent); outline-offset: 0; }
 #sheetWrap { min-width: 0; }
-.tabs { display: flex; flex-wrap: wrap; gap: 2px; border-bottom: 1px solid var(--line); }
-.tabs button { border: 0; border-bottom: 3px solid transparent; background: transparent; color: var(--muted); font: 600 14px var(--display); padding: 9px 14px 8px; cursor: pointer; }
+.tabs { display: flex; flex-wrap: wrap; gap: 2px; margin-bottom: -1px; }
+.tabs button { border: 0; border-bottom: 3px solid transparent; background: transparent; color: var(--muted); font: 600 13.5px var(--display); padding: 6px 12px 5px; cursor: pointer; }
 .tabs button[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--accent); }
 .tabs button:hover { color: var(--ink); }
 .saved { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; color: var(--muted); font-size: 12.5px; }
@@ -191,7 +205,13 @@ footer.foot { color: var(--muted); font-size: 12px; line-height: 1.5; display: g
 footer.foot .fine { font-size: 11px; max-width: 110ch; }
 @media (max-width: 600px) {
   #tbl td:first-child { min-width: 170px; }
-  .co h1 { font-size: 20px; }
+  .co h1 { font-size: 18px; }
+  .tabbar { display: grid; }
+  .tabs { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+  .tabs button { white-space: nowrap; padding-inline: 9px; }
+  .legend { padding-block: 4px 6px; }
+  .strip { grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); }
+  .strip b { font-size: 14px; }
 }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 </style>
@@ -199,9 +219,11 @@ footer.foot .fine { font-size: 11px; max-width: 110ch; }
 <div class="wrap">
   <header class="top">
     <div class="co">
-      <div class="eyebrow" id="eyebrow">Company model</div>
       <h1 id="coName">Enter a ticker</h1>
-      <div class="meta" id="coMeta">P&amp;L, cash flow and balance sheet history, a driver-based forecast, consensus, guidance and a DCF</div>
+      <div class="cometa">
+        <div class="eyebrow" id="eyebrow">Company model</div>
+        <div class="meta" id="coMeta">P&amp;L, cash flow and balance sheet history, a driver-based forecast, consensus, guidance and a DCF</div>
+      </div>
     </div>
     <form class="controls" id="form" autocomplete="off">
       <div class="tick">
@@ -221,15 +243,17 @@ footer.foot .fine { font-size: 11px; max-width: 110ch; }
 
   <div class="strip" id="strip" hidden></div>
   <div class="notice" id="notice" hidden></div>
-  <div class="legend">
-    <span><span class="chip">A</span>Reported</span>
-    <span><span class="chip kE">E</span>Our forecast</span>
-    <span><span class="chip kG">G</span>Company guidance</span>
-    <span><span class="chip kC">C</span>Consensus (FMP analyst average)</span>
-    <span><span class="sw">1.0</span>Input: type over it, clear it to restore the default</span>
-    <span class="save" id="saveState"></span>
+  <div class="tabbar">
+    <nav class="tabs" id="tabs" role="tablist" aria-label="Model sections"></nav>
+    <div class="legend">
+      <span><span class="chip">A</span>Reported</span>
+      <span><span class="chip kE">E</span>Our forecast</span>
+      <span><span class="chip kG">G</span>Guidance</span>
+      <span title="FMP analyst average"><span class="chip kC">C</span>Consensus</span>
+      <span title="Type over an input to change it; clear it to restore the default"><span class="sw">1.0</span>Input (clear to restore)</span>
+      <span class="save" id="saveState"></span>
+    </div>
   </div>
-  <nav class="tabs" id="tabs" role="tablist" aria-label="Model sections"></nav>
   <div id="sheetWrap"><div class="sheet"><table id="tbl"></table></div></div>
 
   <div class="panels">
@@ -885,16 +909,20 @@ footer.foot .fine { font-size: 11px; max-width: 110ch; }
     if (!state.act || !state.inp) { el.hidden = true; return; }
     el.hidden = false;
     // rebuild only when the ticker changes, so typing is never interrupted by a re-render
-    if (state.notesFor === state.ticker && $("notesText")) { const b = $("notesDraft"); if (b) { b.hidden = !state.sampleOk; b.disabled = !!state.notesBusy; b.textContent = state.notesBusy ? "Drafting from filings…" : "Draft notes with Claude"; } return; }
+    if (state.notesFor === state.ticker && $("notesText")) { const b = $("notesDraft"); if (b) { b.hidden = !state.sampleOk; b.disabled = !!state.notesBusy; b.textContent = state.notesBusy ? "Drafting from filings…" : state.inp.notesDraft ? "Redraft with Claude" : "Draft notes with Claude"; } return; }
     state.notesFor = state.ticker;
     const nCalls = state.inp.notesCalls || 8;
-    el.innerHTML = '<header><h2>Notes on the fundamentals · ' + esc(state.ticker) + '</h2><span class="btnrow"><span class="save">Earnings calls to read</span>' + [4, 8, 12].map((k) => '<button type="button" class="mini" data-act="ncalls" data-v="' + k + '" aria-pressed="' + (nCalls === k) + '">' + k + (k === 4 ? " (1 year)" : k === 8 ? " (2 years)" : " (3 years)") + "</button>").join("") + '<button type="button" class="btn" id="notesDraft" data-act="notesdraft"' + (state.sampleOk ? "" : " hidden") + '>Draft notes with Claude</button></span></header>' +
-      "<p>Your notes for this company, saved with the model. The draft also frames the company through the lenses of Will Danoff, Peter Lynch and Warren Buffett. “Draft notes with Claude” reads the chosen number of earnings call transcripts (FMP), the latest earnings release and the past year's 8-K events (EDGAR Tools), together with this model's own analysis (scale slopes, cost structure, trend breaks, segments). It drafts the latest call's major topics, what the Q&amp;A focused on and how that shifted over the calls, how the story changed, big swings to future earnings against consensus, and framework insights (structural vs operational drivers, scale, pricing headroom, demand levers, profit concentration). Each call's summary is saved, so later runs only read new calls. The draft goes at the top for you to edit.</p>" +
-      '<textarea id="notesText" spellcheck="true" aria-label="Notes on the fundamentals" placeholder="Business, drivers, one-off items, guidance vs consensus, risks, questions to follow up…"></textarea>';
+    el.innerHTML = '<header><h2>Notes on the fundamentals · ' + esc(state.ticker) + '</h2><span class="btnrow"><span class="save">Earnings calls to read</span>' + [4, 8, 12].map((k) => '<button type="button" class="mini" data-act="ncalls" data-v="' + k + '" aria-pressed="' + (nCalls === k) + '">' + k + (k === 4 ? " (1 year)" : k === 8 ? " (2 years)" : " (3 years)") + "</button>").join("") + '<button type="button" class="btn" id="notesDraft" data-act="notesdraft"' + (state.sampleOk ? "" : " hidden") + ">" + (state.inp.notesDraft ? "Redraft with Claude" : "Draft notes with Claude") + "</button></span></header>" +
+      "<p>Your notes for this company, saved with the model. The draft also frames the company through the lenses of Will Danoff, Peter Lynch and Warren Buffett. “Draft notes with Claude” reads the chosen number of earnings call transcripts (FMP), the latest earnings release and the past year's 8-K events (EDGAR Tools), together with this model's own analysis (scale slopes, cost structure, trend breaks, segments). It drafts the latest call's major topics, what the Q&amp;A focused on and how that shifted over the calls, how the story changed, big swings to future earnings against consensus, and framework insights (structural vs operational drivers, scale, pricing headroom, demand levers, profit concentration). Each call's summary is saved, so later runs only read new calls. Claude writes only to its own section; your notes are never changed. A redraft replaces Claude's section, and the one before it can be restored.</p>" +
+      '<div class="notes2"><div><div class="nh"><h3>Claude\'s draft</h3><span class="btnrow">' + (state.inp.notesDraftPrev ? '<button type="button" class="mini" data-act="notesprev">Restore previous draft</button>' : "") + "</span></div>" +
+      '<textarea id="notesDraftText" spellcheck="true" aria-label="Claude\'s draft notes" placeholder="' + (state.sampleOk ? "“Draft notes with Claude” fills this section from the earnings calls and filings." : "Drafting needs Claude, available when this page is opened in claude.ai.") + '"></textarea></div>' +
+      '<div><div class="nh"><h3>My notes</h3></div><textarea id="notesText" spellcheck="true" aria-label="My notes" placeholder="Your own view: business, drivers, one-off items, guidance vs consensus, risks, questions to follow up…"></textarea></div></div>';
     $("notesText").value = state.inp.notes || "";
+    $("notesDraftText").value = state.inp.notesDraft || "";
   }
   document.addEventListener("input", (e) => {
     if (e.target && e.target.id === "notesText" && state.inp) { state.inp.notes = e.target.value; scheduleSave(); }
+    if (e.target && e.target.id === "notesDraftText" && state.inp) { state.inp.notesDraft = e.target.value; scheduleSave(); }
   });
   const CALL_PROMPT = `Summarise this earnings call transcript for an equity analyst. Return JSON only:
 {"call":"Q2 FY2026","date":"YYYY-MM-DD","topics":["management's main topics, with the numbers given"],"qa_themes":[{"theme":"...","share":"high|medium|low","askers":["Name (Firm)"],"answer":"management's answer, with numbers"}],"guidance":["guidance or targets given, with periods"],"swings":[{"item":"what will move future earnings","direction":"up|down","size":"amount or %, if given","period":"when"}],"pricing_and_demand":["price changes, elasticity or churn comments, demand levers mentioned"],"costs_and_scale":["cost growth, margin, operating leverage, scale or investment comments"],"one_offs":["one-time items mentioned"],"tone":"one sentence on what changed versus prior messaging, if evident"}
@@ -995,7 +1023,8 @@ Rules:
       const text = String(out?.text || "").trim();
       if (!text) throw new Error("empty draft");
       const head = "Draft by Claude, " + new Date().toLocaleDateString("en-US") + (srcs.length ? " · from " + srcs.join(", ") : "") + " · review before relying on it\n";
-      state.inp.notes = head + text + (state.inp.notes ? "\n\n----------\n\n" + state.inp.notes : "");
+      if (state.inp.notesDraft) state.inp.notesDraftPrev = state.inp.notesDraft;
+      state.inp.notesDraft = head + text;
       scheduleSave();
       state.notesFor = null; // rebuild with the new text
       setNotice("");
@@ -1015,6 +1044,63 @@ Rules:
   const pc = (v) => (isNum(v) ? (v * 100).toFixed(1) + "%" : "n/a");
 
   // ---------- settings panel ----------
+  // Every input saved for this ticker, wherever it is typed, with its default and a way to clear it
+  const SET_LBL = { life: ["Useful life of new capex (years)", "num"], rem: ["D&A rate on existing assets", "pct"], kd: ["Interest rate on debt", "pct"], ky: ["Yield on cash", "pct"], px: ["Share price for buybacks and stock comp", "eps"] };
+  const DCF_LBL = { rf: ["Risk-free rate", "pct"], beta: ["Beta", "x"], erp: ["Mature-market equity risk premium", "pct"], crp: ["Country risk premium", "pct"], kdPre: ["Pre-tax cost of debt", "pct"], tm: ["Marginal tax rate", "pct"], wacc: ["WACC override", "pct"], g: ["Stable growth rate", "pct"], mT: ["Target operating margin (year 10)", "pct"], s2c: ["Sales-to-capital, years 6–10", "x"], roicT: ["Return on capital in stable growth", "pct"], betaT: ["Beta in stable growth", "x"], pe: ["Target P/E", "x"], lti: ["Add long-term investments", "bool"], mid: ["Mid-year discounting", "bool"] };
+  const PFX_LBL = { g: "revenue growth", ug: "units growth", pg: "price / mix", u0: "units, last reported year (mm)", se0: "segment EBIT, last reported year", si: "segment incremental margin", sl: "slope per doubling of revenue" };
+  const KEY_LBL = { em: "EBIT margin", incr: "Incremental EBIT margin", var: "Variable costs, % of revenue", fg: "Fixed cash costs, growth", ua: "Unallocated / corporate costs, growth" };
+  const METHOD_LBL = { cons: "consensus EBIT margin", incr: "incremental margin", regress: "scale slopes", fixvar: "fixed + variable costs", segment: "segment EBIT" };
+  function savedChanges() {
+    const I = state.inp, M = state.mdl, A = state.act, rows = [], choices = [];
+    const TL = Object.fromEntries(TABS), cat = {}, gcat = {};
+    [...driverSections(), ...SECTIONS()].forEach((sec) => (sec.rows || []).forEach((r) => {
+      [r.inp, r.inBase].forEach((x) => { if (x && !cat[x.k]) cat[x.k] = { u: x.u, l: r.l, tab: tabOf(sec) }; });
+      if (r.g && !gcat[r.g.k]) gcat[r.g.k] = { u: r.g.u, l: r.l };
+    }));
+    const show = (v, u) => (!isNum(v) ? "–" : u === "bool" ? (v ? "on" : "off") : u === "mm" || u === "mmneg" || u === "sh" ? (+UNIT[u].show(v)).toLocaleString("en-US", { maximumFractionDigits: u === "sh" ? 1 : DP }) : UNIT[u].show(v) + (u === "pct" ? "%" : u === "x" ? "×" : ""));
+    Object.keys(I.ov || {}).forEach((key) => {
+      const v = I.ov[key]; if (!isNum(v)) return;
+      const [k, fyS] = key.split("|"), fy = fyS ? +fyS : null, m = k.match(/^(g|ug|pg|u0|se0|si|sl):(.*)$/);
+      let l, u, tab, sc = "m";
+      if (m) { l = (m[1] === "sl" ? M?.costLines?.find((L) => L.key === m[2])?.label || m[2] : m[2]) + " · " + PFX_LBL[m[1]]; u = m[1] === "u0" ? "sh" : m[1] === "se0" ? "mm" : "pct"; tab = "drivers"; if (m[1] === "u0" || m[1] === "se0") sc = "b"; }
+      else { const c = cat[k] || {}; l = KEY_LBL[k] || c.l || k; u = c.u || "pct"; tab = c.tab || "drivers"; }
+      rows.push({ where: TL[tab] || "Drivers", l, per: fy ? "FY" + fy : "", v: show(v, u), d: sc === "m" && M ? show(M.D[key], u) : "–", s: sc, k, fy: fy ?? "" });
+    });
+    Object.keys(I.s || {}).forEach((k) => { if (!isNum(I.s[k]) || !SET_LBL[k]) return; const [l, u] = SET_LBL[k]; rows.push({ where: "Settings", l, per: "all years", v: show(I.s[k], u), d: M ? show(M.dflt[k], u) : "–", s: "s", k, fy: "" }); });
+    if (Object.keys(I.dcf || {}).length && M && state.mkt) {
+      const D0 = runDcf(M, state.mkt, {}, null, I.dcfBasis === "cons" ? "cons" : "model");
+      const dd = { s2c: D0.s2cDflt, roicT: D0.roicDflt, wacc: D0.waccCalc, pe: peUpside()?.dflt };
+      Object.keys(I.dcf).forEach((k) => { if (!isNum(I.dcf[k]) || !DCF_LBL[k]) return; const [l, u] = DCF_LBL[k]; rows.push({ where: "Valuation", l, per: k === "pe" ? "FY" + (A.curFY + 1) + "–" + (A.curFY + 2) : "DCF", v: show(I.dcf[k], u), d: show(k in dd ? dd[k] : D0.s[k], u), s: "d", k, fy: "" }); });
+    }
+    Object.keys(I.guide?.periods || {}).sort().forEach((pk) => Object.keys(I.guide.periods[pk] || {}).forEach((f) => {
+      const v = I.guide.periods[pk][f]; if (!isNum(v)) return; const c = gcat[f] || {};
+      const [q, fy] = pk.split("|");
+      rows.push({ where: "Model · guidance", l: "Guidance · " + (c.l || f), per: (q && q !== "FY" ? q + " " : "") + "FY" + fy, v: show(v, c.u || "mm"), d: "–", s: "g", k: pk + "::" + f, fy: "" });
+    }));
+    if (I.basis) choices.push(["Drivers", "Revenue built from " + ({ segment: "segments", geo: "regions", total: "total revenue" }[I.basis] || I.basis), "chosen automatically", "basis"]);
+    if (I.costMethod) choices.push(["Drivers", "Cost method: " + (METHOD_LBL[I.costMethod] || I.costMethod), "chosen by the cost structure", "costMethod"]);
+    Object.keys(I.up || {}).filter((k) => I.up[k]).forEach((k) => choices.push(["Drivers", k + ": revenue split into units × price", "single growth rate", "up:" + k]));
+    if (I.dcfBasis === "cons") choices.push(["Valuation", "DCF run on consensus", "our forecast", "dcfBasis"]);
+    if (I.reg) { const r = I.reg, t = []; if (isNum(r.n) && r.n !== 10) t.push(r.n + "-year window"); if (r.icpt) t.push("cost drift on"); if (r.robust === false) t.push("outlier years kept"); if (r.afterBreak === false) t.push("fit ignores the trend break"); if (t.length) choices.push(["Cost structure", "Regression: " + t.join(", "), "10 years, outliers dropped, fit after any break", "reg"]); }
+    if (I.notesCalls && I.notesCalls !== 8) choices.push(["Notes", "Earnings calls read: " + I.notesCalls, "8", "notesCalls"]);
+    rows.sort((a, b) => a.where.localeCompare(b.where) || a.l.localeCompare(b.l) || String(a.fy).localeCompare(String(b.fy)));
+    return { rows, choices };
+  }
+  function savedChangesHTML() {
+    const { rows, choices } = savedChanges(), I = state.inp, n = rows.length + choices.length;
+    const words = (t) => (t ? String(t).trim().split(/\s+/).length : 0);
+    const notes = [I.notes ? "my notes (" + words(I.notes) + " words)" : "", I.notesDraft ? "Claude's draft (" + words(I.notesDraft) + " words)" : ""].filter(Boolean);
+    const clr = (s, k, fy) => '<button type="button" class="mini" data-act="clr" data-s="' + s + '" data-k="' + esc(k) + '" data-fy="' + fy + '">Clear</button>';
+    const clc = (v) => '<button type="button" class="mini" data-act="clrc" data-v="' + esc(v) + '">Clear</button>';
+    const G = I.guide?.src;
+    return "<h3>Everything saved for " + esc(state.ticker) + (n ? " · " + n + " change" + (n === 1 ? "" : "s") : "") + "</h3>" +
+      "<p class=\"save\">The boxes above are only the model-wide assumptions that have no year column. Every number you type anywhere is saved with the model: forecast drivers on the Model and Drivers tabs, guidance, DCF inputs and the target P/E on Valuation, the cost method and revenue build, plus your notes. All of it is listed here; Clear puts an input back to its default." + (G ? " Guidance figures include those read from the earnings release filed " + esc(G.filed) + "." : "") + "</p>" +
+      (n ? '<div class="tablewrap"><table class="sens chg"><tbody><tr class="sec"><td>Tab</td><td>Input</td><td>Period</td><td>Yours</td><td>Default</td><td></td></tr>' +
+        rows.map((r) => "<tr><td>" + esc(r.where) + "</td><td>" + esc(r.l) + "</td><td>" + esc(r.per) + "</td><td><b>" + r.v + "</b></td><td>" + r.d + "</td><td>" + clr(r.s, r.k, r.fy) + "</td></tr>").join("") +
+        choices.map((c) => "<tr><td>" + esc(c[0]) + "</td><td>" + esc(c[1]) + '</td><td></td><td><b>yes</b></td><td>' + esc(c[2]) + "</td><td>" + clc(c[3]) + "</td></tr>").join("") +
+        "</tbody></table></div>" : '<p class="save">No inputs changed yet: the model runs entirely on its defaults (consensus where it exists).</p>') +
+      (notes.length ? '<p class="save">Also saved on the Notes tab: ' + notes.join(" and ") + ". “Reset this model” clears the numbers and choices above but keeps the notes.</p>" : "");
+  }
   function renderSettings() {
     const M = state.mdl, el = $("settings");
     if (!M) { el.hidden = true; return; }
@@ -1032,7 +1118,7 @@ Rules:
       row("Yield on cash", "ky", "pct", "Default " + pct(M.dflt.ky) + " = last year's interest income ÷ cash; applied to opening cash") + "</div>" +
       '<div class="kv"><h3 style="grid-column:1/-1">Share count</h3>' +
       row("Share price for buybacks and stock comp", "px", "eps", "Shares change by (stock comp − buybacks) ÷ this price. Default is today's price.") + "</div>" +
-      "</div>";
+      "</div>" + savedChangesHTML();
   }
 
   // ---------- DCF panel ----------
@@ -1107,9 +1193,9 @@ Rules:
 
     // sensitivity: WACC shift x terminal growth shift
     const ws = [-0.01, -0.005, 0, 0.005, 0.01], gs = [-0.01, -0.005, 0, 0.005, 0.01];
-    let sens = '<div class="tablewrap"><table class="sens"><tbody><tr class="sec"><td>WACC ↓ / stable growth →</td>' + gs.map((g) => "<td>" + pct(R.g + g) + "</td>").join("") + "</tr>";
+    let sens = '<div class="tablewrap"><table class="sens dcfsens"><tbody><tr class="sec"><td>WACC ↓ / stable growth →</td>' + gs.map((g) => "<td>" + pct(R.g + g) + "</td>").join("") + "</tr>";
     ws.forEach((w) => {
-      sens += "<tr><td>" + pct(R.wacc + w) + "</td>" + gs.map((g) => { const r = runDcf(M, state.mkt, state.inp.dcf, { w, g }, basis); return '<td class="' + (w === 0 && g === 0 ? "mid" : "") + '">' + (isNum(r.perShare) && r.waccT > r.g ? r.perShare.toFixed(2) : "n/m") + "</td>"; }).join("") + "</tr>";
+      sens += "<tr><td>" + pct(R.wacc + w) + "</td>" + gs.map((g) => { const r = runDcf(M, state.mkt, state.inp.dcf, { w, g }, basis); const ok = isNum(r.perShare) && r.waccT > r.g, up = ok && isNum(state.mkt.price) ? r.perShare / state.mkt.price - 1 : null; return '<td class="' + (w === 0 && g === 0 ? "mid" : "") + '">' + (ok ? r.perShare.toFixed(2) + (isNum(up) ? '<span class="up ' + (up >= 0 ? "pos" : "neg") + '">' + FMT.yoy(up) + "</span>" : "") : "n/m") + "</td>"; }).join("") + "</tr>";
     });
     sens += "</tbody></table></div>";
 
@@ -1152,7 +1238,7 @@ Rules:
       out("Terminal value share of EV", pct(R.tvShare, 0)) +
       out("Same DCF on " + (basis === "cons" ? "our forecast" : "consensus"), isNum(Other.perShare) ? cur + " " + Other.perShare.toFixed(2) + (isNum(Other.upside) ? " (" + FMT.yoy(Other.upside) + ")" : "") : "–") + "</div>" +
       "</div>" + tbl +
-      "<h3>Value per share: WACC × stable growth</h3>" + sens +
+      "<h3>Value per share: WACC × stable growth <span class=\"save\" style=\"text-transform:none;letter-spacing:0;font-weight:400\">· small figure = upside to today's price</span></h3>" + sens +
       '<ul class="flags">' + flags.map(([c, t]) => '<li class="' + c + '">' + t + "</li>").join("") + "</ul>";
     // strip DCF value
   }
@@ -1170,17 +1256,17 @@ Rules:
     const items = [
       ["Price", isNum(mk.price) ? (mk.currency || "") + " " + mk.price.toFixed(2) : null],
       ["Market cap", isNum(mk.mcap) ? big(mk.mcap) : null],
-      ["Enterprise value", isNum(mk.ev) ? big(mk.ev) : null],
+      ["EV", isNum(mk.ev) ? big(mk.ev) : null, "", "Enterprise value"],
       ["P/E LTM", fmtX(div(mk.price, nn(L.i?.epsDiluted)))],
       ["P/E FY" + (y1 ? y1.fy : "") + "E", fmtX(div(mk.price, y1?.eps))],
       ["P/E FY" + (y2 ? y2.fy : "") + "E", fmtX(div(mk.price, y2?.eps))],
       ["EV/EBITDA FY" + (y1 ? y1.fy : "") + "E", fmtX(div(mk.ev, y1 ? y1.ebit + y1.da : null))],
       ["FCF yield LTM", (() => { const y = div(fcf(L), mk.mcap); return isNum(y) ? FMT.pct(y) : null; })()],
       ["DCF / share" + (R?.basis === "cons" ? " (consensus)" : ""), R && isNum(R.perShare) ? R.perShare.toFixed(2) : null],
-      ["Upside to current price", R && isNum(R.upside) ? FMT.yoy(R.upside) : null, R && isNum(R.upside) ? (R.upside >= 0 ? "pos" : "neg") : ""],
-      ...(state.peRes && state.peRes.years[0].o ? [["Upside at " + state.peRes.pe.toFixed(1) + "× FY" + state.peRes.years[0].fy + " EPS", FMT.yoy(state.peRes.years[0].o.up), state.peRes.years[0].o.up >= 0 ? "pos" : "neg"]] : []),
+      ["DCF upside", R && isNum(R.upside) ? FMT.yoy(R.upside) : null, R && isNum(R.upside) ? (R.upside >= 0 ? "pos" : "neg") : "", "DCF value per share vs today's price"],
+      ...(state.peRes && state.peRes.years[0].o ? [[state.peRes.pe.toFixed(1) + "× FY" + state.peRes.years[0].fy + " EPS", FMT.yoy(state.peRes.years[0].o.up), state.peRes.years[0].o.up >= 0 ? "pos" : "neg", "Upside if the stock trades at " + state.peRes.pe.toFixed(1) + "× FY" + state.peRes.years[0].fy + " EPS (target P/E on the Valuation tab)"]] : []),
     ];
-    strip.innerHTML = items.map(([k, v, cls]) => "<div><span>" + esc(k) + '</span><b class="' + (cls || "") + '">' + (v ?? "–") + "</b></div>").join("");
+    strip.innerHTML = items.map(([k, v, cls, tip]) => '<div title="' + esc(tip || k) + '"><span>' + esc(k) + '</span><b class="' + (cls || "") + '">' + (v ?? "–") + "</b></div>").join("");
   }
 
   // ---------- persistence: your inputs per ticker ----------
@@ -1196,6 +1282,12 @@ Rules:
     } catch (e) {}
     if (!inp) { try { inp = JSON.parse(store.get("tmpl.inp." + t) || "null"); } catch (e) {} }
     if (inp && (inp.v || 0) < 3 && inp.costMethod === "incr") inp.costMethod = null;
+    if (inp && inp.notes && inp.notesDraft == null && /^Draft by Claude,/.test(inp.notes)) {
+      const parts = String(inp.notes).split("\n\n----------\n\n"), drafts = parts.filter((x) => /^Draft by Claude,/.test(x));
+      inp.notesDraft = drafts[0] || "";
+      if (drafts[1]) inp.notesDraftPrev = drafts[1];
+      inp.notes = parts.filter((x) => !/^Draft by Claude,/.test(x)).join("\n\n");
+    }
     return Object.assign(blank(), inp || {}, { v: 3 });
   }
   // ---------- segment detail from SEC earnings releases (EDGAR Tools + Claude) ----------
@@ -1608,6 +1700,7 @@ Rules:
     if (act === "tab") { state.tab = v; store.set("tmpl.tab", v); render(); if (TABLE_TABS.has(v)) { scrollToForecast(); const sh = document.querySelector(".sheet"); if (sh) sh.scrollTop = 0; } return; }
     if (act === "backup") { backupAll(); return; }
     if (act === "notesdraft") { draftNotes(); return; }
+    if (act === "notesprev") { const cur = state.inp.notesDraft; state.inp.notesDraft = state.inp.notesDraftPrev || ""; state.inp.notesDraftPrev = cur || null; scheduleSave(); state.notesFor = null; renderNotes(); return; }
     if (act === "ncalls") { state.inp.notesCalls = +v; scheduleSave(); state.notesFor = null; renderNotes(); return; }
     if (act === "restore") { $("restoreFile").click(); return; }
     if (act === "open") { load(v); window.scrollTo({ top: 0 }); return; }
@@ -1620,7 +1713,9 @@ Rules:
     else if (act === "basis") state.inp.basis = v;
     else if (act === "method") state.inp.costMethod = v === "auto" ? null : v;
     else if (act === "units") state.inp.up[v] = !state.inp.up[v];
-    else if (act === "reset") state.inp = blank();
+    else if (act === "reset") { const keep = ["notes", "notesDraft", "notesDraftPrev", "notesCalls"].reduce((o, k) => (state.inp[k] != null ? { ...o, [k]: state.inp[k] } : o), {}); state.inp = Object.assign(blank(), keep); }
+    else if (act === "clr") setIn(b.dataset.s, b.dataset.k, b.dataset.fy === "" ? null : +b.dataset.fy, null);
+    else if (act === "clrc") { if (v.startsWith("up:")) delete state.inp.up[v.slice(3)]; else if (v === "basis" || v === "costMethod") state.inp[v] = null; else delete state.inp[v]; }
     else return;
     recompute(); render(); scheduleSave();
   });
@@ -1747,6 +1842,11 @@ Rules:
       const ws5 = [-0.01, -0.005, 0, 0.005, 0.01];
       ws5.forEach((g, j) => { const c = d.getCell(y, j + 2); c.value = R.g + g; c.numFmt = F.pct; c.font = { ...base, bold: true }; }); y++;
       ws5.forEach((w) => { d.getCell(y, 1).value = R.wacc + w; d.getCell(y, 1).numFmt = F.pct; d.getCell(y, 1).font = { ...base, bold: true }; ws5.forEach((g, j) => { const rr = runDcf(state.mdl, mk, state.inp.dcf, { w, g }, R.basis); const c = d.getCell(y, j + 2); c.value = isNum(rr.perShare) && rr.waccT > rr.g ? rr.perShare : null; c.numFmt = "0.00"; c.font = { ...base, bold: w === 0 && g === 0 }; }); y++; });
+      if (isNum(mk.price)) {
+        y++; d.getCell(y, 1).value = "Upside to today's price of " + mk.price.toFixed(2); d.getCell(y, 1).font = { ...base, bold: true }; y++;
+        ws5.forEach((g, j) => { const c = d.getCell(y, j + 2); c.value = R.g + g; c.numFmt = F.pct; c.font = { ...base, bold: true }; }); y++;
+        ws5.forEach((w) => { d.getCell(y, 1).value = R.wacc + w; d.getCell(y, 1).numFmt = F.pct; d.getCell(y, 1).font = { ...base, bold: true }; ws5.forEach((g, j) => { const rr = runDcf(state.mdl, mk, state.inp.dcf, { w, g }, R.basis); const ok = isNum(rr.perShare) && rr.waccT > rr.g, u = ok ? rr.perShare / mk.price - 1 : null; const c = d.getCell(y, j + 2); c.value = u; c.numFmt = F.yoy; c.font = { ...base, bold: w === 0 && g === 0, color: { argb: isNum(u) && u < 0 ? ARGB.neg : "FF1B6A3D" } }; }); y++; });
+      }
     }
 
     // --- Cost structure sheet
@@ -1826,8 +1926,9 @@ Rules:
       "", "Method", "The forecast runs P&L → cash flow → balance sheet. Cash is the balancing item; D&A is calculated from capex.",
       "The DCF uses free cash flow to the firm with a five-year fade to stable growth; stock-based compensation is treated as an operating expense.",
       SLOPE_NOTE,
-      ...(state.inp.notes ? ["", "Your notes on " + state.ticker, ...String(state.inp.notes).split("\n")] : []),
-      "Values are exported as of " + new Date().toLocaleString("en-US") + "; they are numbers, not live formulas."].forEach((t, i) => { const k = n.getCell(i + 1, 1); k.value = t; k.font = { ...base, bold: t === "Sources" || t === "Method" }; k.alignment = { wrapText: true }; });
+      ...(state.inp.notes ? ["", "My notes on " + state.ticker, ...String(state.inp.notes).split("\n")] : []),
+      ...(state.inp.notesDraft ? ["", "Claude's draft notes on " + state.ticker, ...String(state.inp.notesDraft).split("\n")] : []),
+      "Values are exported as of " + new Date().toLocaleString("en-US") + "; they are numbers, not live formulas."].forEach((t, i) => { const k = n.getCell(i + 1, 1); k.value = t; k.font = { ...base, bold: t === "Sources" || t === "Method" || /^(My notes|Claude's draft notes) on /.test(t) }; k.alignment = { wrapText: true }; });
 
     const buf = await wb.xlsx.writeBuffer();
     return { filename: fileBase() + ".xlsx", data: new Blob([buf], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }) };
@@ -1960,9 +2061,17 @@ Rules:
       ];
       doc.autoTable({ head: [["DCF (FCFF)", ""]], body: dBody, startY: y, margin: { left: m, right: m + half + 16 }, theme: "plain", styles: { font: "helvetica", fontSize: 7.2, cellPadding: 1.6, halign: "right", textColor: ink }, headStyles: { fontStyle: "bold", fillColor: band }, columnStyles: { 0: { halign: "left" } }, didParseCell: (d) => { if (d.section === "head") d.cell.styles.halign = d.column.index === 0 ? "left" : "right"; } });
       const g5 = [-0.01, -0.005, 0, 0.005, 0.01];
-      const sens = g5.map((w) => [((R.wacc + w) * 100).toFixed(1) + "%", ...g5.map((g) => { const rr = runDcf(M, mk, state.inp.dcf, { w, g }, R.basis); return isNum(rr.perShare) && rr.waccT > rr.g ? rr.perShare.toFixed(2) : "n/m"; })]);
+      const ups = {};
+      const sens = g5.map((w, ri) => [((R.wacc + w) * 100).toFixed(1) + "%", ...g5.map((g, ci) => { const rr = runDcf(M, mk, state.inp.dcf, { w, g }, R.basis); const ok = isNum(rr.perShare) && rr.waccT > rr.g; if (ok && isNum(mk.price)) ups[ri + "|" + (ci + 1)] = rr.perShare / mk.price - 1; return ok ? rr.perShare.toFixed(2) : "n/m"; })]);
       doc.autoTable({ head: [["WACC \\ growth", ...g5.map((g) => ((R.g + g) * 100).toFixed(1) + "%")]], body: sens, startY: y, margin: { left: m + half + 16, right: m }, theme: "plain", styles: { font: "helvetica", fontSize: 7.2, cellPadding: 1.6, halign: "right", textColor: ink }, headStyles: { fontStyle: "bold", fillColor: band }, columnStyles: { 0: { halign: "left", fontStyle: "bold" } },
-        didParseCell: (d) => { if (d.section === "head") d.cell.styles.halign = d.column.index === 0 ? "left" : "right"; if (d.section === "body" && d.row.index === 2 && d.column.index === 3) { d.cell.styles.fontStyle = "bold"; d.cell.styles.fillColor = tE; } } });
+        didParseCell: (d) => { if (d.section === "head") d.cell.styles.halign = d.column.index === 0 ? "left" : "right"; if (d.section === "body" && d.column.index > 0) d.cell.styles.cellPadding = { top: 1.6, bottom: 1.6, left: 2, right: 26 }; if (d.section === "body" && d.row.index === 2 && d.column.index === 3) { d.cell.styles.fontStyle = "bold"; d.cell.styles.fillColor = tE; } },
+        didDrawCell: (d) => {
+          const u = d.section === "body" ? ups[d.row.index + "|" + d.column.index] : undefined;
+          if (!isNum(u)) return;
+          doc.setFontSize(5.4); doc.setFont("helvetica", "bold"); doc.setTextColor(...(u >= 0 ? [27, 106, 61] : [177, 39, 29]));
+          doc.text(FMT.yoy(u).replace(/\u2212/g, "-"), d.cell.x + d.cell.width - 2, d.cell.y + d.cell.height / 2 + 1.9, { align: "right" });
+          doc.setTextColor(...ink); doc.setFont("helvetica", "normal");
+        } });
     }
     doc.setFontSize(6.5); doc.setTextColor(...muted);
     const fine = doc.splitTextToSize(SLOPE_NOTE.replace(/₀/g, "0").replace(/₂/g, "2").replace(/÷/g, "/").replace(/×/g, "x").replace(/²/g, "2"), W - 2 * m);
