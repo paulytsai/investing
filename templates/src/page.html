@@ -171,6 +171,7 @@ svg.scatter .ptlab { fill: var(--ink); font-weight: 600; }
 .multiples { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
 
 footer.foot { color: var(--muted); font-size: 12px; line-height: 1.5; display: grid; gap: 6px; }
+footer.foot .fine { font-size: 11px; max-width: 110ch; }
 @media (max-width: 600px) {
   #tbl td:first-child { min-width: 170px; }
   .co h1 { font-size: 20px; }
@@ -216,6 +217,7 @@ footer.foot { color: var(--muted); font-size: 12px; line-height: 1.5; display: g
   <div class="panels">
     <section class="panel" id="regp" hidden></section>
     <section class="panel" id="settings" hidden></section>
+    <section class="panel" id="pe" hidden></section>
     <section class="panel" id="dcf" hidden></section>
   </div>
 
@@ -223,6 +225,7 @@ footer.foot { color: var(--muted); font-size: 12px; line-height: 1.5; display: g
     <div id="units"></div>
     <div>Source: Financial Modeling Prep (filings, analyst estimates, Treasury yields and country risk premiums), pulled live through your FMP connector. Consensus covers revenue, SG&amp;A, EBITDA, EBIT, net income and EPS only. Guidance is entered by hand from the company's latest release or call. H1/H2 sum the quarters; a half that mixes reported and consensus quarters is marked C. Costs are positive; cash outflows are negative. Multiples in the valuation block use today's price and enterprise value for every year.</div>
     <div>The forecast runs P&amp;L → cash flow → balance sheet. Cash is the balancing item, interest is earned and paid on opening balances, and D&amp;A is calculated from capex. The DCF follows Aswath Damodaran's FCFF approach: CAPM cost of equity with a mature-market premium plus country risk, a synthetic-rating cost of debt, a five-year fade to stable growth, and terminal reinvestment of g ÷ ROIC. Stock-based compensation is treated as an operating expense.</div>
+    <div class="fine">Scale slopes. A cost line's slope is the factor by which its cost per dollar of revenue is multiplied each time revenue doubles. It is estimated by regressing ln(cost ÷ revenue) on ln(revenue) over the fitted years; with fitted coefficient b, slope = 2^b. A 90% slope means each doubling of revenue cuts that line's cost per dollar of revenue by 10% (economies of scale); 100% means the line stays a constant share of revenue; above 100% means it grows faster than revenue. In the forecast, a line's cost at revenue R is cost(R₀) × (R ÷ R₀)^(1 + log₂ slope). Revenue stands in for physical volume, so price and mix changes blur the estimate: treat slopes as directional. Fits use the years after any break in the revenue trend (found with a two-segment log-linear fit), drop outlier years, and default to 100% when R² is below 0.3.</div>
   </footer>
 </div>
 
@@ -288,6 +291,7 @@ footer.foot { color: var(--muted); font-size: 12px; line-height: 1.5; display: g
     if (scope === "b") return nn(I.ov[k + "|" + fy]);
     if (scope === "g") { const [pk, f] = k.split("::"); return nn(I.guide.periods?.[pk]?.[f]); }
     if (scope === "s") return M ? M.scal[k] : null;
+    if (scope === "p") return state.peRes ? state.peRes.pe : null;
     if (scope === "d") { const R = state.dcf; if (!R) return null; if (k === "s2c") return R.s2c; if (k === "roicT") return R.roicT; return R.s[k]; }
     return null;
   }
@@ -296,7 +300,7 @@ footer.foot { color: var(--muted); font-size: 12px; line-height: 1.5; display: g
     if (scope === "m" || scope === "b") return isNum(I.ov[k + "|" + fy]);
     if (scope === "g") { const [pk, f] = k.split("::"); return isNum(I.guide.periods?.[pk]?.[f]); }
     if (scope === "s") return isNum(I.s[k]);
-    if (scope === "d") return isNum(I.dcf[k]);
+    if (scope === "d" || scope === "p") return isNum(I.dcf[k]);
     return false;
   }
   function setIn(scope, k, fy, v) {
@@ -305,7 +309,7 @@ footer.foot { color: var(--muted); font-size: 12px; line-height: 1.5; display: g
     if (scope === "m" || scope === "b") put(I.ov, k + "|" + fy);
     else if (scope === "g") { const [pk, f] = k.split("::"); I.guide.periods = I.guide.periods || {}; const o = (I.guide.periods[pk] = I.guide.periods[pk] || {}); if (isNum(v)) o[f] = v; else delete o[f]; }
     else if (scope === "s") put(I.s, k);
-    else if (scope === "d") put(I.dcf, k);
+    else if (scope === "d" || scope === "p") put(I.dcf, k);
   }
   function inputHTML(scope, k, fy, u, cls) {
     const v = inVal(scope, k, fy);
@@ -717,7 +721,7 @@ footer.foot { color: var(--muted); font-size: 12px; line-height: 1.5; display: g
     $("tbl").innerHTML = "<tbody>" + out.join("") + "</tbody>";
     state.xrows = xrows; state.xcols = cols.map((c) => ({ label: c.label, kind: c.kind, type: c.type }));
     $("xlsx").disabled = false; $("pdf").disabled = false;
-    renderReg(); renderSettings(); renderDcf(); renderHeader();
+    renderReg(); renderSettings(); renderPe(); renderDcf(); renderHeader();
     if (focusKey) {
       const el = document.querySelector('input.in[data-s="' + focusKey[0] + '"][data-k="' + CSS.escape(focusKey[1]) + '"][data-fy="' + focusKey[2] + '"]');
       if (el) { el.focus(); if (sel) el.select(); }
@@ -853,6 +857,33 @@ footer.foot { color: var(--muted); font-size: 12px; line-height: 1.5; display: g
   }
 
   // ---------- DCF panel ----------
+  // Simple multiple-based upside: a target P/E applied to EPS for the current year +1 and +2
+  function peUpside() {
+    const A = state.act, M = state.mdl, mk = state.mkt;
+    if (!A || !mk || !isNum(mk.price)) return null;
+    const cur = M ? M.out[A.curFY]?.eps : nn(A.consFy[A.curFY]?.i?.epsDiluted);
+    const dflt = isNum(cur) && cur > 0 ? +(mk.price / cur).toFixed(1) : pos(div(mk.price, nn(A.ltm.i?.epsDiluted)));
+    const pe = isNum(state.inp.dcf.pe) ? state.inp.dcf.pe : dflt;
+    const years = [A.curFY + 1, A.curFY + 2].map((fy, k) => {
+      const ours = M ? M.out[fy]?.eps : null, cons = nn(A.consFy[fy]?.i?.epsDiluted);
+      const at = (eps) => (isNum(eps) && isNum(pe) ? { price: pe * eps, up: (pe * eps) / mk.price - 1 } : null);
+      return { fy, label: "FY" + fy + " (current +" + (k + 1) + ")", ours, cons, o: at(ours), c: at(cons) };
+    });
+    return { pe, dflt, years };
+  }
+  function renderPe() {
+    const el = $("pe"), P = (state.peRes = peUpside());
+    if (!P) { el.hidden = true; return; }
+    el.hidden = false;
+    const cur = state.prof?.currency || "";
+    const px = (v) => (v ? cur + " " + v.price.toFixed(2) : "–");
+    const up = (v) => (v ? '<b class="' + (v.up >= 0 ? "pos" : "neg") + '">' + FMT.yoy(v.up) + "</b>" : "–");
+    el.innerHTML = '<header><h2>Upside at a target P/E</h2><span class="kv" style="display:inline-grid;grid-template-columns:auto auto;gap:8px;align-items:center"><span>Target P/E</span><b>' + inputHTML("p", "pe", "", "x") + "</b></span></header>" +
+      "<p>Implied price = target P/E × EPS for that year; upside is against today's price of " + cur + " " + state.mkt.price.toFixed(2) + ". Default target: today's P/E on our current-year EPS (" + (isNum(P.dflt) ? P.dflt.toFixed(1) + "×" : "–") + "), so the upside mostly reflects EPS growth; type a multiple to test a re-rating.</p>" +
+      '<div class="tablewrap"><table class="sens"><tbody><tr class="sec"><td>Year</td><td>EPS, our forecast</td><td>Implied price</td><td>Upside</td><td>EPS, consensus</td><td>Implied price</td><td>Upside</td></tr>' +
+      P.years.map((y) => "<tr><td>" + y.label + "</td><td>" + (isNum(y.ours) ? y.ours.toFixed(2) : "–") + "</td><td>" + px(y.o) + "</td><td>" + up(y.o) + "</td><td>" + (isNum(y.cons) ? y.cons.toFixed(2) : "–") + "</td><td>" + px(y.c) + "</td><td>" + up(y.c) + "</td></tr>").join("") +
+      "</tbody></table></div>";
+  }
   function renderDcf() {
     const M = state.mdl, el = $("dcf");
     if (!M || !state.mkt) { el.hidden = true; return; }
@@ -968,6 +999,7 @@ footer.foot { color: var(--muted); font-size: 12px; line-height: 1.5; display: g
       ["FCF yield LTM", (() => { const y = div(fcf(L), mk.mcap); return isNum(y) ? FMT.pct(y) : null; })()],
       ["DCF / share" + (R?.basis === "cons" ? " (consensus)" : ""), R && isNum(R.perShare) ? R.perShare.toFixed(2) : null],
       ["Upside to current price", R && isNum(R.upside) ? FMT.yoy(R.upside) : null, R && isNum(R.upside) ? (R.upside >= 0 ? "pos" : "neg") : ""],
+      ...(state.peRes && state.peRes.years[0].o ? [["Upside at " + state.peRes.pe.toFixed(1) + "× FY" + state.peRes.years[0].fy + " EPS", FMT.yoy(state.peRes.years[0].o.up), state.peRes.years[0].o.up >= 0 ? "pos" : "neg"]] : []),
     ];
     strip.innerHTML = items.map(([k, v, cls]) => "<div><span>" + esc(k) + '</span><b class="' + (cls || "") + '">' + (v ?? "–") + "</b></div>").join("");
   }
@@ -1335,6 +1367,7 @@ Rules:
   });
 
   // ---------- export: formatted Excel workbook and a 2-page PDF ----------
+  const SLOPE_NOTE = "Scale slopes. A cost line's slope is the factor by which its cost per dollar of revenue is multiplied each time revenue doubles. It is estimated by regressing ln(cost ÷ revenue) on ln(revenue) over the fitted years; with fitted coefficient b, slope = 2^b. A 90% slope means each doubling of revenue cuts that line's cost per dollar of revenue by 10% (economies of scale); 100% means the line stays a constant share of revenue; above 100% means it grows faster than revenue. In the forecast, a line's cost at revenue R is cost(R₀) × (R ÷ R₀)^(1 + log₂ slope). Revenue stands in for physical volume, so price and mix changes blur the estimate: treat slopes as directional. Fits use the years after any break in the revenue trend (found with a two-segment log-linear fit), drop outlier years, and default to 100% when R² is below 0.3.";
   const LIBS = {
     excel: "https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js",
     jspdf: "https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js",
@@ -1448,6 +1481,7 @@ Rules:
       kv("PV of FCFF, years 1–10", xval(R.pvSum, "usd"), F.usd); kv("PV of terminal value", xval(T.pvTv, "usd"), F.usd); kv("Enterprise value", xval(R.ev, "usd"), F.usd);
       kv("− Debt", xval(-(mk.debt ?? 0), "usd"), F.usd); kv("− Minority interest", xval(-(mk.minority ?? 0), "usd"), F.usd); kv("+ Cash & short-term investments", xval(mk.cash, "usd"), F.usd); kv("+ Long-term investments", R.s.lti ? xval(mk.lti, "usd") : 0, F.usd);
       kv("Equity value", xval(R.equity, "usd"), F.usd); kv("Diluted shares (mm)", xval(mk.shares, "sh"), F.sh); kv("Value per share", R.perShare, "0.00"); kv("Price today", mk.price, "0.00"); kv("Upside / (downside)", R.upside, F.yoy);
+      if (state.peRes) { y++; kv("Target P/E", state.peRes.pe, '0.0"x"'); state.peRes.years.forEach((yy2) => { kv("Implied price at target P/E, " + yy2.label, yy2.o ? yy2.o.price : null, "0.00"); kv("  upside", yy2.o ? yy2.o.up : null, F.yoy); }); }
       d.getCell(y - 3, 2).font = { ...base, bold: true };
       y++;
       d.getCell(y, 1).value = "Value per share: WACC (rows) × stable growth (columns)"; d.getCell(y, 1).font = { ...base, bold: true }; y++;
@@ -1532,6 +1566,7 @@ Rules:
       Object.keys(state.sec || {}).length ? "Quarterly segment detail: SEC earnings releases via EDGAR Tools." : "",
       "", "Method", "The forecast runs P&L → cash flow → balance sheet. Cash is the balancing item; D&A is calculated from capex.",
       "The DCF uses free cash flow to the firm with a five-year fade to stable growth; stock-based compensation is treated as an operating expense.",
+      SLOPE_NOTE,
       "Values are exported as of " + new Date().toLocaleString("en-US") + "; they are numbers, not live formulas."].forEach((t, i) => { const k = n.getCell(i + 1, 1); k.value = t; k.font = { ...base, bold: t === "Sources" || t === "Method" }; k.alignment = { wrapText: true }; });
 
     const buf = await wb.xlsx.writeBuffer();
@@ -1601,7 +1636,7 @@ Rules:
     ];
     // strip of headline numbers
     doc.setFontSize(8.5); doc.setTextColor(...ink);
-    const strip = [["Price", cur + " " + (isNum(mk.price) ? mk.price.toFixed(2) : "–")], ["Market cap", isNum(mk.mcap) ? big(mk.mcap) : "–"], ["EV", isNum(mk.ev) ? big(mk.ev) : "–"], ["DCF / share", R && isNum(R.perShare) ? R.perShare.toFixed(2) + " (" + (R.basis === "cons" ? "consensus" : "our forecast") + ")" : "–"], ["Upside", R && isNum(R.upside) ? FMT.yoy(R.upside) : "–"]];
+    const strip = [["Price", cur + " " + (isNum(mk.price) ? mk.price.toFixed(2) : "–")], ["Market cap", isNum(mk.mcap) ? big(mk.mcap) : "–"], ["EV", isNum(mk.ev) ? big(mk.ev) : "–"], ["DCF / share", R && isNum(R.perShare) ? R.perShare.toFixed(2) + " (" + (R.basis === "cons" ? "consensus" : "our forecast") + ")" : "–"], ["Upside", R && isNum(R.upside) ? FMT.yoy(R.upside).replace(/\u2212/g, "-") : "–"]];
     let x = m; strip.forEach(([k, v]) => { doc.setFont("helvetica", "normal"); doc.setTextColor(...muted); doc.text(k.toUpperCase(), x, m + 40); doc.setFont("helvetica", "bold"); doc.setTextColor(...ink); doc.text(v, x, m + 52); x += (W - 2 * m) / strip.length; });
     table(["", ...cols.map((c) => c.label + " " + c.kind)], body, m + 62, kinds, { fs: cols.length > 11 ? 8 : 8.6, w0: 160 });
 
@@ -1660,7 +1695,8 @@ Rules:
         ["Cost of equity / WACC", (R.ke * 100).toFixed(2) + "% / " + (R.wacc * 100).toFixed(2) + "%"], ["Stable growth / stable WACC", (R.g * 100).toFixed(1) + "% / " + (R.waccT * 100).toFixed(2) + "%"],
         ["Terminal ROIC / target margin", (R.roicT * 100).toFixed(1) + "% / " + (R.s.mT * 100).toFixed(1) + "%"], ["PV of FCFF, years 1–10", f(R.pvSum, "usd")], ["PV of terminal value (" + (isNum(R.tvShare) ? (R.tvShare * 100).toFixed(0) : "–") + "% of EV)", f(T.pvTv, "usd")],
         ["Enterprise value", f(R.ev, "usd")], ["Equity value", f(R.equity, "usd")], ["Value per share (" + (R.basis === "cons" ? "consensus" : "our forecast") + ")", isNum(R.perShare) ? R.perShare.toFixed(2) : "–"],
-        ["Price today / upside", (isNum(mk.price) ? mk.price.toFixed(2) : "–") + " / " + (isNum(R.upside) ? FMT.yoy(R.upside) : "–")],
+        ["Price today / upside", (isNum(mk.price) ? mk.price.toFixed(2) : "–") + " / " + (isNum(R.upside) ? FMT.yoy(R.upside).replace(/\u2212/g, "-") : "–")],
+        ...((state.peRes?.years || []).map((y) => ["At " + state.peRes.pe.toFixed(1) + "x " + y.label + " EPS", y.o ? y.o.price.toFixed(2) + " / " + FMT.yoy(y.o.up).replace(/\u2212/g, "-") : "–"])),
       ];
       doc.autoTable({ head: [["DCF (FCFF)", ""]], body: dBody, startY: y, margin: { left: m, right: m + half + 16 }, theme: "plain", styles: { font: "helvetica", fontSize: 7.2, cellPadding: 1.6, halign: "right", textColor: ink }, headStyles: { fontStyle: "bold", fillColor: band }, columnStyles: { 0: { halign: "left" } }, didParseCell: (d) => { if (d.section === "head") d.cell.styles.halign = d.column.index === 0 ? "left" : "right"; } });
       const g5 = [-0.01, -0.005, 0, 0.005, 0.01];
@@ -1668,8 +1704,11 @@ Rules:
       doc.autoTable({ head: [["WACC \\ growth", ...g5.map((g) => ((R.g + g) * 100).toFixed(1) + "%")]], body: sens, startY: y, margin: { left: m + half + 16, right: m }, theme: "plain", styles: { font: "helvetica", fontSize: 7.2, cellPadding: 1.6, halign: "right", textColor: ink }, headStyles: { fontStyle: "bold", fillColor: band }, columnStyles: { 0: { halign: "left", fontStyle: "bold" } },
         didParseCell: (d) => { if (d.section === "head") d.cell.styles.halign = d.column.index === 0 ? "left" : "right"; if (d.section === "body" && d.row.index === 2 && d.column.index === 3) { d.cell.styles.fontStyle = "bold"; d.cell.styles.fillColor = tE; } } });
     }
-    doc.setFontSize(7); doc.setTextColor(...muted);
-    doc.text("Sources: Financial Modeling Prep; SEC filings via EDGAR Tools where noted. Values as of " + new Date().toLocaleString("en-US") + ".", m, doc.internal.pageSize.getHeight() - 16);
+    doc.setFontSize(6.5); doc.setTextColor(...muted);
+    const fine = doc.splitTextToSize(SLOPE_NOTE.replace(/₀/g, "0").replace(/₂/g, "2").replace(/÷/g, "/").replace(/×/g, "x").replace(/²/g, "2"), W - 2 * m);
+    const H = doc.internal.pageSize.getHeight();
+    doc.text(fine, m, H - 16 - fine.length * 7.5);
+    doc.text("Sources: Financial Modeling Prep; SEC filings via EDGAR Tools where noted. Values as of " + new Date().toLocaleString("en-US") + ".", m, H - 16);
     return { filename: fileBase() + ".pdf", data: doc.output("blob") };
   }
 
