@@ -91,7 +91,14 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .legend .chip { margin-right: 4px; }
 .legend .sw { display: inline-block; width: 26px; height: 14px; vertical-align: -3px; margin-right: 5px; border: 1px solid var(--line); background: var(--in-bg); color: var(--in-ink); font-size: 10px; text-align: center; line-height: 12px; font-weight: 700; }
 
-.sheet { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; overflow-x: auto; }
+.sheet { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; overflow: auto; max-height: calc(100vh - 32px); overscroll-behavior: contain; }
+#tbl thead { position: sticky; top: 0; z-index: 3; }
+#tbl thead td { background-color: var(--surface); }
+#tbl thead tr.yrs td { background-color: var(--band); font-family: var(--display); font-weight: 600; font-size: 12px; padding-top: 7px; padding-bottom: 7px; border-bottom: 1px solid var(--faint); }
+#tbl thead td:first-child { z-index: 4; }
+#tbl thead tr.groups td:first-child { white-space: normal; overflow: visible; }
+#tbl thead tr.groups td:first-child .mini { margin: 2px 6px 2px 0; }
+#tbl thead tr.yrs td:first-child { background: var(--band); color: var(--muted); text-transform: uppercase; letter-spacing: .07em; }
 table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; }
 th, td { padding: 4px 10px; white-space: nowrap; text-align: right; border-bottom: 1px solid var(--line); }
 #tbl td:first-child { text-align: left; position: sticky; left: 0; background: var(--surface); z-index: 1; min-width: 240px; max-width: 300px; overflow: hidden; text-overflow: ellipsis; border-right: 1px solid var(--line); }
@@ -1407,7 +1414,8 @@ function runDcf(mdl, mkt, setIn, shift, basis) {
     const span = (n, cls, html) => (n ? '<td colspan="' + n + '" class="' + cls + '">' + html + "</td>" : "");
     const drillBtn = '<button type="button" class="mini" data-act="drill" aria-pressed="' + state.drill + '">' + (state.drill ? "Hide quarters" : "Show Q1–Q4, H1, H2") + "</button>";
     const fcBtn = M ? '<button type="button" class="mini" data-act="fc" aria-pressed="' + state.showFc + '">' + (state.showFc ? "Collapse" : "Show our forecast") + "</button>" : "";
-    out.push('<tr class="groups"><td>' + esc(state.ticker) + (state.drill ? "" : drillBtn) + (state.showFc ? "" : fcBtn) + "</td>" +
+    const head = [];
+    head.push('<tr class="groups"><td>' + esc(state.ticker) + (state.drill ? "" : drillBtn) + (state.showFc ? "" : fcBtn) + "</td>" +
       span(hist.length, "", "Reported · " + hist.length + " years") +
       span(drill.length ? A.drillPrev.length : 0, "bnd", "FY" + (A.curFY - 1) + " by quarter · reported " + drillBtn + secBtn()) +
       span(drill.length ? A.drill.length : 0, "kC bnd", "FY" + A.curFY + " by quarter · " + A.nReportedQ + " of 4 reported") +
@@ -1424,9 +1432,11 @@ function runDcf(mdl, mkt, setIn, shift, basis) {
     ];
     const blanks = cols.map((c, j) => '<td class="' + cc[j] + '"></td>').join("");
     const headCells = cols.map((c, j) => '<td class="' + cc[j] + '">' + esc(c.label) + '<span class="chip k' + c.kind + '">' + c.kind + "</span></td>").join("");
+    // frozen header: group row + year labels stay at the top of the table while scrolling down
+    head.push('<tr class="yrs"><td>Line item</td>' + headCells + "</tr>");
     secs.forEach((s) => {
       if (s.modelOnly && !M) return;
-      out.push('<tr class="sec"><td>' + esc(s.title) + (s.ctl || "") + "</td>" + headCells + "</tr>");
+      out.push('<tr class="sec"><td>' + esc(s.title) + (s.ctl || "") + "</td>" + blanks + "</tr>");
       xrows.push({ t: "sec", label: s.title });
       if (!s.rows) { out.push('<tr class="note"><td colspan="' + (cols.length + 1) + '"><div class="notetext">' + esc(s.empty) + "</div></td></tr>"); return; }
       s.rows.forEach((r) => {
@@ -1479,7 +1489,7 @@ function runDcf(mdl, mkt, setIn, shift, basis) {
         }
       });
     });
-    $("tbl").innerHTML = "<tbody>" + out.join("") + "</tbody>";
+    $("tbl").innerHTML = "<thead>" + head.join("") + "</thead><tbody>" + out.join("") + "</tbody>";
     state.xrows = xrows; state.xcols = cols.map((c) => ({ label: c.label, kind: c.kind, type: c.type }));
     $("xlsx").disabled = false; $("pdf").disabled = false;
     renderReg(); renderSettings(); renderPe(); renderDcf(); renderHeader();
@@ -2150,7 +2160,7 @@ Rules:
   // Like a frozen pane: show the last few reported years next to the forecast
   function scrollToForecast() {
     const sheet = document.querySelector(".sheet");
-    const cells = document.querySelectorAll("#tbl tr.sec")[0]?.children;
+    const cells = document.querySelector("#tbl tr.yrs")?.children;
     if (!sheet || !cells) return;
     const firstFwd = Math.min(state.act.hist.slice(-state.years).length, cells.length - 1);
     const target = cells[Math.max(1, firstFwd - 3)];
