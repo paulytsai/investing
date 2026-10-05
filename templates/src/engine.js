@@ -572,7 +572,7 @@ function runModel(m, inp, opts) {
   // chain YoY: first model year compares with the last reported year
   let pc = B;
   fys.forEach((fy) => { out[fy].ctx.p = pc; pc = out[fy].ctx; });
-  return { fys, B, basis, field, lines, R, out, I, D, ov, method, slopeCost, costLines, slopeR2, slopesUsable, reconB, autoMethod, methodAuto: !["incr", "regress", "fixvar", "segment"].includes(inp.costMethod), vEst, reg, regCfg, scal, dflt, fixed0, fixedNeg, uaBase, segE0, histLine, consRev };
+  return { consFy: m.consFy, fys, B, basis, field, lines, R, out, I, D, ov, method, slopeCost, costLines, slopeR2, slopesUsable, reconB, autoMethod, methodAuto: !["incr", "regress", "fixvar", "segment"].includes(inp.costMethod), vEst, reg, regCfg, scal, dflt, fixed0, fixedNeg, uaBase, segE0, histLine, consRev };
 }
 
 // ---------- DCF (Damodaran-style FCFF) ----------
@@ -605,7 +605,9 @@ function dcfDefaults(mdl, mkt) {
   };
 }
 
-function runDcf(mdl, mkt, setIn, shift) {
+// basis "cons": years 1-3 use consensus revenue and EBIT margin (later years carry year 3 forward);
+// consensus has no capex or working capital, so reinvestment = revenue added / sales-to-capital.
+function runDcf(mdl, mkt, setIn, shift, basis) {
   const d0 = dcfDefaults(mdl, mkt);
   const s = { ...d0 };
   Object.keys(setIn || {}).forEach((k) => { if (isNum(setIn[k])) s[k] = setIn[k]; });
@@ -624,17 +626,29 @@ function runDcf(mdl, mkt, setIn, shift) {
   const rows = [];
   let prevRev = rev(mdl.B);
   let reinvSum = 0, dRevSum = 0;
+  // sales-to-capital implied by our forecast (used for the fade years, and for the consensus case)
+  mdl.fys.forEach((fy) => { const o = mdl.out[fy]; reinvSum += o.capex - o.da + o.dNwc + o.acq; dRevSum += o.rev - prevRev; prevRev = o.rev; });
+  const s2cDflt = dRevSum > 0 && reinvSum > 0 ? clamp(dRevSum / reinvSum, 0.3, 8) : clamp(div(rev(mdl.B), mkt.ic) ?? 1.5, 0.3, 8);
+  const s2c = isNum(s.s2c) ? s.s2c : s2cDflt;
+  prevRev = rev(mdl.B);
+  const useCons = basis === "cons";
+  let cg = null, cm = null; // last consensus growth and margin, carried forward
   mdl.fys.forEach((fy, k) => {
     const o = mdl.out[fy];
     const t = mdl.I("tax", fy);
-    const nopat = o.ebit * (1 - t);
-    const reinv = o.capex - o.da + o.dNwc + o.acq;
-    reinvSum += reinv; dRevSum += o.rev - prevRev;
-    rows.push({ yr: k + 1, label: "FY" + fy + "E", rev: o.rev, g: growth(o.rev, prevRev), margin: div(o.ebit, o.rev), ebit: o.ebit, tax: t, nopat, reinv, fcff: nopat - reinv, wacc });
-    prevRev = o.rev;
+    let r, e, reinv, label;
+    if (useCons) {
+      const c = mdl.consFy?.[fy], cr = rev(c || {}), ce = ebit(c || {});
+      if (isNum(cr) && isNum(ce) && cr > 0) { cg = growth(cr, prevRev); cm = ce / cr; r = cr; e = ce; label = "FY" + fy + "C"; }
+      else { r = prevRev * (1 + (cg ?? growth(o.rev, prevRev) ?? 0)); e = r * (cm ?? div(o.ebit, o.rev)); label = "FY" + fy + "C*"; }
+      reinv = (r - prevRev) / s2c;
+    } else {
+      r = o.rev; e = o.ebit; reinv = o.capex - o.da + o.dNwc + o.acq; label = "FY" + fy + "E";
+    }
+    const nopat = e * (1 - t);
+    rows.push({ yr: k + 1, label, rev: r, g: growth(r, prevRev), margin: div(e, r), ebit: e, tax: t, nopat, reinv, fcff: nopat - reinv, wacc });
+    prevRev = r;
   });
-  const s2cDflt = dRevSum > 0 && reinvSum > 0 ? clamp(dRevSum / reinvSum, 0.3, 8) : clamp(div(rev(mdl.B), mkt.ic) ?? 1.5, 0.3, 8);
-  const s2c = isNum(s.s2c) ? s.s2c : s2cDflt;
   const l5 = rows[rows.length - 1];
   const g5 = l5.g ?? g, m5 = l5.margin, t5 = l5.tax;
   for (let k = 6; k <= 10; k++) {
@@ -672,7 +686,7 @@ function runDcf(mdl, mkt, setIn, shift) {
   const equity = isNum(ev) ? ev - (mkt.debt ?? 0) - (mkt.minority ?? 0) + (mkt.cash ?? 0) + (s.lti ? mkt.lti ?? 0 : 0) : null;
   const perShare = div(equity, mkt.shares);
   return {
-    s, d0, ke, keT, kdAT, wE, waccCalc, wacc, waccT, g, roicT, roicDflt, s2c, s2cDflt, rows,
+    basis: useCons ? "cons" : "model", s, d0, ke, keT, kdAT, wE, waccCalc, wacc, waccT, g, roicT, roicDflt, s2c, s2cDflt, rows,
     terminal: { rev: revT, ebit: ebitT, nopat: nopatT, reinvRate: reinvRateT, fcff: fcffT, tv, pvTv },
     pvSum, ev, equity, perShare, upside: isNum(perShare) && isNum(mkt.price) ? perShare / mkt.price - 1 : null,
     tvShare: div(pvTv, ev),
