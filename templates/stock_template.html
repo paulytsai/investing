@@ -1751,6 +1751,21 @@ Rules:
 - "X plus or minus 2%" means low = X*0.98, high = X*1.02; "plus or minus 50 basis points" on a margin means +-0.005. A range "between A and B" gives low A, high B, mid the average.
 - Prefer GAAP figures when both GAAP and non-GAAP are given; use non-GAAP only if that is all there is.
 - Use null for anything not guided. If the release has no guidance at all, return {"periods":[]}.`;
+  // Fetch guidance when the latest earnings release is newer than the one last read (no Claude call if current)
+  async function ensureGuidance(force) {
+    const t = state.ticker;
+    if (!state.act || !state.sampleOk || state.guideBusy) return;
+    state.guideChecked = state.guideChecked || {};
+    if (state.guideChecked[t] && !force) return;
+    state.guideChecked[t] = true;
+    try {
+      const mcp = await mcpP; if (!mcp) return;
+      const since = new Date(Date.now() - 200 * 864e5).toISOString().slice(0, 10);
+      const ev = await call(mcp, "material_events", { company: t, item: "2.02", since, limit: 3 }, false, EDGAR);
+      const latest = (ev?.results || []).find((x) => x.accession_number);
+      if (latest && latest.accession_number !== state.inp.guide?.src?.acc && state.ticker === t) await guideFill();
+    } catch (e) { /* EDGAR not connected or not allowed: the Guidance button still works by hand */ }
+  }
   async function guideFill() {
     const t = state.ticker, mcp = await mcpP, sample = await sampleP;
     if (!mcp || !sample || state.guideBusy) return;
@@ -1938,6 +1953,7 @@ Rules:
     setNotice(notes.join(" "));
     $("saveState").textContent = "";
     render();
+    sampleP.then((x) => { if (x && state.ticker === t) ensureGuidance(); }).catch(() => {});
     scrollToForecast();
   }
   // Like a frozen pane: show the last few reported years next to the forecast
@@ -2009,6 +2025,18 @@ Rules:
   });
   const xval = (v, f) => (!isNum(v) ? null : f === "usd" || f === "sh" ? v / 1e6 : v);
   const ARGB = { ink: "FF16202C", muted: "FF5B6676", band: "FFE9EEF5", key: "FFF7F9FC", E: "FFEEF3FA", G: "FFFBF3E3", C: "FFF3F0FA", inBg: "FFFFF7CF", inInk: "FF0000FF", neg: "FFB1271D", line: "FFDDE2EA" };
+
+  // Segment / region revenue for the export columns: reported years plus our forecast where the build uses that split
+  function segTable(field, cols, maxLines) {
+    const latest = {}, lastIx = {};
+    cols.forEach((c, j) => Object.entries(c[field] || {}).forEach(([k, v]) => { if (isNum(v)) { latest[k] = v; lastIx[k] = j; } }));
+    let names = Object.keys(latest).sort((a, b) => lastIx[b] - lastIx[a] || latest[b] - latest[a]);
+    const current = names.filter((k) => lastIx[k] === Math.max(...Object.values(lastIx)));
+    names = (current.length ? current : names).slice(0, maxLines || 12);
+    const tot = (c) => { const v = Object.values(c[field] || {}).filter(isNum); return v.length ? v.reduce((a, b) => a + b, 0) : null; };
+    return { names, rows: names.map((nm) => ({ name: nm, vals: cols.map((c) => nn(c[field]?.[nm])), yoy: cols.map((c) => growth(nn(c[field]?.[nm]), nn(c.p?.[field]?.[nm]))), mix: cols.map((c) => div(nn(c[field]?.[nm]), tot(c))) })), total: cols.map(tot) };
+  }
+  const exportGuides = () => (state.act ? guidePeriods().map(guideCtx).filter((c) => Object.values(c.i || {}).some(isNum)) : []);
 
   async function exportXlsx(btn) {
     await loadScript(LIBS.excel);
@@ -2124,6 +2152,51 @@ Rules:
       kv("Incremental EBIT margin, ΔEBIT on Δrevenue", M.reg.fit?.beta, F.pct);
     }
 
+    // --- Segments sheet: segment and region revenue with YoY and mix
+    {
+      const A = state.act, M2 = state.mdl;
+      const sc = [...A.hist.slice(-state.years), ...(M2 ? M2.fys.map((fy) => M2.out[fy].ctx) : [])];
+      const sg = wb.addWorksheet("Segments", { views: [{ state: "frozen", xSplit: 1, ySplit: 3, showGridLines: false }] });
+      sg.getColumn(1).width = 40; sc.forEach((c, j) => { sg.getColumn(j + 2).width = 11.5; });
+      sg.getCell("A1").value = "Revenue by segment and by region (" + cur + " millions)"; sg.getCell("A1").font = { ...base, size: 12, bold: true };
+      sc.forEach((c, j) => { const h = sg.getCell(3, j + 2); h.value = c.label + " " + c.kind; h.font = { ...base, bold: true }; h.alignment = { horizontal: "right" }; h.fill = { type: "pattern", pattern: "solid", fgColor: { argb: c.kind === "A" ? ARGB.band : ARGB[c.kind] } }; });
+      let y = 4;
+      [["prod", "Revenue by segment"], ["geo", "Revenue by region"]].forEach(([field, title]) => {
+        const t = segTable(field, sc, 20);
+        const hr = sg.getRow(y++); hr.getCell(1).value = title.toUpperCase(); for (let j = 1; j <= sc.length + 1; j++) { hr.getCell(j).fill = { type: "pattern", pattern: "solid", fgColor: { argb: ARGB.band } }; hr.getCell(j).font = { ...base, bold: true }; }
+        if (!t.rows.length) { sg.getCell(y++, 1).value = "Not reported for this company."; return; }
+        t.rows.forEach((row) => {
+          const put = (label, arr, fmtK, style) => { const rr = sg.getRow(y++); rr.getCell(1).value = label; rr.getCell(1).font = { ...base, ...(style || {}) }; rr.getCell(1).alignment = { indent: style?.italic ? 2 : 1 }; arr.forEach((v, j) => { const c = rr.getCell(j + 2); c.value = xval(v, fmtK); c.numFmt = F[fmtK]; c.font = { ...base, ...(style || {}) }; if (sc[j].kind !== "A") c.fill = { type: "pattern", pattern: "solid", fgColor: { argb: ARGB[sc[j].kind] } }; }); };
+          put(row.name, row.vals, "usd");
+          put("% yoy", row.yoy, "yoy", { italic: true, size: 9, color: { argb: ARGB.muted } });
+          put("% of total", row.mix, "pct", { italic: true, size: 9, color: { argb: ARGB.muted } });
+        });
+        const tr = sg.getRow(y++); tr.getCell(1).value = "Total"; tr.getCell(1).font = { ...base, bold: true };
+        t.total.forEach((v, j) => { const c = tr.getCell(j + 2); c.value = xval(v, "usd"); c.numFmt = F.usd; c.font = { ...base, bold: true }; c.border = { top: { style: "thin", color: { argb: ARGB.line } } }; });
+        y++;
+      });
+    }
+
+    // --- Guidance sheet: every guided figure with its range and source
+    {
+      const gs = exportGuides();
+      const gw = wb.addWorksheet("Guidance", { views: [{ showGridLines: false }] });
+      gw.getColumn(1).width = 34; for (let j = 2; j <= 8; j++) gw.getColumn(j).width = 14;
+      gw.getCell("A1").value = "Company guidance"; gw.getCell("A1").font = { ...base, size: 12, bold: true };
+      const src = state.inp.guide?.src;
+      gw.getCell("A2").value = src ? "From the earnings release filed " + src.filed + (src.url ? " · " + src.url : "") : "Entered by hand"; gw.getCell("A2").font = { ...base, color: { argb: ARGB.muted } };
+      if (src?.quote) { gw.getCell("A3").value = "“" + src.quote + "”"; gw.getCell("A3").font = { ...base, italic: true, color: { argb: ARGB.muted } }; }
+      const h = gw.getRow(5); ["Period", "Revenue", "Low", "High", "Gross margin", "Opex", "Implied EBIT", "Tax rate", "EPS", "vs consensus revenue"].forEach((t, j) => { const c = h.getCell(j + 1); c.value = t; c.font = { ...base, bold: true }; c.fill = { type: "pattern", pattern: "solid", fgColor: { argb: ARGB.G } }; });
+      gw.getColumn(9).width = 10; gw.getColumn(10).width = 20;
+      let y = 6;
+      if (!gs.length) gw.getCell(y, 1).value = "No guidance found or entered.";
+      gs.forEach((c) => {
+        const o = state.inp.guide.periods[c.gkey] || {};
+        const rr = gw.getRow(y++);
+        [[c.label, "@"], [xval(o.rev, "usd"), F.usd], [xval(o.revLo, "usd"), F.usd], [xval(o.revHi, "usd"), F.usd], [o.gm, F.pct], [xval(o.opex, "usd"), F.usd], [xval(ebit(c), "usd"), F.usd], [o.tax, F.pct], [o.eps, F.eps], [growth(rev(c), rev(c.cons || {})), F.yoy]].forEach(([v, f], j) => { const k = rr.getCell(j + 1); k.value = v ?? null; k.numFmt = f; k.font = base; });
+      });
+    }
+
     // --- Notes
     const n = wb.addWorksheet("Notes", { views: [{ showGridLines: false }] });
     n.getColumn(1).width = 120;
@@ -2174,18 +2247,19 @@ Rules:
     // ---- page 1: summary model
     header("Model summary");
     const hist = A.hist.slice(-5), model = M ? M.fys.slice(0, 3).map((fy) => M.out[fy].ctx) : [], cons = A.cons.slice(0, 3);
-    const cols = [...hist, ...model, ...cons], kinds = cols.map((c) => c.kind);
+    const guides = exportGuides().slice(0, 2);
+    const cols = [...hist, ...model, ...guides, ...cons], kinds = cols.map((c) => c.kind);
     const yo = (fn) => cols.map((c) => f(growth(fn(c), fn(c.p || {})), "yoy"));
     const val = (fn, k) => cols.map((c) => f(fn(c), k));
     const body = [
       mkRow("Revenue", val(rev, "usd"), "key"), mkRow("  % yoy", yo(rev), "sub"),
-      mkRow("  consensus high / low", cols.map((c) => (c.kind === "C" && isNum(c.i?._revHi) ? f(c.i._revHi, "usd") + " / " + f(c.i._revLo, "usd") : "")), "sub"),
+      mkRow("  high / low (consensus, guidance)", cols.map((c) => ((c.kind === "C" || c.kind === "G") && isNum(c.i?._revHi) ? f(c.i._revHi, "usd") + " / " + f(c.i._revLo, "usd") : "")), "sub"),
       mkRow("Gross margin", val(pctRev((c) => nn(c.i?.grossProfit)), "pct")),
       mkRow("EBIT", val(ebit, "usd"), "key"), mkRow("  EBIT margin", val(pctRev(ebit), "pct"), "sub"), mkRow("  % yoy", yo(ebit), "sub"),
       mkRow("EBITDA", val(ebitda, "usd")),
       mkRow("Net income", val((c) => nn(c.i?.netIncome), "usd")),
       mkRow("Diluted EPS", val((c) => nn(c.i?.epsDiluted), "eps"), "key"), mkRow("  % yoy", yo((c) => nn(c?.i?.epsDiluted)), "sub"),
-      mkRow("  consensus high / low", cols.map((c) => (c.kind === "C" && isNum(c.i?._epsHi) ? f(c.i._epsHi, "eps") + " / " + f(c.i._epsLo, "eps") : "")), "sub"),
+      mkRow("  high / low (consensus, guidance)", cols.map((c) => ((c.kind === "C" || c.kind === "G") && isNum(c.i?._epsHi) ? f(c.i._epsHi, "eps") + " / " + f(c.i._epsLo, "eps") : "")), "sub"),
       mkRow("Free cash flow", val(fcf, "usd"), "key"), mkRow("  FCF margin", val(pctRev(fcf), "pct"), "sub"),
       mkRow("Capex", val(capex, "usd")),
       mkRow("Net debt / (net cash)", val((c) => sub(debt(c), cashST(c)), "usd")),
@@ -2202,7 +2276,7 @@ Rules:
     doc.setFontSize(8.5); doc.setTextColor(...ink);
     const strip = [["Price", cur + " " + (isNum(mk.price) ? mk.price.toFixed(2) : "–")], ["Market cap", isNum(mk.mcap) ? big(mk.mcap) : "–"], ["EV", isNum(mk.ev) ? big(mk.ev) : "–"], ["DCF / share", R && isNum(R.perShare) ? R.perShare.toFixed(2) + " (" + (R.basis === "cons" ? "consensus" : "our forecast") + ")" : "–"], ["Upside", R && isNum(R.upside) ? FMT.yoy(R.upside) : "–"]];
     let x = m; strip.forEach(([k, v]) => { doc.setFont("helvetica", "normal"); doc.setTextColor(...muted); doc.text(k.toUpperCase(), x, m + 40); doc.setFont("helvetica", "bold"); doc.setTextColor(...ink); doc.text(v, x, m + 52); x += (W - 2 * m) / strip.length; });
-    table(["", ...cols.map((c) => c.label + " " + c.kind)], body, m + 62, kinds, { fs: 8.6, w0: 170 });
+    table(["", ...cols.map((c) => c.label + " " + c.kind)], body, m + 62, kinds, { fs: cols.length > 11 ? 8 : 8.6, w0: 160 });
 
     // ---- page 2: quarters, cost structure, DCF
     doc.addPage();
@@ -2219,11 +2293,29 @@ Rules:
     ];
     table(["FY" + (A.curFY - 1) + " / FY" + A.curFY + " by quarter", ...q.map((c) => c.label + " " + c.kind)], qBody, m + 34, q.map((c) => c.kind), { fs: 7, w0: 120 });
     let y = doc.lastAutoTable.finalY + 10;
-    // guidance and cost structure side by side
     const half = (W - 2 * m - 16) / 2;
-    const gp = state.inp.guide?.periods || {};
-    const gRows = Object.keys(gp).filter((k) => Object.values(gp[k]).some(isNum)).map((k) => { const o = gp[k], [per, fy] = k.split("|"); return [per === "FY" ? "FY" + fy : per + " FY" + String(fy).slice(-2), f(o.rev, "usd") + (isNum(o.revLo) ? " (" + f(o.revLo, "usd") + "–" + f(o.revHi, "usd") + ")" : ""), f(o.gm, "pct"), f(o.opex, "usd"), f(o.tax, "pct"), f(o.eps, "eps")]; });
-    doc.autoTable({ head: [["Guidance", "Revenue (range)", "Gross margin", "Opex", "Tax rate", "EPS"]], body: gRows.length ? gRows : [["None entered", "", "", "", "", ""]], startY: y, margin: { left: m, right: m + half + 16 }, theme: "plain", styles: { font: "helvetica", fontSize: 7, cellPadding: 1.6, halign: "right", textColor: ink }, headStyles: { fontStyle: "bold", fillColor: band }, columnStyles: { 0: { halign: "left" } }, didParseCell: (d) => { if (d.section === "head") d.cell.styles.halign = d.column.index === 0 ? "left" : "right"; } });
+    // segment and region revenue: last 4 reported years and our first 2 forecast years
+    const segCols = [...A.hist.slice(-4), ...(M ? M.fys.slice(0, 2).map((fy) => M.out[fy].ctx) : [])];
+    const segBlock = (field, title, left) => {
+      const t = segTable(field, segCols, 7);
+      const body = [];
+      t.rows.forEach((row) => { const a = [row.name, ...row.vals.map((v) => f(v, "usd"))]; body.push(a); const b2 = ["  % yoy", ...row.yoy.map((v) => f(v, "yoy"))]; b2._style = "sub"; body.push(b2); });
+      if (t.rows.length) { const tt = ["Total", ...t.total.map((v) => f(v, "usd"))]; tt._style = "key"; body.push(tt); }
+      doc.autoTable({ head: [[title, ...segCols.map((c) => c.label.replace("FY", "") + c.kind)]], body: body.length ? body : [["Not reported", ...segCols.map(() => "")]], startY: y,
+        margin: left ? { left: m, right: m + half + 16 } : { left: m + half + 16, right: m }, theme: "plain",
+        styles: { font: "helvetica", fontSize: 6.4, cellPadding: 1.1, halign: "right", textColor: ink, overflow: "ellipsize" }, headStyles: { fontStyle: "bold", fillColor: band }, columnStyles: { 0: { halign: "left", cellWidth: 104 } },
+        didParseCell: (d) => {
+          if (d.section === "head") d.cell.styles.halign = d.column.index === 0 ? "left" : "right";
+          if (d.section === "body") { const k = segCols[d.column.index - 1]?.kind; if (k && k !== "A") d.cell.styles.fillColor = tE; const st = d.row.raw?._style; if (st === "sub") { d.cell.styles.textColor = muted; d.cell.styles.fontStyle = "italic"; d.cell.styles.fontSize = 5.8; } if (st === "key") d.cell.styles.fontStyle = "bold"; }
+        } });
+      return doc.lastAutoTable.finalY;
+    };
+    const ySeg = Math.max(segBlock("prod", "Revenue by segment", true), segBlock("geo", "Revenue by region", false));
+    y = ySeg + 10;
+    // guidance and cost structure side by side
+    const gRows = exportGuides().map((c) => { const o = state.inp.guide.periods[c.gkey] || {}; return [c.label, f(o.rev, "usd") + (isNum(o.revLo) ? " (" + f(o.revLo, "usd") + "–" + f(o.revHi, "usd") + ")" : ""), f(o.gm, "pct"), f(o.opex, "usd"), f(ebit(c), "usd"), f(o.tax, "pct"), f(o.eps, "eps"), f(growth(rev(c), rev(c.cons || {})), "yoy")]; });
+    const gSrc = state.inp.guide?.src;
+    doc.autoTable({ head: [["Guidance" + (gSrc ? " (release " + gSrc.filed + ")" : ""), "Revenue (range)", "GM", "Opex", "EBIT", "Tax", "EPS", "vs cons."]], body: gRows.length ? gRows : [["None found or entered", "", "", "", "", "", "", ""]], startY: y, margin: { left: m, right: m + half + 16 }, theme: "plain", styles: { font: "helvetica", fontSize: 7, cellPadding: 1.6, halign: "right", textColor: ink }, headStyles: { fontStyle: "bold", fillColor: band }, columnStyles: { 0: { halign: "left" } }, didParseCell: (d) => { if (d.section === "head") d.cell.styles.halign = d.column.index === 0 ? "left" : "right"; } });
     const yG = doc.lastAutoTable.finalY;
     const sl = M?.reg.slopes;
     const sRows = sl ? sl.lines.filter((L) => isNum(L.base) && L.base !== 0).map((L) => [L.label, f(L.share, "pct"), L.fit ? f(L.fit.slope, "pct") : "–", L.fit && isNum(L.fit.r2) ? L.fit.r2.toFixed(2) : "–", f(L.dflt, "pct")]) : [];
@@ -2254,8 +2346,10 @@ Rules:
     const dl = await dlP;
     if (!dl || !state.xrows) return;
     const label = btn.textContent;
-    btn.disabled = true; btn.textContent = "Preparing…";
+    btn.disabled = true; btn.textContent = "Checking guidance…";
     try {
+      await ensureGuidance();
+      btn.textContent = "Preparing…";
       const file = await build(btn);
       await dl.save(file);
       setNotice("");
