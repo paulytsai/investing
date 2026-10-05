@@ -1774,17 +1774,18 @@ const I0 = (mdl, k, fy) => mdl.I(k, fy) ?? 0;
     if (!state.act || !state.inp) { el.hidden = true; return; }
     el.hidden = false;
     // rebuild only when the ticker changes, so typing is never interrupted by a re-render
-    if (state.notesFor === state.ticker && $("notesText")) { const b = $("notesDraft"); if (b) { b.hidden = !state.sampleOk; b.disabled = !!state.notesBusy; b.textContent = state.notesBusy ? "Drafting from filings…" : state.inp.notesDraft ? "Redraft with Claude" : "Draft notes with Claude"; } return; }
+    if (state.notesFor === state.ticker && $("notesText")) { const b = $("notesDraft"); if (b) { b.hidden = !state.sampleOk; b.disabled = !!state.notesBusy; b.textContent = state.notesBusy ? (state.notesBusy === state.ticker ? "Drafting from filings…" : "Drafting " + state.notesBusy + " notes…") : state.inp.notesDraft ? "Redraft with Claude" : "Draft notes with Claude"; } return; }
     state.notesFor = state.ticker;
     const nCalls = state.inp.notesCalls || 8;
     el.innerHTML = '<header><h2>Notes on the fundamentals · ' + esc(state.ticker) + '</h2><span class="btnrow"><span class="save">Earnings calls to read</span>' + [4, 8, 12].map((k) => '<button type="button" class="mini" data-act="ncalls" data-v="' + k + '" aria-pressed="' + (nCalls === k) + '">' + k + (k === 4 ? " (1 year)" : k === 8 ? " (2 years)" : " (3 years)") + "</button>").join("") + '<button type="button" class="btn" id="notesDraft" data-act="notesdraft"' + (state.sampleOk ? "" : " hidden") + ">" + (state.inp.notesDraft ? "Redraft with Claude" : "Draft notes with Claude") + "</button></span></header>" +
-      "<p>Your notes for this company, saved with the model. The draft also frames the company through the lenses of Will Danoff, Peter Lynch and Warren Buffett. “Draft notes with Claude” reads the chosen number of earnings call transcripts (FMP), the latest earnings release and the past year's 8-K events (EDGAR Tools), together with this model's own analysis (scale slopes, cost structure, trend breaks, segments). It drafts the latest call's major topics, what the Q&amp;A focused on and how that shifted over the calls, how the story changed, big swings to future earnings against consensus, and framework insights (structural vs operational drivers, scale, pricing headroom, demand levers, profit concentration). Each call's summary is saved, so later runs only read new calls. Claude writes only to its own section; your notes are never changed. A redraft replaces Claude's section, and the one before it can be restored.</p>" +
+      "<p>Your notes for this company, saved with the model. “Draft notes with Claude” writes in your investment engine's pitch format: a story told as a portfolio manager would present the idea, built around the engine's three questions (the story, the evidence, when it breaks), with the four lenses (Buffett, Danoff, Tillinghast, Lynch), checkpoints and the one tension that decides it. It reads the chosen number of earnings call transcripts (FMP), the latest earnings release and the past year's 8-K events (EDGAR Tools), together with this model's own analysis (scale slopes, cost structure, trend breaks, segments). It drafts the latest call's major topics, what the Q&amp;A focused on and how that shifted over the calls, how the story changed, big swings to future earnings against consensus, and framework insights (structural vs operational drivers, scale, pricing headroom, demand levers, profit concentration). Each call's summary is saved as soon as it is done, so later runs only read new calls, and a run that stops part-way continues from there. Drafting runs in this page, so keep it open until it finishes; switching tabs or companies inside the model is fine, and the draft is saved to the company it was written for. Claude writes only to its own section; your notes are never changed. A redraft replaces Claude's section, and the one before it can be restored.</p>" +
       '<div class="notes2"><div><div class="nh"><h3>Claude\'s draft</h3><span class="btnrow">' + (state.inp.notesDraftPrev ? '<button type="button" class="mini" data-act="notesprev">Restore previous draft</button>' : "") + "</span></div>" +
       '<textarea id="notesDraftText" spellcheck="true" aria-label="Claude\'s draft notes" placeholder="' + (state.sampleOk ? "“Draft notes with Claude” fills this section from the earnings calls and filings." : "Drafting needs Claude, available when this page is opened in claude.ai.") + '"></textarea></div>' +
       '<div><div class="nh"><h3>My notes</h3></div><textarea id="notesText" spellcheck="true" aria-label="My notes" placeholder="Your own view: business, drivers, one-off items, guidance vs consensus, risks, questions to follow up…"></textarea></div></div>';
     $("notesText").value = state.inp.notes || "";
     $("notesDraftText").value = state.inp.notesDraft || "";
   }
+  window.addEventListener("beforeunload", (e) => { if (state.notesBusy) { e.preventDefault(); e.returnValue = ""; } });
   document.addEventListener("input", (e) => {
     if (e.target && e.target.id === "notesText" && state.inp) { state.inp.notes = e.target.value; scheduleSave(); }
     if (e.target && e.target.id === "notesDraftText" && state.inp) { state.inp.notesDraft = e.target.value; scheduleSave(); }
@@ -1792,38 +1793,40 @@ const I0 = (mdl, k, fy) => mdl.I(k, fy) ?? 0;
   const CALL_PROMPT = `Summarise this earnings call transcript for an equity analyst. Return JSON only:
 {"call":"Q2 FY2026","date":"YYYY-MM-DD","topics":["management's main topics, with the numbers given"],"qa_themes":[{"theme":"...","share":"high|medium|low","askers":["Name (Firm)"],"answer":"management's answer, with numbers"}],"guidance":["guidance or targets given, with periods"],"swings":[{"item":"what will move future earnings","direction":"up|down","size":"amount or %, if given","period":"when"}],"pricing_and_demand":["price changes, elasticity or churn comments, demand levers mentioned"],"costs_and_scale":["cost growth, margin, operating leverage, scale or investment comments"],"one_offs":["one-time items mentioned"],"tone":"one sentence on what changed versus prior messaging, if evident"}
 Be specific and quantitative. Keep each list to the essentials (at most 6 items).`;
-  const NOTES_PROMPT = `You are an equity analyst's assistant. From the call summaries, the latest full transcript, the filings and the model data below, write working notes in plain text (no markdown symbols such as # or **). Use these headings on their own lines, each followed by short bullet lines starting with "- ":
-LATEST EARNINGS CALL: MAJOR TOPICS
-WHAT THE Q&A FOCUSED ON
-HOW THE STORY CHANGED OVER THE CALLS
-BIG SWINGS TO FUTURE EARNINGS
-ONE-OFF ITEMS IN REPORTED OR CONSENSUS NUMBERS
-GUIDANCE VS CONSENSUS
-FRAMEWORK INSIGHTS
-INVESTOR LENSES
-QUESTIONS TO FOLLOW UP
-Rules:
-- Latest call: start with the date and quarter; cover the 4-6 topics management spent most time on, with numbers.
-- Q&A: group questions into themes ranked by how much of the Q&A they took; name the analyst and firm for key questions; summarise the answers. Say which themes recur across the calls and which are new.
-- How the story changed: themes that appeared or faded across the calls; for guidance given in earlier calls, say whether it was delivered (compare with later actuals in the summaries and model data).
-- Big swings: anything management said will move earnings materially in future periods (cost step-ups or roll-offs, margin targets, pricing, timing effects, FX, tax, M&A, restructuring, investment), with period and size; say whether consensus appears to reflect it.
-- One-offs: one-time gains, charges, fees, disposals, splits or accounting changes that distort comparisons, with dates, amounts and source (e.g. "8-K, 2026-02-27").
-- Framework insights: 4-6 insights, each written as six short lines: "Observation:" (one sentence, with the number and period), "Evidence:" (data points and sources), "Driver:" (the activity, cost variable, demand lever or structural factor), "Type:" (structural = outside management's control, e.g. scale, location, technology, regulation; or operational = closable by management), "Event link:" (the business event behind it, or "unexplained"), "Implication:" (scope, efficiency, offensive/defensive move or target) and "Confidence:" (high/medium/low and why). Draw on: which battlefields (segments, regions, customer groups) the profits come from and how concentrated they are; scale effects shown by the cost-line slopes and operating leverage in the model data; pricing headroom (evidence that price rises held volume, or that volume needed price); which demand levers management is spending on and whether they move demand; trend breaks in the model data and the event that explains each. Normalise one-off items before drawing conclusions. Public data is thin, so say when a conclusion is only directional.
-- Investor lenses: three short sub-sections, each starting with the investor's name on its own line, framing this company the way that investor does, using the numbers provided:
-  Will Danoff (Fidelity Contrafund): best-of-breed franchise in its industry? improving fundamentals and signs earnings will beat expectations (estimate revisions, guidance raises, operating leverage)? quality and candour of management; durability of multi-year earnings growth.
-  Peter Lynch: which of his six categories it fits (slow grower, stalwart, fast grower, cyclical, turnaround, asset play) and why; the two-minute story; P/E against growth (PEG); balance sheet strength; what would break the story.
-  Warren Buffett: durable competitive advantage and pricing power; owner earnings and returns on capital without heavy leverage; management's capital allocation (buybacks, M&A); margin of safety against the DCF value.
-  For each, say what that investor would find attractive and what would concern them. No buy/sell call.
-- Stay factual otherwise: no price target. Under 1,400 words.`;
+  // The narrative follows the investor's own engine (investment engine branch, src/engine/research: context.py SYSTEM,
+  // pitch.py PITCH_RULES/STOCK_INSTR, stages.py thesis/lenses/checkpoints), fed with this page's data.
+  const NOTES_SYSTEM = `You are the research agent inside the investor's own investment engine. The investor is a Fidelity-trained portfolio manager. Philosophy: buy the indispensable number one with a good investment story when everyone is pessimistic; hold while the thesis is intact; sell only when it breaks; survival first; asymmetry through sizing.
+Answer the engine's three questions: what is the investment story; what is the evidence for believing it; when does the story break.
+Frameworks: story before valuation; explain the chart (why the stock moved); drivers = price × quantity, or demand × distribution; the toll booth: does the company own a chokepoint asset customers cannot replace, is its advantage accumulating or re-earned each year, is there evidence of pricing power; four lenses: Warren Buffett (moat durability and margins, owner earnings, capital allocation, margin of safety), Will Danoff (best of breed, accelerating earnings, upward revisions, beating every time, would you buy it again today), Joel Tillinghast (low debt, real cash flow, reasonable P/E, verifiable from outside), Peter Lynch (a two-minute story, which of his six categories, a buyable price against growth, runway left).
+Source discipline: every number must come from the documents provided; quote it as given and never do arithmetic; name the source briefly in parentheses the first time you use it, e.g. (Q2 FY2026 call), (10-K), (8-K 2026-02-27), (model), (consensus). If a number cannot be sourced, leave it out. Never invent quotes, estimates or price moves.`;
+  const NOTES_PROMPT = `Write working notes on this company as a portfolio manager presenting one idea to an experienced investor and trying to convince them: a story in plain English, in full sentences and paragraphs, with no bullet points except where stated, no markdown symbols (# * **) and no rule ids. Use management's own words from the transcripts where they carry the story (short quotes). The investor knows the industry; do not explain basics. Be honest about the weak points: the case is only credible if the bear case is real. No price target and no buy or sell call; the investor decides.
+Use these headings, each on its own line in capitals, each followed by one or two paragraphs:
+THE STORY: two sentences, the one idea and why now.
+THE BUSINESS: what it sells, why customers cannot do without it, whether it is the indispensable number one in its field, and which segments and regions carry the profits (and how concentrated they are).
+WHY NOW: what changed in the numbers and in demand, how the story has changed over the earnings calls, and whether guidance given in earlier calls was delivered.
+THE LATEST CALL: the date and quarter; the topics management spent most time on, with numbers; what the Q&A focused on (name the analysts and firms behind the key questions) and how management answered; which themes are new and which keep coming back.
+SWINGS TO FUTURE EARNINGS: anything management said will move earnings materially in coming periods (cost step-ups or roll-offs, margin targets, pricing, timing, FX, tax, M&A, restructuring, investment), with size and period, whether consensus seems to reflect it, and any one-off items that distort reported or consensus numbers.
+WHAT DRIVES THE ECONOMICS: the drivers as price × quantity (or demand × distribution); scale effects and operating leverage from the model's cost-line slopes and cost structure; pricing headroom (did price rises hold volume?); which demand levers management is spending on and whether they move demand; trend breaks in the model data and the event behind each; and whether each gap to peers or to the past is structural (outside management's control) or operational (closable by management). Say when public data only supports a directional read.
+VALUATION IN THE CYCLE: where the P/E sits in the company's own ten-year history (use the VALUATION CYCLE document) and the most likely reason it is there; include the recovery value if the document gives one.
+WHAT THE PRICE ASSUMES: state the implied growth figure from the WHAT THE PRICE ASSUMES document exactly, against the growth the company has delivered, and say whether the price asks for more or less than it has shown; then the DCF value against the price.
+THREE REASONS: exactly three sentences in this order: the strongest reason, the weakest of the three, the second-strongest.
+WHAT BREAKS IT: the honest bear case and the sign that would end the thesis.
+FOUR LENSES: four short paragraphs, each starting with the investor's name and a one-word verdict (pass, mixed or fail): Buffett, Danoff, Tillinghast, Lynch.
+CHECKPOINTS: three to six lines starting with "- ", each giving the premise to watch, the number that tests it and when it next reports.
+THE TENSION: one sentence, the one question that decides the idea.
+Keep the whole draft under 1,300 words.`;
   async function draftNotes() {
     const t = state.ticker, mcp = await mcpP, sample = await sampleP;
     if (!mcp || !sample || state.notesBusy) return;
-    state.notesBusy = true; renderNotes();
+    // everything about the company is read from this snapshot, so switching ticker mid-run can't mix data
+    const S = { act: state.act, mdl: state.mdl, mkt: state.mkt, prof: state.prof, inp: state.inp, dcf: state.dcf, rec: state.recRes, raw: state.raw };
+    const note = (msg) => setNotice(esc(t) + " notes: " + msg + " Keep this page open until it finishes; each call's summary is saved as it is done, so if the run stops, the next one picks up from there.");
+    state.notesBusy = t; renderNotes();
     const parts = [], srcs = [];
     const clip = (x, n) => String(x || "").slice(0, n);
     try {
       // earnings calls: summarise each of the last N (cached per call), keep the latest in full
-      const nCalls = state.inp.notesCalls || 8;
+      const nCalls = S.inp.notesCalls || 8;
       try {
         const dates = await call(mcp, "earningsTranscript", { endpoint: "transcripts-dates-by-symbol", symbol: t });
         const list = (Array.isArray(dates) ? dates : []).filter((d) => d && d.date).sort((a, b) => String(b.date).localeCompare(String(a.date))).slice(0, nCalls);
@@ -1833,20 +1836,21 @@ Rules:
           const d = list[i], key = "Q" + d.quarter + " FY" + d.fiscalYear + " " + d.date;
           let text = null;
           if (!cache[key] || i === 0) {
-            setNotice("Reading earnings call " + (i + 1) + " of " + list.length + " (" + esc(key) + ")…");
+            note("reading earnings call " + (i + 1) + " of " + list.length + " (" + esc(key) + ")…");
             const tr = await call(mcp, "earningsTranscript", { endpoint: "search-transcripts", symbol: t, year: d.fiscalYear, quarter: d.quarter });
             text = (Array.isArray(tr) ? tr[0] : tr)?.content || null;
           }
           if (i === 0 && text) { parts.push("LATEST EARNINGS CALL TRANSCRIPT, " + key + ":\n" + clip(text, 45000)); srcs.push("call transcripts " + list[list.length - 1].date + " to " + d.date); }
           if (!cache[key] && text) {
             try { cache[key] = await sample.json([{ role: "user", content: CALL_PROMPT + "\n\nTranscript (" + key + "):\n" + clip(text, 45000) }], { modelTier: "default" }); } catch (e) { cache[key] = null; }
+            if (cache[key]) await docSet("calls-" + t, cache); // save each summary as soon as it exists
           }
           if (cache[key]) summaries.push(key + ": " + JSON.stringify(cache[key]));
         }
         await docSet("calls-" + t, cache);
         if (summaries.length) parts.push("SUMMARIES OF THE LAST " + summaries.length + " EARNINGS CALLS (newest first):\n" + summaries.join("\n\n"));
       } catch (e) { parts.push("(No earnings call transcripts available from FMP.)"); }
-      setNotice("Writing the notes…");
+      note("reading filings and writing the notes…");
       let events = [];
       try {
         const since = new Date(Date.now() - 365 * 864e5).toISOString().slice(0, 10);
@@ -1861,11 +1865,11 @@ Rules:
         }
       } catch (e) {}
       // the model's own numbers: last actuals, consensus and guidance
-      const A = state.act, B = A.fyA[A.curFY - 1], line = (c, lab) => lab + ": revenue " + f0(rev(c)) + ", EBIT " + f0(ebit(c)) + " (margin " + pc(div(ebit(c), rev(c))) + "), net income " + f0(nn(c?.i?.netIncome)) + ", EPS " + (isNum(nn(c?.i?.epsDiluted)) ? c.i.epsDiluted.toFixed(2) : "n/a");
+      const A = S.act, B = A.fyA[A.curFY - 1], line = (c, lab) => lab + ": revenue " + f0(rev(c)) + ", EBIT " + f0(ebit(c)) + " (margin " + pc(div(ebit(c), rev(c))) + "), net income " + f0(nn(c?.i?.netIncome)) + ", EPS " + (isNum(nn(c?.i?.epsDiluted)) ? c.i.epsDiluted.toFixed(2) : "n/a");
       const data = [line(B || {}, "FY" + (A.curFY - 1) + " reported")].concat(A.cons.filter((c) => rev(c)).map((c) => line(c, c.label + " consensus")));
-      const gp = state.inp.guide?.periods || {};
+      const gp = S.inp.guide?.periods || {};
       Object.keys(gp).forEach((k) => { const o = gp[k]; data.push("Guidance " + k.replace("|", " FY") + ": " + Object.entries(o).filter(([, v]) => isNum(v)).map(([f, v]) => f + " " + (Math.abs(v) > 1000 ? f0(v) : Math.abs(v) < 1 ? pc(v) : v)).join(", ")); });
-      const M = state.mdl;
+      const M = S.mdl;
       if (M) {
         const sl = M.reg.slopes, cr = M.reg.cost;
         data.push("Revenue trend: " + (sl.brk ? "break at FY" + sl.brk.fy + ", growth " + pc(sl.brk.before) + "/yr before and " + pc(sl.brk.after) + "/yr after" : "no break over FY" + sl.years[0] + "-FY" + sl.years[sl.years.length - 1] + ", " + pc(sl.cagr) + "/yr"));
@@ -1876,26 +1880,74 @@ Rules:
         const hist = A.hist.slice(-6).map((c) => "FY" + c.fy + " rev " + f0(rev(c)) + ", EBIT margin " + pc(div(ebit(c), rev(c))) + ", FCF " + f0(fcf(c)));
         data.push("History: " + hist.join("; "));
         // valuation and quality numbers for the investor lenses
-        const mk = state.mkt || {}, L = A.ltm, c1 = M.out[A.curFY]?.ctx, c2 = M.out[A.curFY + 1]?.ctx;
+        const mk = S.mkt || {}, L = A.ltm, c1 = M.out[A.curFY]?.ctx, c2 = M.out[A.curFY + 1]?.ctx;
         const pe1 = div(mk.price, nn(c1?.i?.epsDiluted)), g2 = isNum(nn(c1?.i?.epsDiluted)) && isNum(nn(M.out[A.curFY + 2]?.eps)) && c1.i.epsDiluted > 0 ? Math.sqrt(M.out[A.curFY + 2].eps / c1.i.epsDiluted) - 1 : null;
         const bL = L.b || {}, eq = nn(bL.totalStockholdersEquity), dv = debt({ b: bL }), cs = cashST({ b: bL });
         const t0 = taxRate(B || {}), ic = isNum(dv) && isNum(eq) && isNum(cs) ? dv + eq - cs : null;
-        data.push("Valuation and quality: price " + (isNum(mk.price) ? mk.price.toFixed(2) : "n/a") + ", market cap " + f0(mk.mcap) + ", P/E on FY" + A.curFY + " " + (isNum(pe1) ? pe1.toFixed(1) + "x" : "n/a") + ", 2-year EPS growth " + pc(g2) + "/yr, PEG " + (isNum(pe1) && g2 > 0 ? (pe1 / (g2 * 100)).toFixed(2) : "n/a") + ", FCF yield LTM " + pc(div(fcf(L), mk.mcap)) + ", ROE LTM " + pc(isNum(eq) && eq > 0 ? div(nn(L.i?.netIncome), eq) : null) + ", ROIC LTM " + pc(isNum(ic) && ic > 0 ? div(ebit(L), ic) * (1 - (isNum(t0) && t0 > 0 && t0 < 0.5 ? t0 : 0.21)) : null) + ", net debt / EBITDA " + (isNum(dv) && isNum(cs) && ebitda(L) > 0 ? ((dv - cs) / ebitda(L)).toFixed(1) + "x" : "n/a") + ", buybacks LTM " + f0(buyback(L)) + ", DCF value per share " + (state.dcf && isNum(state.dcf.perShare) ? state.dcf.perShare.toFixed(2) + " (" + FMT.yoy(state.dcf.upside) + " vs price)" : "n/a"));
+        data.push("Valuation and quality: price " + (isNum(mk.price) ? mk.price.toFixed(2) : "n/a") + ", market cap " + f0(mk.mcap) + ", P/E on FY" + A.curFY + " " + (isNum(pe1) ? pe1.toFixed(1) + "x" : "n/a") + ", 2-year EPS growth " + pc(g2) + "/yr, PEG " + (isNum(pe1) && g2 > 0 ? (pe1 / (g2 * 100)).toFixed(2) : "n/a") + ", FCF yield LTM " + pc(div(fcf(L), mk.mcap)) + ", ROE LTM " + pc(isNum(eq) && eq > 0 ? div(nn(L.i?.netIncome), eq) : null) + ", ROIC LTM " + pc(isNum(ic) && ic > 0 ? div(ebit(L), ic) * (1 - (isNum(t0) && t0 > 0 && t0 < 0.5 ? t0 : 0.21)) : null) + ", net debt / EBITDA " + (isNum(dv) && isNum(cs) && ebitda(L) > 0 ? ((dv - cs) / ebitda(L)).toFixed(1) + "x" : "n/a") + ", buybacks LTM " + f0(buyback(L)) + ", DCF value per share " + (S.dcf && isNum(S.dcf.perShare) ? S.dcf.perShare.toFixed(2) + " (" + FMT.yoy(S.dcf.upside) + " vs price)" : "n/a"));
       }
       parts.push("MODEL DATA (" + (A.lastA.reportedCurrency || "USD") + ", millions except per share):\n" + data.join("\n"));
-      parts.push("COMPANY DESCRIPTION (FMP):\n" + clip(state.prof?.description, 2500));
-      const out = await sample([{ role: "user", content: NOTES_PROMPT + "\n\nCompany: " + (state.prof?.companyName || t) + " (" + t + ")\n\n" + parts.join("\n\n") }], { modelTier: "default" });
+      try { parts.push(valuationDocs(S)); } catch (e) {}
+      parts.push("COMPANY DESCRIPTION (FMP):\n" + clip(S.prof?.description, 2500));
+      const out = await sample([{ role: "user", content: NOTES_SYSTEM + "\n\nDOCUMENTS FOR " + (S.prof?.companyName || t) + " (" + t + "):\n\n" + parts.join("\n\n") + "\n\nINSTRUCTIONS:\n" + NOTES_PROMPT }], { modelTier: "default" });
       const text = String(out?.text || "").trim();
       if (!text) throw new Error("empty draft");
-      const head = "Draft by Claude, " + new Date().toLocaleDateString("en-US") + (srcs.length ? " · from " + srcs.join(", ") : "") + " · review before relying on it\n";
-      if (state.inp.notesDraft) state.inp.notesDraftPrev = state.inp.notesDraft;
-      state.inp.notesDraft = head + text;
-      scheduleSave();
-      state.notesFor = null; // rebuild with the new text
-      setNotice("");
+      const head = "Draft by Claude in the investment engine's pitch format, " + new Date().toLocaleDateString("en-US") + (srcs.length ? " · from " + srcs.join(", ") : "") + " · review before relying on it\n";
+      const draft = head + text;
+      if (state.ticker === t && state.inp) {
+        if (state.inp.notesDraft) state.inp.notesDraftPrev = state.inp.notesDraft;
+        state.inp.notesDraft = draft;
+        scheduleSave();
+        state.notesFor = null; // rebuild with the new text
+        setNotice("");
+      } else {
+        // the user moved to another company: save the draft to the one it was written for
+        const inp = await loadInputs(t);
+        if (inp.notesDraft) inp.notesDraftPrev = inp.notesDraft;
+        inp.notesDraft = draft;
+        await saveInputsFor(t, inp);
+        setNotice("The " + esc(t) + " notes draft is ready and saved with " + esc(t) + "'s model.");
+      }
     } catch (e) {
-      setNotice(e && e.code === "server_not_connected" ? "Drafting notes needs the FMP and EDGAR Tools connectors. Add them in claude.ai Settings → Connectors." : "Couldn't draft notes (" + esc(e?.message || e?.code || "error") + ").");
+      setNotice(e && e.code === "server_not_connected" ? "Drafting notes needs the FMP and EDGAR Tools connectors. Add them in claude.ai Settings → Connectors." : "Couldn't draft " + esc(t) + " notes (" + esc(e?.message || e?.code || "error") + "). Call summaries already done are saved, so the next run continues from there.");
     } finally { state.notesBusy = false; renderNotes(); }
+  }
+  // The engine's reverse DCF (frameworks/dcf.py _implied_growth): the constant growth in free cash flow for n years,
+  // then stable growth, at which the present value equals today's enterprise value
+  function impliedGrowth(ev, fcf0, n, rate, gT) {
+    if (!(fcf0 > 0) || !(ev > 0) || !(rate > gT)) return null;
+    const pv = (g) => { let p = 0, f = fcf0; for (let t = 1; t <= n; t++) { f *= 1 + g; p += f / Math.pow(1 + rate, t); } return p + (f * (1 + gT)) / (rate - gT) / Math.pow(1 + rate, n); };
+    let lo = -0.5, hi = 1.5;
+    if (pv(lo) > ev) return lo; if (pv(hi) < ev) return hi;
+    for (let i = 0; i < 60; i++) { const mid = (lo + hi) / 2; if (pv(mid) < ev) lo = mid; else hi = mid; }
+    return (lo + hi) / 2;
+  }
+  function valuationDocs(S) {
+    const A = S.act, mk = S.mkt || {}, R = S.dcf, out = [];
+    const cagr = (fn, yrs) => { const h = A.hist.slice(-(yrs + 1)); const a = fn(h[0]), b = fn(h[h.length - 1]); return h.length === yrs + 1 && a > 0 && b > 0 ? Math.pow(b / a, 1 / yrs) - 1 : null; };
+    // valuation cycle: fiscal-year-end P/E over ten years (FMP) and where today's sits
+    const peOf = {};
+    (Array.isArray(S.raw?.ratios) ? S.raw.ratios : []).forEach((r) => { const v = nn(r.priceToEarningsDilutedRatio) ?? nn(r.priceToEarningsRatio); if (isNum(v) && v > 0) peOf[+r.fiscalYear] = v; });
+    const hist = A.hist.slice(-10).map((c) => ({ fy: c.fy, pe: peOf[c.fy] })).filter((x) => isNum(x.pe));
+    const peNow = div(mk.price, nn(A.ltm?.i?.epsDiluted));
+    if (hist.length >= 3) {
+      const sorted = hist.map((x) => x.pe).sort((a, b) => a - b), med = sorted.length % 2 ? sorted[(sorted.length - 1) / 2] : (sorted[sorted.length / 2 - 1] + sorted[sorted.length / 2]) / 2;
+      const below = isNum(peNow) && peNow > 0 ? sorted.filter((v) => v < peNow).length : null;
+      const where = below === null ? "" : below === 0 ? ", below every one of those year-end readings" : below === sorted.length ? ", above every one of them" : ", above " + below + " of the " + sorted.length;
+      let d = "Fiscal-year-end P/E (price / diluted EPS, FMP): " + hist.map((x) => "FY" + x.fy + " " + x.pe.toFixed(1) + "x").join(", ") + ". Median " + med.toFixed(1) + "x. P/E on the last 12 months' EPS today: " + (isNum(peNow) && peNow > 0 ? peNow.toFixed(1) + "x" + where : "n/a (no positive trailing EPS)") + ".";
+      const RV = S.rec;
+      if (RV && isNum(RV.value) && isNum(RV.up)) d += " Recovery value: at " + RV.pe.toFixed(1) + "x (the ten-year " + (RV.stat === "med" ? "median" : "average") + " P/E" + (RV.leftOut?.length ? ", leaving out " + RV.leftOut.map((x) => "FY" + x.fy).join(" and ") + " when depressed earnings inflated the multiple" : "") + ") on the previous peak EPS of " + RV.eps.toFixed(2) + (RV.peak ? " (FY" + RV.peak.fy + ")" : "") + ", the price would be " + RV.value.toFixed(2) + ", " + FMT.yoy(RV.up).replace("−", "-") + " from today." + (RV.reachOurs ? " Our forecast gets EPS back to that peak in FY" + RV.reachOurs + "." : " Neither our forecast nor consensus gets EPS back to that peak within its horizon.");
+      out.push("VALUATION CYCLE (engine):\n" + d);
+    }
+    // what the price assumes: the engine's implied FCF growth against what the company has delivered
+    if (R && isNum(mk.mcap)) {
+      const ev = mk.mcap + (R.debtUsed ?? mk.debt ?? 0) + (mk.minority ?? 0) - (mk.cash ?? 0) - (R.s.lti ? mk.lti ?? 0 : 0), fcf0 = fcf(A.ltm);
+      const gi = impliedGrowth(ev, fcf0, 10, R.wacc, R.g);
+      const dRev = cagr(rev, 3), dEps = cagr((c) => nn(c.i?.epsDiluted), 3), dFcf = cagr(fcf, 3);
+      out.push("WHAT THE PRICE ASSUMES (engine reverse DCF):\n" + (isNum(gi) ? "At today's enterprise value of " + f0(ev) + "m, discounting at the DCF's cost of capital of " + pc(R.wacc) + " with stable growth of " + pc(R.g) + " after ten years, the price implies free cash flow (last 12 months " + f0(fcf0) + "m) growing " + pc(gi) + " a year for ten years." : "No implied growth: trailing free cash flow is not positive (" + f0(fcf0) + "m), so the price rests on a recovery in cash flow.") +
+        " Delivered over the last three fiscal years: revenue " + pc(dRev) + " a year, diluted EPS " + pc(dEps) + " a year, free cash flow " + pc(dFcf) + " a year. DCF value per share " + (isNum(R.perShare) ? R.perShare.toFixed(2) : "n/a") + " on " + (R.basis === "cons" ? "consensus" : "our forecast") + " against a price of " + (isNum(mk.price) ? mk.price.toFixed(2) : "n/a") + (isNum(R.upside) ? " (" + FMT.yoy(R.upside).replace("−", "-") + ")" : "") + ".");
+    }
+    return out.join("\n\n");
   }
   async function docGet(id) {
     try { const db = await dbP, u = await userP, uid = u ? await u.id() : null; if (db && uid) { const sn = await db.collection("data/users/" + uid).doc(id.replace(/[^A-Za-z0-9_~:@+-]/g, "_")).get(); if (sn.exists) return JSON.parse(sn.data().json); } } catch (e) {}
@@ -2492,12 +2544,18 @@ Rules:
   }
 
   let saveTimer = null, saving = Promise.resolve();
+  async function saveInputsFor(t, inp) {
+    const json = JSON.stringify(inp);
+    store.set("tmpl.inp." + t, json);
+    try { const db = await dbP; if (db && state.uid) await db.collection("data/users/" + state.uid).doc(docId(t)).set({ json, ticker: t, updatedAt: Date.now() }); } catch (e) {}
+  }
+  const saveTimers = {};
   function scheduleSave() {
     const t = state.ticker, json = JSON.stringify(state.inp);
     store.set("tmpl.inp." + t, json);
     $("saveState").textContent = "Saving…";
-    clearTimeout(saveTimer);
-    saveTimer = setTimeout(() => {
+    clearTimeout(saveTimers[t]);
+    saveTimers[t] = setTimeout(() => {
       saving = saving.then(async () => {
         try {
           const db = await dbP;
