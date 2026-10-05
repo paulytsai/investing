@@ -166,6 +166,8 @@ td.flag { color: var(--muted); }
 .flags li.warn { color: var(--neg); }
 .save { color: var(--muted); font-size: 12px; }
 .btnrow { display: flex; flex-wrap: wrap; gap: 8px; }
+#notesText { width: 100%; min-height: 60vh; resize: vertical; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); color: var(--ink); font: 14px/1.55 var(--body); padding: 12px 14px; }
+#notesText:focus { outline: 2px solid var(--accent); outline-offset: 0; }
 #sheetWrap { min-width: 0; }
 .tabs { display: flex; flex-wrap: wrap; gap: 2px; border-bottom: 1px solid var(--line); }
 .tabs button { border: 0; border-bottom: 3px solid transparent; background: transparent; color: var(--muted); font: 600 14px var(--display); padding: 9px 14px 8px; cursor: pointer; }
@@ -231,6 +233,7 @@ footer.foot .fine { font-size: 11px; max-width: 110ch; }
   <div id="sheetWrap"><div class="sheet"><table id="tbl"></table></div></div>
 
   <div class="panels">
+    <section class="panel" id="notesp" hidden></section>
     <section class="panel" id="regp" hidden></section>
     <section class="panel" id="settings" hidden></section>
     <section class="panel" id="pe" hidden></section>
@@ -256,7 +259,7 @@ footer.foot .fine { font-size: 11px; max-width: 110ch; }
   const use = (name) => { try { return window.claude?.use ? window.claude.use(name) : Promise.resolve(null); } catch (e) { return Promise.resolve(null); } };
   const mcpP = use("mcp"), dlP = use("downloads"), dbP = use("db"), userP = use("user"), sampleP = use("sample");
   const EDGAR = "Edgar Tools";
-  sampleP.then((x) => { state.sampleOk = !!x; if (x && state.act) render(); }).catch(() => {});
+  sampleP.then((x) => { state.sampleOk = !!x; if (x && state.act) { render(); renderNotes(); } }).catch(() => {});
 
   const store = {
     get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
@@ -468,7 +471,7 @@ footer.foot .fine { font-size: 11px; max-width: 110ch; }
   }
 
   // ---------- tabs ----------
-  const TABS = [["model", "Model"], ["drivers", "Drivers"], ["segments", "Segments"], ["cost", "Cost structure"], ["valuation", "Valuation"], ["settings", "Settings"]];
+  const TABS = [["model", "Model"], ["drivers", "Drivers"], ["segments", "Segments"], ["cost", "Cost structure"], ["valuation", "Valuation"], ["notes", "Notes"], ["settings", "Settings"]];
   const TAB_OF = { "Income statement": "model", "Our forecast vs consensus": "model", "Cash flow": "model", "Balance sheet": "model", "Cost drivers (% of revenue)": "drivers", "Working capital & returns": "drivers", "Valuation at today's price": "valuation" };
   const tabOf = (sec) => sec.tab || TAB_OF[sec.title] || (sec.driver ? "drivers" : /^Revenue by|^Segment operating/.test(sec.title) ? "segments" : "model");
   const TABLE_TABS = new Set(["model", "drivers", "segments", "valuation"]);
@@ -479,7 +482,7 @@ footer.foot .fine { font-size: 11px; max-width: 110ch; }
   function applyTab() {
     const t = state.tab, loaded = !!state.act;
     $("sheetWrap").hidden = loaded && !TABLE_TABS.has(t);
-    const vis = { regp: "cost", settings: "settings", pe: "valuation", dcf: "valuation" };
+    const vis = { regp: "cost", settings: "settings", pe: "valuation", dcf: "valuation", notesp: "notes" };
     Object.entries(vis).forEach(([id, tab]) => { const el = $(id); if (el && el.dataset.ready === "1") el.hidden = t !== tab; });
   }
 
@@ -742,7 +745,7 @@ footer.foot .fine { font-size: 11px; max-width: 110ch; }
         });
         const rowCls = [r.key ? "key" : "", r.ratio ? "ratio" : "", r.chk ? "chk" : ""].join(" ").trim();
         const label = r.lhtml || esc(r.l);
-        out.push('<tr class="' + rowCls + '"><td class="' + (r.ind ? "ind1" : "") + '" title="' + esc(r.l) + '">' + label + "</td>" + cells.map((x, j) => '<td class="' + (cc[j] + " " + x.cls + (r.chk && isNum(x.val) && Math.abs(x.val) > 1e3 ? " bad" : "")).trim() + '">' + x.html + "</td>").join("") + "</tr>");
+        out.push('<tr class="' + rowCls + '"><td class="' + (r.ind ? "ind1" : "") + '" title="' + esc(r.tip || r.l) + '">' + label + "</td>" + cells.map((x, j) => '<td class="' + (cc[j] + " " + x.cls + (r.chk && isNum(x.val) && Math.abs(x.val) > 1e3 ? " bad" : "")).trim() + '">' + x.html + "</td>").join("") + "</tr>");
         xrows.push({ t: "row", label: r.l, ind: !!r.ind, f: r.f, key: !!r.key, ratio: !!r.ratio, cells: cells.map((x) => ({ v: isNum(x.val) ? x.val : null, inp: x.cls === "in" })) });
         if (r.yoy && r.v) {
           const yc = cols.map((c) => {
@@ -759,7 +762,8 @@ footer.foot .fine { font-size: 11px; max-width: 110ch; }
     state.xrows = xrows; state.xcols = cols.map((c) => ({ label: c.label, kind: c.kind, type: c.type }));
     $("xlsx").disabled = false; $("pdf").disabled = false;
     renderReg(); renderSettings(); renderPe(); renderDcf(); renderHeader();
-    ["regp", "settings", "pe", "dcf"].forEach((id) => { const el = $(id); el.dataset.ready = el.hidden ? "0" : "1"; });
+    renderNotes();
+    ["regp", "settings", "pe", "dcf", "notesp"].forEach((id) => { const el = $(id); el.dataset.ready = el.hidden ? "0" : "1"; });
     renderTabs(); applyTab();
     if (focusKey) {
       const el = document.querySelector('input.in[data-s="' + focusKey[0] + '"][data-k="' + CSS.escape(focusKey[1]) + '"][data-fy="' + focusKey[2] + '"]');
@@ -874,6 +878,141 @@ footer.foot .fine { font-size: 11px; max-width: 110ch; }
     g += '<text x="' + (W - m.r) + '" y="' + (H - 4) + '" text-anchor="end">Change in revenue</text><text x="' + m.l + '" y="' + (m.t - 2) + '" text-anchor="start" dy="-1">Change in EBIT</text>';
     return '<svg class="scatter" viewBox="0 0 ' + W + " " + H + '" role="img" aria-label="Scatter of yearly change in EBIT against change in revenue, with fitted line">' + g + "</svg>";
   }
+
+  // ---------- notes on the fundamentals (per ticker, saved with the model) ----------
+  function renderNotes() {
+    const el = $("notesp");
+    if (!state.act || !state.inp) { el.hidden = true; return; }
+    el.hidden = false;
+    // rebuild only when the ticker changes, so typing is never interrupted by a re-render
+    if (state.notesFor === state.ticker && $("notesText")) { const b = $("notesDraft"); if (b) { b.hidden = !state.sampleOk; b.disabled = !!state.notesBusy; b.textContent = state.notesBusy ? "Drafting from filings…" : "Draft notes with Claude"; } return; }
+    state.notesFor = state.ticker;
+    const nCalls = state.inp.notesCalls || 8;
+    el.innerHTML = '<header><h2>Notes on the fundamentals · ' + esc(state.ticker) + '</h2><span class="btnrow"><span class="save">Earnings calls to read</span>' + [4, 8, 12].map((k) => '<button type="button" class="mini" data-act="ncalls" data-v="' + k + '" aria-pressed="' + (nCalls === k) + '">' + k + (k === 4 ? " (1 year)" : k === 8 ? " (2 years)" : " (3 years)") + "</button>").join("") + '<button type="button" class="btn" id="notesDraft" data-act="notesdraft"' + (state.sampleOk ? "" : " hidden") + '>Draft notes with Claude</button></span></header>' +
+      "<p>Your notes for this company, saved with the model. The draft also frames the company through the lenses of Will Danoff, Peter Lynch and Warren Buffett. “Draft notes with Claude” reads the chosen number of earnings call transcripts (FMP), the latest earnings release and the past year's 8-K events (EDGAR Tools), together with this model's own analysis (scale slopes, cost structure, trend breaks, segments). It drafts the latest call's major topics, what the Q&amp;A focused on and how that shifted over the calls, how the story changed, big swings to future earnings against consensus, and framework insights (structural vs operational drivers, scale, pricing headroom, demand levers, profit concentration). Each call's summary is saved, so later runs only read new calls. The draft goes at the top for you to edit.</p>" +
+      '<textarea id="notesText" spellcheck="true" aria-label="Notes on the fundamentals" placeholder="Business, drivers, one-off items, guidance vs consensus, risks, questions to follow up…"></textarea>';
+    $("notesText").value = state.inp.notes || "";
+  }
+  document.addEventListener("input", (e) => {
+    if (e.target && e.target.id === "notesText" && state.inp) { state.inp.notes = e.target.value; scheduleSave(); }
+  });
+  const CALL_PROMPT = `Summarise this earnings call transcript for an equity analyst. Return JSON only:
+{"call":"Q2 FY2026","date":"YYYY-MM-DD","topics":["management's main topics, with the numbers given"],"qa_themes":[{"theme":"...","share":"high|medium|low","askers":["Name (Firm)"],"answer":"management's answer, with numbers"}],"guidance":["guidance or targets given, with periods"],"swings":[{"item":"what will move future earnings","direction":"up|down","size":"amount or %, if given","period":"when"}],"pricing_and_demand":["price changes, elasticity or churn comments, demand levers mentioned"],"costs_and_scale":["cost growth, margin, operating leverage, scale or investment comments"],"one_offs":["one-time items mentioned"],"tone":"one sentence on what changed versus prior messaging, if evident"}
+Be specific and quantitative. Keep each list to the essentials (at most 6 items).`;
+  const NOTES_PROMPT = `You are an equity analyst's assistant. From the call summaries, the latest full transcript, the filings and the model data below, write working notes in plain text (no markdown symbols such as # or **). Use these headings on their own lines, each followed by short bullet lines starting with "- ":
+LATEST EARNINGS CALL: MAJOR TOPICS
+WHAT THE Q&A FOCUSED ON
+HOW THE STORY CHANGED OVER THE CALLS
+BIG SWINGS TO FUTURE EARNINGS
+ONE-OFF ITEMS IN REPORTED OR CONSENSUS NUMBERS
+GUIDANCE VS CONSENSUS
+FRAMEWORK INSIGHTS
+INVESTOR LENSES
+QUESTIONS TO FOLLOW UP
+Rules:
+- Latest call: start with the date and quarter; cover the 4-6 topics management spent most time on, with numbers.
+- Q&A: group questions into themes ranked by how much of the Q&A they took; name the analyst and firm for key questions; summarise the answers. Say which themes recur across the calls and which are new.
+- How the story changed: themes that appeared or faded across the calls; for guidance given in earlier calls, say whether it was delivered (compare with later actuals in the summaries and model data).
+- Big swings: anything management said will move earnings materially in future periods (cost step-ups or roll-offs, margin targets, pricing, timing effects, FX, tax, M&A, restructuring, investment), with period and size; say whether consensus appears to reflect it.
+- One-offs: one-time gains, charges, fees, disposals, splits or accounting changes that distort comparisons, with dates, amounts and source (e.g. "8-K, 2026-02-27").
+- Framework insights: 4-6 insights, each written as six short lines: "Observation:" (one sentence, with the number and period), "Evidence:" (data points and sources), "Driver:" (the activity, cost variable, demand lever or structural factor), "Type:" (structural = outside management's control, e.g. scale, location, technology, regulation; or operational = closable by management), "Event link:" (the business event behind it, or "unexplained"), "Implication:" (scope, efficiency, offensive/defensive move or target) and "Confidence:" (high/medium/low and why). Draw on: which battlefields (segments, regions, customer groups) the profits come from and how concentrated they are; scale effects shown by the cost-line slopes and operating leverage in the model data; pricing headroom (evidence that price rises held volume, or that volume needed price); which demand levers management is spending on and whether they move demand; trend breaks in the model data and the event that explains each. Normalise one-off items before drawing conclusions. Public data is thin, so say when a conclusion is only directional.
+- Investor lenses: three short sub-sections, each starting with the investor's name on its own line, framing this company the way that investor does, using the numbers provided:
+  Will Danoff (Fidelity Contrafund): best-of-breed franchise in its industry? improving fundamentals and signs earnings will beat expectations (estimate revisions, guidance raises, operating leverage)? quality and candour of management; durability of multi-year earnings growth.
+  Peter Lynch: which of his six categories it fits (slow grower, stalwart, fast grower, cyclical, turnaround, asset play) and why; the two-minute story; P/E against growth (PEG); balance sheet strength; what would break the story.
+  Warren Buffett: durable competitive advantage and pricing power; owner earnings and returns on capital without heavy leverage; management's capital allocation (buybacks, M&A); margin of safety against the DCF value.
+  For each, say what that investor would find attractive and what would concern them. No buy/sell call.
+- Stay factual otherwise: no price target. Under 1,400 words.`;
+  async function draftNotes() {
+    const t = state.ticker, mcp = await mcpP, sample = await sampleP;
+    if (!mcp || !sample || state.notesBusy) return;
+    state.notesBusy = true; renderNotes();
+    const parts = [], srcs = [];
+    const clip = (x, n) => String(x || "").slice(0, n);
+    try {
+      // earnings calls: summarise each of the last N (cached per call), keep the latest in full
+      const nCalls = state.inp.notesCalls || 8;
+      try {
+        const dates = await call(mcp, "earningsTranscript", { endpoint: "transcripts-dates-by-symbol", symbol: t });
+        const list = (Array.isArray(dates) ? dates : []).filter((d) => d && d.date).sort((a, b) => String(b.date).localeCompare(String(a.date))).slice(0, nCalls);
+        const cache = (await docGet("calls-" + t)) || {};
+        const summaries = [];
+        for (let i = 0; i < list.length; i++) {
+          const d = list[i], key = "Q" + d.quarter + " FY" + d.fiscalYear + " " + d.date;
+          let text = null;
+          if (!cache[key] || i === 0) {
+            setNotice("Reading earnings call " + (i + 1) + " of " + list.length + " (" + esc(key) + ")…");
+            const tr = await call(mcp, "earningsTranscript", { endpoint: "search-transcripts", symbol: t, year: d.fiscalYear, quarter: d.quarter });
+            text = (Array.isArray(tr) ? tr[0] : tr)?.content || null;
+          }
+          if (i === 0 && text) { parts.push("LATEST EARNINGS CALL TRANSCRIPT, " + key + ":\n" + clip(text, 45000)); srcs.push("call transcripts " + list[list.length - 1].date + " to " + d.date); }
+          if (!cache[key] && text) {
+            try { cache[key] = await sample.json([{ role: "user", content: CALL_PROMPT + "\n\nTranscript (" + key + "):\n" + clip(text, 45000) }], { modelTier: "default" }); } catch (e) { cache[key] = null; }
+          }
+          if (cache[key]) summaries.push(key + ": " + JSON.stringify(cache[key]));
+        }
+        await docSet("calls-" + t, cache);
+        if (summaries.length) parts.push("SUMMARIES OF THE LAST " + summaries.length + " EARNINGS CALLS (newest first):\n" + summaries.join("\n\n"));
+      } catch (e) { parts.push("(No earnings call transcripts available from FMP.)"); }
+      setNotice("Writing the notes…");
+      let events = [];
+      try {
+        const since = new Date(Date.now() - 365 * 864e5).toISOString().slice(0, 10);
+        events = (await call(mcp, "material_events", { company: t, since, limit: 30 }, false, EDGAR))?.results || [];
+        parts.push("8-K EVENTS, LAST 12 MONTHS:\n" + events.map((e) => e.filing_date + ": " + (e.item_names || e.items || []).join("; ")).join("\n"));
+        const rel = events.find((e) => (e.items || []).includes("2.02"));
+        if (rel) { const r = await call(mcp, "filing_section", { accession: rel.accession_number, section: "earnings_release", tables: "none", prose: "full" }, false, EDGAR); parts.push("LATEST EARNINGS RELEASE (filed " + rel.filing_date + "):\n" + clip(r?.content, 14000)); srcs.push("earnings release " + rel.filing_date); }
+        const big = events.filter((e) => (e.items || []).some((i) => ["1.01", "1.02", "2.01", "2.05", "2.06", "3.03", "4.02"].includes(i))).slice(0, 4);
+        for (const e of big) {
+          const it = (e.items || []).find((i) => ["1.02", "2.01", "2.05", "2.06", "3.03", "4.02", "1.01"].includes(i));
+          try { const x = await call(mcp, "filing_section", { accession: e.accession_number, section: "eight_k_item:" + it }, false, EDGAR); parts.push("8-K ITEM " + it + " (filed " + e.filing_date + "):\n" + clip(x?.content, 3500)); srcs.push("8-K " + e.filing_date); } catch (err) {}
+        }
+      } catch (e) {}
+      // the model's own numbers: last actuals, consensus and guidance
+      const A = state.act, B = A.fyA[A.curFY - 1], line = (c, lab) => lab + ": revenue " + f0(rev(c)) + ", EBIT " + f0(ebit(c)) + " (margin " + pc(div(ebit(c), rev(c))) + "), net income " + f0(nn(c?.i?.netIncome)) + ", EPS " + (isNum(nn(c?.i?.epsDiluted)) ? c.i.epsDiluted.toFixed(2) : "n/a");
+      const data = [line(B || {}, "FY" + (A.curFY - 1) + " reported")].concat(A.cons.filter((c) => rev(c)).map((c) => line(c, c.label + " consensus")));
+      const gp = state.inp.guide?.periods || {};
+      Object.keys(gp).forEach((k) => { const o = gp[k]; data.push("Guidance " + k.replace("|", " FY") + ": " + Object.entries(o).filter(([, v]) => isNum(v)).map(([f, v]) => f + " " + (Math.abs(v) > 1000 ? f0(v) : Math.abs(v) < 1 ? pc(v) : v)).join(", ")); });
+      const M = state.mdl;
+      if (M) {
+        const sl = M.reg.slopes, cr = M.reg.cost;
+        data.push("Revenue trend: " + (sl.brk ? "break at FY" + sl.brk.fy + ", growth " + pc(sl.brk.before) + "/yr before and " + pc(sl.brk.after) + "/yr after" : "no break over FY" + sl.years[0] + "-FY" + sl.years[sl.years.length - 1] + ", " + pc(sl.cagr) + "/yr"));
+        sl.lines.filter((L) => L.fit && isNum(L.base) && L.base > 0).forEach((L) => data.push("Scale slope, " + L.label + " (" + pc(L.share) + " of revenue): " + pc(L.fit.slope) + " per doubling of revenue, R2 " + (L.fit.r2 ?? 0).toFixed(2)));
+        if (cr.valid) data.push("Cost structure: variable costs " + pc(cr.fit.v) + " of revenue, fixed share of costs " + pc(cr.fixedShare) + ", operating leverage " + (isNum(cr.dol) ? cr.dol.toFixed(1) + "x" : "n/a") + ", fixed costs growing " + pc(cr.fixedGrowth) + "/yr");
+        else data.push("Cost structure: fixed vs variable split not identifiable from history");
+        ["prod", "geo"].forEach((f) => { const cur = A.fyA[A.curFY - 1]?.[f], old = A.fyA[A.curFY - 4]?.[f]; if (cur) data.push((f === "prod" ? "Segments" : "Regions") + " FY" + (A.curFY - 1) + " (vs FY" + (A.curFY - 4) + "): " + Object.entries(cur).filter(([, v]) => isNum(v)).sort((a, b) => b[1] - a[1]).map(([k, v]) => k + " " + f0(v) + (old && isNum(old[k]) && old[k] > 0 ? " (" + pc(Math.pow(v / old[k], 1 / 3) - 1) + "/yr 3y)" : "")).join("; ")); });
+        const hist = A.hist.slice(-6).map((c) => "FY" + c.fy + " rev " + f0(rev(c)) + ", EBIT margin " + pc(div(ebit(c), rev(c))) + ", FCF " + f0(fcf(c)));
+        data.push("History: " + hist.join("; "));
+        // valuation and quality numbers for the investor lenses
+        const mk = state.mkt || {}, L = A.ltm, c1 = M.out[A.curFY]?.ctx, c2 = M.out[A.curFY + 1]?.ctx;
+        const pe1 = div(mk.price, nn(c1?.i?.epsDiluted)), g2 = isNum(nn(c1?.i?.epsDiluted)) && isNum(nn(M.out[A.curFY + 2]?.eps)) && c1.i.epsDiluted > 0 ? Math.sqrt(M.out[A.curFY + 2].eps / c1.i.epsDiluted) - 1 : null;
+        const bL = L.b || {}, eq = nn(bL.totalStockholdersEquity), dv = debt({ b: bL }), cs = cashST({ b: bL });
+        const t0 = taxRate(B || {}), ic = isNum(dv) && isNum(eq) && isNum(cs) ? dv + eq - cs : null;
+        data.push("Valuation and quality: price " + (isNum(mk.price) ? mk.price.toFixed(2) : "n/a") + ", market cap " + f0(mk.mcap) + ", P/E on FY" + A.curFY + " " + (isNum(pe1) ? pe1.toFixed(1) + "x" : "n/a") + ", 2-year EPS growth " + pc(g2) + "/yr, PEG " + (isNum(pe1) && g2 > 0 ? (pe1 / (g2 * 100)).toFixed(2) : "n/a") + ", FCF yield LTM " + pc(div(fcf(L), mk.mcap)) + ", ROE LTM " + pc(isNum(eq) && eq > 0 ? div(nn(L.i?.netIncome), eq) : null) + ", ROIC LTM " + pc(isNum(ic) && ic > 0 ? div(ebit(L), ic) * (1 - (isNum(t0) && t0 > 0 && t0 < 0.5 ? t0 : 0.21)) : null) + ", net debt / EBITDA " + (isNum(dv) && isNum(cs) && ebitda(L) > 0 ? ((dv - cs) / ebitda(L)).toFixed(1) + "x" : "n/a") + ", buybacks LTM " + f0(buyback(L)) + ", DCF value per share " + (state.dcf && isNum(state.dcf.perShare) ? state.dcf.perShare.toFixed(2) + " (" + FMT.yoy(state.dcf.upside) + " vs price)" : "n/a"));
+      }
+      parts.push("MODEL DATA (" + (A.lastA.reportedCurrency || "USD") + ", millions except per share):\n" + data.join("\n"));
+      parts.push("COMPANY DESCRIPTION (FMP):\n" + clip(state.prof?.description, 2500));
+      const out = await sample([{ role: "user", content: NOTES_PROMPT + "\n\nCompany: " + (state.prof?.companyName || t) + " (" + t + ")\n\n" + parts.join("\n\n") }], { modelTier: "default" });
+      const text = String(out?.text || "").trim();
+      if (!text) throw new Error("empty draft");
+      const head = "Draft by Claude, " + new Date().toLocaleDateString("en-US") + (srcs.length ? " · from " + srcs.join(", ") : "") + " · review before relying on it\n";
+      state.inp.notes = head + text + (state.inp.notes ? "\n\n----------\n\n" + state.inp.notes : "");
+      scheduleSave();
+      state.notesFor = null; // rebuild with the new text
+      setNotice("");
+    } catch (e) {
+      setNotice(e && e.code === "server_not_connected" ? "Drafting notes needs the FMP and EDGAR Tools connectors. Add them in claude.ai Settings → Connectors." : "Couldn't draft notes (" + esc(e?.message || e?.code || "error") + ").");
+    } finally { state.notesBusy = false; renderNotes(); }
+  }
+  async function docGet(id) {
+    try { const db = await dbP, u = await userP, uid = u ? await u.id() : null; if (db && uid) { const sn = await db.collection("data/users/" + uid).doc(id.replace(/[^A-Za-z0-9_~:@+-]/g, "_")).get(); if (sn.exists) return JSON.parse(sn.data().json); } } catch (e) {}
+    try { return JSON.parse(store.get("tmpl." + id) || "null"); } catch (e) { return null; }
+  }
+  async function docSet(id, obj) {
+    const json = JSON.stringify(obj); store.set("tmpl." + id, json);
+    try { const db = await dbP, u = await userP, uid = u ? await u.id() : null; if (db && uid) await db.collection("data/users/" + uid).doc(id.replace(/[^A-Za-z0-9_~:@+-]/g, "_")).set({ json, ticker: state.ticker, updatedAt: Date.now() }); } catch (e) {}
+  }
+  const f0 = (v) => (isNum(v) ? Math.round(v / 1e6).toLocaleString("en-US") : "n/a");
+  const pc = (v) => (isNum(v) ? (v * 100).toFixed(1) + "%" : "n/a");
 
   // ---------- settings panel ----------
   function renderSettings() {
@@ -1468,6 +1607,8 @@ Rules:
     if (act === "secfill") { secFill(); return; }
     if (act === "tab") { state.tab = v; store.set("tmpl.tab", v); render(); if (TABLE_TABS.has(v)) { scrollToForecast(); const sh = document.querySelector(".sheet"); if (sh) sh.scrollTop = 0; } return; }
     if (act === "backup") { backupAll(); return; }
+    if (act === "notesdraft") { draftNotes(); return; }
+    if (act === "ncalls") { state.inp.notesCalls = +v; scheduleSave(); state.notesFor = null; renderNotes(); return; }
     if (act === "restore") { $("restoreFile").click(); return; }
     if (act === "open") { load(v); window.scrollTo({ top: 0 }); return; }
     if (act === "guidefill") { guideFill(); return; }
@@ -1685,6 +1826,7 @@ Rules:
       "", "Method", "The forecast runs P&L → cash flow → balance sheet. Cash is the balancing item; D&A is calculated from capex.",
       "The DCF uses free cash flow to the firm with a five-year fade to stable growth; stock-based compensation is treated as an operating expense.",
       SLOPE_NOTE,
+      ...(state.inp.notes ? ["", "Your notes on " + state.ticker, ...String(state.inp.notes).split("\n")] : []),
       "Values are exported as of " + new Date().toLocaleString("en-US") + "; they are numbers, not live formulas."].forEach((t, i) => { const k = n.getCell(i + 1, 1); k.value = t; k.font = { ...base, bold: t === "Sources" || t === "Method" }; k.alignment = { wrapText: true }; });
 
     const buf = await wb.xlsx.writeBuffer();
@@ -1867,7 +2009,7 @@ Rules:
   const sy = +store.get("tmpl.years"); if ([10, 15, 20, 30].includes(sy)) setYears(sy);
   if (store.get("tmpl.drill") === "0") state.drill = false;
   if (store.get("tmpl.fc") === "0") state.showFc = false;
-  { const tb = (location.hash || "").slice(1) || store.get("tmpl.tab"); if (["model", "drivers", "segments", "cost", "valuation", "settings"].includes(tb)) state.tab = tb; }
+  { const tb = (location.hash || "").slice(1) || store.get("tmpl.tab"); if (["model", "drivers", "segments", "cost", "valuation", "notes", "settings"].includes(tb)) state.tab = tb; }
   const start = store.get("tmpl.ticker") || "MSFT";
   $("ticker").value = start;
   render();
