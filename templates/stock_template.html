@@ -167,6 +167,11 @@ td.flag { color: var(--muted); }
 .dcf td.fade { background-image: linear-gradient(var(--cs), var(--cs)); }
 .sens td.mid { font-weight: 700; outline: 2px solid var(--accent); outline-offset: -2px; }
 .chg td:nth-child(-n+3) { text-align: left; }
+.rec { display: grid; gap: 10px; border-top: 1px solid var(--line); padding-top: 12px; }
+.recchk { display: flex; gap: 8px; align-items: center; font-weight: 600; cursor: pointer; }
+.recchk input { width: 16px; height: 16px; accent-color: var(--accent); }
+.rect td.spike { color: var(--neg); }
+.rect td.peak { font-weight: 700; outline: 2px solid var(--accent); outline-offset: -2px; }
 .chg td:nth-child(2) { color: var(--ink); }
 .chg td { white-space: nowrap; }
 .sens .up { font-size: 10.5px; font-weight: 600; margin-left: 6px; }
@@ -1092,7 +1097,7 @@ function runDcf(mdl, mkt, setIn, shift, basis) {
     if (scope === "b") return nn(I.ov[k + "|" + fy]);
     if (scope === "g") { const [pk, f] = k.split("::"); return nn(I.guide.periods?.[pk]?.[f]); }
     if (scope === "s") return M ? M.scal[k] : null;
-    if (scope === "p") return state.peRes ? state.peRes.pe : null;
+    if (scope === "p") { if (k === "pe") return state.peRes ? state.peRes.pe : null; const RV = state.recRes; return RV ? { rpe: RV.pe, reps: RV.eps, ryr: RV.ry }[k] ?? null : null; }
     if (scope === "d") { const R = state.dcf; if (!R) return null; if (k === "s2c") return R.s2c; if (k === "roicT") return R.roicT; return R.s[k]; }
     return null;
   }
@@ -1804,7 +1809,7 @@ Rules:
   // ---------- settings panel ----------
   // Every input saved for this ticker, wherever it is typed, with its default and a way to clear it
   const SET_LBL = { life: ["Useful life of new capex (years)", "num"], rem: ["D&A rate on existing assets", "pct"], kd: ["Interest rate on debt", "pct"], ky: ["Yield on cash", "pct"], px: ["Share price for buybacks and stock comp", "eps"] };
-  const DCF_LBL = { rf: ["Risk-free rate", "pct"], beta: ["Beta", "x"], erp: ["Mature-market equity risk premium", "pct"], crp: ["Country risk premium", "pct"], kdPre: ["Pre-tax cost of debt", "pct"], tm: ["Marginal tax rate", "pct"], wacc: ["WACC override", "pct"], g: ["Stable growth rate", "pct"], mT: ["Target operating margin (year 10)", "pct"], s2c: ["Sales-to-capital, years 6–10", "x"], roicT: ["Return on capital in stable growth", "pct"], betaT: ["Beta in stable growth", "x"], pe: ["Target P/E", "x"], lti: ["Add long-term investments", "bool"], mid: ["Mid-year discounting", "bool"] };
+  const DCF_LBL = { rf: ["Risk-free rate", "pct"], beta: ["Beta", "x"], erp: ["Mature-market equity risk premium", "pct"], crp: ["Country risk premium", "pct"], kdPre: ["Pre-tax cost of debt", "pct"], tm: ["Marginal tax rate", "pct"], wacc: ["WACC override", "pct"], g: ["Stable growth rate", "pct"], mT: ["Target operating margin (year 10)", "pct"], s2c: ["Sales-to-capital, years 6–10", "x"], roicT: ["Return on capital in stable growth", "pct"], betaT: ["Beta in stable growth", "x"], pe: ["Target P/E", "x"], lti: ["Add long-term investments", "bool"], mid: ["Mid-year discounting", "bool"], recov: ["Recovery value shown", "bool"], rpe: ["Recovery P/E", "x"], reps: ["Previous peak EPS", "eps"], ryr: ["Recovery by fiscal year", "int"] };
   const PFX_LBL = { g: "revenue growth", ug: "units growth", pg: "price / mix", u0: "units, last reported year (mm)", se0: "segment EBIT, last reported year", si: "segment incremental margin", sl: "slope per doubling of revenue" };
   const KEY_LBL = { em: "EBIT margin", incr: "Incremental EBIT margin", var: "Variable costs, % of revenue", fg: "Fixed cash costs, growth", ua: "Unallocated / corporate costs, growth" };
   const METHOD_LBL = { cons: "consensus EBIT margin", incr: "incremental margin", regress: "scale slopes", fixvar: "fixed + variable costs", segment: "segment EBIT" };
@@ -1827,8 +1832,9 @@ Rules:
     Object.keys(I.s || {}).forEach((k) => { if (!isNum(I.s[k]) || !SET_LBL[k]) return; const [l, u] = SET_LBL[k]; rows.push({ where: "Settings", l, per: "all years", v: show(I.s[k], u), d: M ? show(M.dflt[k], u) : "–", s: "s", k, fy: "" }); });
     if (Object.keys(I.dcf || {}).length && M && state.mkt) {
       const D0 = runDcf(M, state.mkt, {}, null, I.dcfBasis === "cons" ? "cons" : "model");
-      const dd = { s2c: D0.s2cDflt, roicT: D0.roicDflt, wacc: D0.waccCalc, pe: peUpside()?.dflt };
-      Object.keys(I.dcf).forEach((k) => { if (!isNum(I.dcf[k]) || !DCF_LBL[k]) return; const [l, u] = DCF_LBL[k]; rows.push({ where: "Valuation", l, per: k === "pe" ? "FY" + (A.curFY + 1) + "–" + (A.curFY + 2) : "DCF", v: show(I.dcf[k], u), d: show(k in dd ? dd[k] : D0.s[k], u), s: "d", k, fy: "" }); });
+      const RV = recoveryValue();
+      const dd = { s2c: D0.s2cDflt, roicT: D0.roicDflt, wacc: D0.waccCalc, pe: peUpside()?.dflt, recov: 0, rpe: RV?.peDflt, reps: RV?.peak?.eps, ryr: RV?.reachOurs };
+      Object.keys(I.dcf).forEach((k) => { if (!isNum(I.dcf[k]) || !DCF_LBL[k]) return; const [l, u] = DCF_LBL[k]; rows.push({ where: "Valuation", l, per: k === "pe" ? "FY" + (A.curFY + 1) + "–" + (A.curFY + 2) : /^(recov|rpe|reps|ryr)$/.test(k) ? "Recovery" : "DCF", v: show(I.dcf[k], u), d: show(k in dd ? dd[k] : D0.s[k], u), s: "d", k, fy: "" }); });
     }
     Object.keys(I.guide?.periods || {}).sort().forEach((pk) => Object.keys(I.guide.periods[pk] || {}).forEach((f) => {
       const v = I.guide.periods[pk][f]; if (!isNum(v)) return; const c = gcat[f] || {};
@@ -1839,6 +1845,7 @@ Rules:
     if (I.costMethod) choices.push(["Drivers", "Cost method: " + (METHOD_LBL[I.costMethod] || I.costMethod), "chosen by the cost structure", "costMethod"]);
     Object.keys(I.up || {}).filter((k) => I.up[k]).forEach((k) => choices.push(["Drivers", k + ": revenue split into units × price", "single growth rate", "up:" + k]));
     if (I.dcfBasis === "cons") choices.push(["Valuation", "DCF run on consensus", "our forecast", "dcfBasis"]);
+    if (I.recStat === "med") choices.push(["Valuation", "Recovery P/E: 10-year median", "10-year average", "recStat"]);
     if (I.reg) { const r = I.reg, t = []; if (isNum(r.n) && r.n !== 10) t.push(r.n + "-year window"); if (r.icpt) t.push("cost drift on"); if (r.robust === false) t.push("outlier years kept"); if (r.afterBreak === false) t.push("fit ignores the trend break"); if (t.length) choices.push(["Cost structure", "Regression: " + t.join(", "), "10 years, outliers dropped, fit after any break", "reg"]); }
     if (I.notesCalls && I.notesCalls !== 8) choices.push(["Notes", "Earnings calls read: " + I.notesCalls, "8", "notesCalls"]);
     rows.sort((a, b) => a.where.localeCompare(b.where) || a.l.localeCompare(b.l) || String(a.fy).localeCompare(String(b.fy)));
@@ -1894,8 +1901,75 @@ Rules:
     });
     return { pe, dflt, years };
   }
+  // Recovery scenario: the price if the stock traded at its 10-year average P/E on its previous peak EPS
+  function recoveryValue() {
+    const A = state.act, mk = state.mkt, I = state.inp, M = state.mdl;
+    if (!A || !mk || !I) return null;
+    const hist = A.hist.slice(-10);
+    const peOf = {};
+    (Array.isArray(state.raw?.ratios) ? state.raw.ratios : []).forEach((r) => { const v = nn(r.priceToEarningsDilutedRatio) ?? nn(r.priceToEarningsRatio); if (isNum(v) && r.fiscalYear != null) peOf[+r.fiscalYear] = v; });
+    const series = hist.map((c) => ({ fy: c.fy, eps: nn(c.i?.epsDiluted), pe: peOf[c.fy] ?? null }));
+    const pes = series.filter((x) => isNum(x.pe) && x.pe > 0 && isNum(x.eps) && x.eps > 0).map((x) => x.pe).sort((a, b) => a - b);
+    const avg = pes.length ? pes.reduce((a, b) => a + b, 0) / pes.length : null;
+    const med = pes.length ? (pes.length % 2 ? pes[(pes.length - 1) / 2] : (pes[pes.length / 2 - 1] + pes[pes.length / 2]) / 2) : null;
+    const stat = I.recStat === "med" ? "med" : "avg";
+    const peDflt = stat === "med" ? med : avg;
+    const peak = series.filter((x) => isNum(x.eps)).reduce((b, x) => (!b || x.eps > b.eps ? x : b), null);
+    const pe = isNum(I.dcf.rpe) ? I.dcf.rpe : peDflt;
+    const eps = isNum(I.dcf.reps) ? I.dcf.reps : peak?.eps ?? null;
+    const value = isNum(pe) && isNum(eps) ? pe * eps : null;
+    const up = isNum(value) && isNum(mk.price) && mk.price > 0 ? value / mk.price - 1 : null;
+    // when EPS gets back to the peak: our forecast, then consensus
+    const lastOurs = M ? M.fys[M.fys.length - 1] : null;
+    const reachOurs = M && isNum(eps) ? M.fys.find((fy) => isNum(M.out[fy]?.eps) && M.out[fy].eps >= eps) ?? null : null;
+    const consYrs = Object.keys(A.consFy || {}).map(Number).filter((fy) => isNum(nn(A.consFy[fy]?.i?.epsDiluted))).sort((a, b) => a - b);
+    const reachCons = isNum(eps) ? consYrs.find((fy) => A.consFy[fy].i.epsDiluted >= eps) ?? null : null;
+    const lastCons = consYrs[consYrs.length - 1] ?? null;
+    const ry = isNum(I.dcf.ryr) ? Math.round(I.dcf.ryr) : reachOurs;
+    let years = null, cagr = null;
+    if (isNum(ry) && isNum(value) && value > 0 && isNum(mk.price) && mk.price > 0) {
+      const end = new Date(A.lastA.date + "T00:00:00");
+      end.setFullYear(end.getFullYear() + (ry - +A.lastA.fiscalYear));
+      years = (end - Date.now()) / (365.25 * 864e5);
+      if (years > 0.25) cagr = Math.pow(value / mk.price, 1 / years) - 1;
+    }
+    const spikes = isNum(med) ? series.filter((x) => isNum(x.pe) && x.pe > 1.5 * med) : [];
+    return { on: !!I.dcf.recov, series, n: pes.length, avg, med, stat, peDflt, pe, peak, eps, value, up, reachOurs, reachCons, lastOurs, lastCons, ry, years, cagr, spikes, from: hist[0]?.fy, to: hist[hist.length - 1]?.fy };
+  }
+  function recoveryHTML(RV, cur) {
+    const head = '<label class="recchk"><input type="checkbox" data-act="recov"' + (RV.on ? " checked" : "") + "> Recovery value: the price if the stock traded at its 10-year average P/E on its previous peak EPS</label>";
+    if (!RV.on) return '<div class="rec">' + head + "</div>";
+    if (!RV.n) return '<div class="rec">' + head + '<p class="save">FMP has no fiscal-year-end P/E history for this company, so there is no 10-year average to apply. Type a P/E below to use your own.</p>' + recoveryInputs(RV, cur) + "</div>";
+    const yrs = RV.series;
+    const peCell = (x) => (isNum(x.pe) && x.pe > 0 && isNum(x.eps) && x.eps > 0 ? '<td class="' + (RV.spikes.includes(x) ? "spike" : "") + '">' + x.pe.toFixed(1) + "×</td>" : '<td title="Loss year or no data: left out">n/m</td>');
+    const epsCell = (x) => '<td class="' + (RV.peak && x.fy === RV.peak.fy ? "peak" : "") + '">' + (isNum(x.eps) ? x.eps.toFixed(2) : "–") + "</td>";
+    const tbl = '<div class="tablewrap"><table class="sens rect"><tbody><tr class="sec"><td>Fiscal year</td>' + yrs.map((x) => "<td>FY" + x.fy + "</td>").join("") + "</tr>" +
+      "<tr><td>P/E at fiscal year-end</td>" + yrs.map(peCell).join("") + "</tr><tr><td>Diluted EPS</td>" + yrs.map(epsCell).join("") + "</tr></tbody></table></div>";
+    const sb = (v, label) => '<button type="button" class="mini" data-act="recstat" data-v="' + v + '" aria-pressed="' + (RV.stat === v) + '">' + label + "</button>";
+    return '<div class="rec">' + head + tbl +
+      '<p class="save">P/E = price at each fiscal year-end ÷ that year\'s diluted EPS (FMP); loss years are left out. ' + (RV.spikes.length ? "P/Es in " + RV.spikes.map((x) => "FY" + x.fy + " (" + x.pe.toFixed(0) + "×)").join(" and ") + " are well above the median because earnings were depressed that year, which lifts the average; applying it to peak EPS counts the rebound twice, so the median is the more conservative read. " : "") + "</p>" +
+      '<div class="btnrow" style="align-items:center"><span class="save">10-year P/E to apply, FY' + RV.from + "–FY" + RV.to + "</span>" + sb("avg", "Average " + RV.avg.toFixed(1) + "×") + sb("med", "Median " + RV.med.toFixed(1) + "×") + "</div>" +
+      recoveryInputs(RV, cur) + "</div>";
+  }
+  function recoveryInputs(RV, cur) {
+    const row = (label, k, u, src) => "<span>" + label + "</span><b>" + inputHTML("p", k, "", u) + "</b>" + (src ? '<span class="src">' + src + "</span>" : "");
+    const out = (label, v, cls) => "<span>" + label + '</span><b class="' + (cls || "") + '">' + v + "</b>";
+    const epsAt = (fy, eps) => (isNum(eps) && isNum(RV.eps) && RV.eps > 0 ? eps.toFixed(2) + " = " + ((eps / RV.eps) * 100).toFixed(0) + "% of the peak" : "–");
+    const M = state.mdl, A = state.act;
+    const ours = RV.reachOurs ? "FY" + RV.reachOurs : RV.lastOurs ? "not by FY" + RV.lastOurs + " (EPS " + epsAt(RV.lastOurs, M?.out[RV.lastOurs]?.eps) + ")" : "–";
+    const cons = RV.reachCons ? "FY" + RV.reachCons : RV.lastCons ? "not by FY" + RV.lastCons + " (EPS " + epsAt(RV.lastCons, nn(A.consFy[RV.lastCons]?.i?.epsDiluted)) + ")" : "–";
+    return '<div class="grid3"><div class="kv">' +
+      row("P/E applied", "rpe", "x", "Default: the 10-year " + (RV.stat === "med" ? "median" : "average") + (isNum(RV.peDflt) ? " (" + RV.peDflt.toFixed(1) + "×)" : "")) +
+      row("Previous peak EPS", "reps", "eps", RV.peak ? "Default: FY" + RV.peak.fy + " diluted EPS, the highest of the ten years" : "No EPS history") +
+      out("Recovery value", isNum(RV.value) ? cur + " " + RV.value.toFixed(2) : "–", "big") +
+      out("Upside to today's price of " + state.mkt.price.toFixed(2), isNum(RV.up) ? FMT.yoy(RV.up) : "–", "big " + (isNum(RV.up) ? (RV.up >= 0 ? "pos" : "neg") : "")) + "</div>" +
+      '<div class="kv">' + out("EPS back at the peak, our forecast", ours) + out("EPS back at the peak, consensus", cons) +
+      row("Recovery by fiscal year", "ryr", "int", "Default: the year our forecast EPS reaches the peak; type a year to test a timeline") +
+      out("Annual return if it gets there by then", isNum(RV.cagr) ? FMT.yoy(RV.cagr) + " a year" : "–", isNum(RV.cagr) ? (RV.cagr >= 0 ? "pos" : "neg") : "") +
+      '<span class="src">Price return only, before dividends' + (isNum(RV.years) ? ", over " + RV.years.toFixed(1) + " years from today to the end of FY" + RV.ry : "") + ".</span></div></div>";
+  }
   function renderPe() {
-    const el = $("pe"), P = (state.peRes = peUpside());
+    const el = $("pe"), P = (state.peRes = peUpside()), RV = (state.recRes = recoveryValue());
     if (!P) { el.hidden = true; return; }
     el.hidden = false;
     const cur = state.prof?.currency || "";
@@ -1905,7 +1979,7 @@ Rules:
       "<p>Implied price = target P/E × EPS for that year; upside is against today's price of " + cur + " " + state.mkt.price.toFixed(2) + ". Default target: today's P/E on our current-year EPS (" + (isNum(P.dflt) ? P.dflt.toFixed(1) + "×" : "–") + "), so the upside mostly reflects EPS growth; type a multiple to test a re-rating.</p>" +
       '<div class="tablewrap"><table class="sens"><tbody><tr class="sec"><td>Year</td><td>EPS, our forecast</td><td>Implied price</td><td>Upside</td><td>EPS, consensus</td><td>Implied price</td><td>Upside</td></tr>' +
       P.years.map((y) => "<tr><td>" + y.label + "</td><td>" + (isNum(y.ours) ? y.ours.toFixed(2) : "–") + "</td><td>" + px(y.o) + "</td><td>" + up(y.o) + "</td><td>" + (isNum(y.cons) ? y.cons.toFixed(2) : "–") + "</td><td>" + px(y.c) + "</td><td>" + up(y.c) + "</td></tr>").join("") +
-      "</tbody></table></div>";
+      "</tbody></table></div>" + (RV ? recoveryHTML(RV, cur) : "");
   }
   function renderDcf() {
     const M = state.mdl, el = $("dcf");
@@ -2022,6 +2096,7 @@ Rules:
       ["FCF yield LTM", (() => { const y = div(fcf(L), mk.mcap); return isNum(y) ? FMT.pct(y) : null; })()],
       ["DCF / share" + (R?.basis === "cons" ? " (consensus)" : ""), R && isNum(R.perShare) ? R.perShare.toFixed(2) : null],
       ["DCF upside", R && isNum(R.upside) ? FMT.yoy(R.upside) : null, R && isNum(R.upside) ? (R.upside >= 0 ? "pos" : "neg") : "", "DCF value per share vs today's price"],
+      ...(state.recRes?.on && isNum(state.recRes.up) ? [["Recovery value", FMT.yoy(state.recRes.up), state.recRes.up >= 0 ? "pos" : "neg", "Price at " + state.recRes.pe.toFixed(1) + "× the previous peak EPS of " + state.recRes.eps.toFixed(2) + " = " + state.recRes.value.toFixed(2) + " (Valuation tab)"]] : []),
       ...(state.peRes && state.peRes.years[0].o ? [[state.peRes.pe.toFixed(1) + "× FY" + state.peRes.years[0].fy + " EPS", FMT.yoy(state.peRes.years[0].o.up), state.peRes.years[0].o.up >= 0 ? "pos" : "neg", "Upside if the stock trades at " + state.peRes.pe.toFixed(1) + "× FY" + state.peRes.years[0].fy + " EPS (target P/E on the Valuation tab)"]] : []),
     ];
     strip.innerHTML = items.map(([k, v, cls, tip]) => '<div title="' + esc(tip || k) + '"><span>' + esc(k) + '</span><b class="' + (cls || "") + '">' + (v ?? "–") + "</b></div>").join("");
@@ -2368,6 +2443,7 @@ Rules:
       geoA: st("revenue-geographic-segments", "annual", { structure: "flat" }),
       prodQ: st("revenue-product-segmentation", "quarter", { structure: "flat" }),
       geoQ: st("revenue-geographic-segments", "quarter", { structure: "flat" }),
+      ratios: st("metrics-ratios", "annual", { limit: 31 }),
       estA: call(mcp, "analyst", { endpoint: "financial-estimates", symbol: t, period: "annual", limit: 12 }),
       estQ: call(mcp, "analyst", { endpoint: "financial-estimates", symbol: t, period: "quarter", limit: 40 }),
       prof: call(mcp, "company", { endpoint: "profile-symbol", symbol: t }),
@@ -2464,6 +2540,7 @@ Rules:
     if (act === "open") { load(v); window.scrollTo({ top: 0 }); return; }
     if (act === "guidefill") { guideFill(); return; }
     if (act === "dcfbasis") { state.inp.dcfBasis = v; render(); scheduleSave(); return; }
+    if (act === "recstat") { state.inp.recStat = v === "med" ? "med" : "avg"; render(); scheduleSave(); return; }
     if (act === "fc") { state.showFc = !state.showFc; store.set("tmpl.fc", state.showFc ? "1" : "0"); render(); return; }
     if (act === "drill") { state.drill = !state.drill; store.set("tmpl.drill", state.drill ? "1" : "0"); render(); return; }
     if (act === "regn") state.inp.reg = { ...(state.inp.reg || {}), n: +v };
@@ -2592,9 +2669,16 @@ Rules:
       d.getCell(y, 1).value = "Value"; d.getCell(y, 1).font = { ...base, bold: true }; y++;
       kv("PV of FCFF, years 1–10", xval(R.pvSum, "usd"), F.usd); kv("PV of terminal value", xval(T.pvTv, "usd"), F.usd); kv("Enterprise value", xval(R.ev, "usd"), F.usd);
       kv("− Debt", xval(-(mk.debt ?? 0), "usd"), F.usd); kv("− Minority interest", xval(-(mk.minority ?? 0), "usd"), F.usd); kv("+ Cash & short-term investments", xval(mk.cash, "usd"), F.usd); kv("+ Long-term investments", R.s.lti ? xval(mk.lti, "usd") : 0, F.usd);
-      kv("Equity value", xval(R.equity, "usd"), F.usd); kv("Diluted shares (mm)", xval(mk.shares, "sh"), F.sh); kv("Value per share", R.perShare, "0.00"); kv("Price today", mk.price, "0.00"); kv("Upside / (downside)", R.upside, F.yoy);
+      kv("Equity value", xval(R.equity, "usd"), F.usd); kv("Diluted shares (mm)", xval(mk.shares, "sh"), F.sh); const vpsRow = y; kv("Value per share", R.perShare, "0.00"); kv("Price today", mk.price, "0.00"); kv("Upside / (downside)", R.upside, F.yoy);
+      d.getCell(vpsRow, 2).font = { ...base, bold: true };
       if (state.peRes) { y++; kv("Target P/E", state.peRes.pe, '0.0"x"'); state.peRes.years.forEach((yy2) => { kv("Implied price at target P/E, " + yy2.label, yy2.o ? yy2.o.price : null, "0.00"); kv("  upside", yy2.o ? yy2.o.up : null, F.yoy); }); }
-      d.getCell(y - 3, 2).font = { ...base, bold: true };
+      const RV = state.recRes;
+      if (RV?.on) {
+        y++; d.getCell(y, 1).value = "Recovery value: 10-year " + (RV.stat === "med" ? "median" : "average") + " P/E on the previous peak EPS"; d.getCell(y, 1).font = { ...base, bold: true }; y++;
+        RV.series.forEach((x) => kv("  FY" + x.fy + " P/E at fiscal year-end", isNum(x.pe) && x.pe > 0 && isNum(x.eps) && x.eps > 0 ? x.pe : null, '0.0"x"'));
+        kv("P/E applied", RV.pe, '0.0"x"'); kv("Previous peak EPS" + (RV.peak ? " (FY" + RV.peak.fy + ")" : ""), RV.eps, "0.00"); kv("Recovery value", RV.value, "0.00"); kv("  upside", RV.up, F.yoy);
+        if (isNum(RV.ry)) kv("Annual return if reached by FY" + RV.ry + " (price only)", RV.cagr, F.yoy);
+      }
       y++;
       d.getCell(y, 1).value = "Value per share: WACC (rows) × stable growth (columns)"; d.getCell(y, 1).font = { ...base, bold: true }; y++;
       const ws5 = [-0.01, -0.005, 0, 0.005, 0.01];
@@ -2816,6 +2900,7 @@ Rules:
         ["Enterprise value", f(R.ev, "usd")], ["Equity value", f(R.equity, "usd")], ["Value per share (" + (R.basis === "cons" ? "consensus" : "our forecast") + ")", isNum(R.perShare) ? R.perShare.toFixed(2) : "–"],
         ["Price today / upside", (isNum(mk.price) ? mk.price.toFixed(2) : "–") + " / " + (isNum(R.upside) ? FMT.yoy(R.upside).replace(/\u2212/g, "-") : "–")],
         ...((state.peRes?.years || []).map((y) => ["At " + state.peRes.pe.toFixed(1) + "x " + y.label + " EPS", y.o ? y.o.price.toFixed(2) + " / " + FMT.yoy(y.o.up).replace(/\u2212/g, "-") : "–"])),
+        ...(state.recRes?.on && isNum(state.recRes.value) ? [["Recovery: " + state.recRes.pe.toFixed(1) + "x " + (state.recRes.stat === "med" ? "median" : "avg") + " P/E x peak EPS " + state.recRes.eps.toFixed(2) + (state.recRes.peak ? " (FY" + state.recRes.peak.fy + ")" : ""), state.recRes.value.toFixed(2) + " / " + FMT.yoy(state.recRes.up).replace(/\u2212/g, "-")]] : []),
       ];
       doc.autoTable({ head: [["DCF (FCFF)", ""]], body: dBody, startY: y, margin: { left: m, right: m + half + 16 }, theme: "plain", styles: { font: "helvetica", fontSize: 7.2, cellPadding: 1.6, halign: "right", textColor: ink }, headStyles: { fontStyle: "bold", fillColor: band }, columnStyles: { 0: { halign: "left" } }, didParseCell: (d) => { if (d.section === "head") d.cell.styles.halign = d.column.index === 0 ? "left" : "right"; } });
       const g5 = [-0.01, -0.005, 0, 0.005, 0.01];
