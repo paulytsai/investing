@@ -46,7 +46,8 @@ function sumSeg(ds) {
 const estToI = (e) => ({ revenue: n(e.revenueAvg), operatingIncome: n(e.ebitAvg), netIncome: n(e.netIncomeAvg), epsDiluted: n(e.epsAvg), sellingGeneralAndAdministrativeExpenses: n(e.sgaExpenseAvg), _ebitda: n(e.ebitdaAvg), _nAnalysts: n(e.numAnalystsEps) ?? n(e.numAnalystsRevenue) });
 const FY_CTX = { A: 1, D: 365, type: "FY" }, Q_CTX = { A: 4, D: 91.25, type: "Q" }, H_CTX = { A: 2, D: 182.5, type: "H" };
 const MODEL_YEARS = 5;
-const CONS_YEARS = 3; // consensus shown (and used for default drivers) for the current year + 2
+const CONS_YEARS = 3;
+const FIXED_GROWTH_CAP = 0.03; // consensus shown (and used for default drivers) for the current year + 2
 
 function buildActuals(raw) {
   const incA = asc(raw.incA), bsA = byKey(raw.bsA), cfA = byKey(raw.cfA), prodA = byKey(raw.prodA), geoA = byKey(raw.geoA);
@@ -82,19 +83,56 @@ function buildActuals(raw) {
       if (!qA[k]) qE[k] = { ...Q_CTX, kind: "C", label: "Q" + q + " FY" + yy(fy), i: estToI(e), date: e.date };
     });
   }
+  // Overlay segment detail read from SEC earnings releases (keyed by quarter-end date)
+  const sec = raw.secSeg || {};
+  const secFor = (date) => { const t = Date.parse(date); const k = Object.keys(sec).find((d) => Math.abs(Date.parse(d) - t) < 8 * 864e5); return k ? sec[k] : null; };
+  Object.values(qA).forEach((c) => {
+    const s = secFor(c.date); if (!s) return;
+    if (s.geo && Object.keys(s.geo).length) c.geo = s.geo;
+    if (s.prod && Object.keys(s.prod).length) c.prod = s.prod;
+    if (s.segEbit && Object.keys(s.segEbit).length) c.segEbit = s.segEbit;
+    c.secSrc = s.src;
+  });
+
+  // Data check: a quarter whose segments cover a very different share of revenue than the
+  // fiscal year does is probably mis-tagged upstream (e.g. a missing quarter folded into Q4)
+  const cover = (c, f) => { const v = Object.values(c?.[f] || {}).filter(isNum); return v.length && rev(c) ? v.reduce((a, b) => a + b, 0) / rev(c) : null; };
+  const median = (xs) => { const v = xs.filter(isNum).sort((a, b) => a - b); return v.length ? v[Math.floor(v.length / 2)] : null; };
+  ["prod", "geo"].forEach((f) => {
+    // what this company's segments usually cover, over the last eight reported quarters
+    const recent = incQ.slice(-8).map((r) => qA[r.period + "|" + r.fiscalYear]);
+    const norm = median(recent.map((c) => cover(c, f))) ?? 1;
+    Object.values(qA).forEach((c) => {
+      const q = cover(c, f);
+      if (isNum(q) && Math.abs(q / norm - 1) > 0.05) (c.segBad = c.segBad || {})[f] = { q, norm };
+    });
+  });
+
   const quarter = (q, fy) => qA["Q" + q + "|" + fy] || qE["Q" + q + "|" + fy] || { ...Q_CTX, kind: "C", label: "Q" + q + " FY" + yy(fy) };
-  const cq = [1, 2, 3, 4].map((q) => quarter(q, curFY));
-  const pq = [1, 2, 3, 4].map((q) => qA["Q" + q + "|" + (curFY - 1)] || null);
-  cq.forEach((c, j) => { c.p = pq[j]; });
   const half = (qs, label) => ({
     ...H_CTX, label, kind: qs.every((c) => c && c.kind === "A") ? "A" : "C",
     i: sumRecs(qs.map((c) => c && c.i)), c: sumRecs(qs.map((c) => c && c.c)), b: qs[qs.length - 1]?.b,
-    prod: sumSeg(qs.map((c) => c && c.prod)), geo: sumSeg(qs.map((c) => c && c.geo)),
+    prod: sumSeg(qs.map((c) => c && c.prod)), geo: sumSeg(qs.map((c) => c && c.geo)), segEbit: sumSeg(qs.map((c) => c && c.segEbit)),
+    segBad: qs.some((c) => c?.segBad?.prod) || qs.some((c) => c?.segBad?.geo) ? { prod: qs.some((c) => c?.segBad?.prod), geo: qs.some((c) => c?.segBad?.geo) } : undefined,
   });
-  const h1 = half(cq.slice(0, 2), "H1 FY" + yy(curFY)), h2 = half(cq.slice(2), "H2 FY" + yy(curFY));
-  if (pq.every(Boolean)) { h1.p = half(pq.slice(0, 2), ""); h2.p = half(pq.slice(2), ""); }
-  const drill = [cq[0], cq[1], h1, cq[2], cq[3], h2];
-  drill.forEach((c) => { c.drill = true; });
+  // One fiscal year by quarter: Q1, Q2, H1, Q3, Q4, H2, each linked to the same period a year earlier
+  const yearByQuarter = (fy, actualOnly) => {
+    const qs = [1, 2, 3, 4].map((q) => (actualOnly ? qA["Q" + q + "|" + fy] || { ...Q_CTX, kind: "A", label: "Q" + q + " FY" + yy(fy) } : quarter(q, fy)));
+    const pq = [1, 2, 3, 4].map((q) => qA["Q" + q + "|" + (fy - 1)] || null);
+    qs.forEach((c, j) => { c.p = pq[j]; c.fy = fy; });
+    const h1 = half(qs.slice(0, 2), "H1 FY" + yy(fy)), h2 = half(qs.slice(2), "H2 FY" + yy(fy));
+    h1.fy = h2.fy = fy;
+    if (pq.every(Boolean)) { h1.p = half(pq.slice(0, 2), ""); h2.p = half(pq.slice(2), ""); h1.p.fy = h2.p.fy = fy - 1; }
+    pq.forEach((c) => { if (c) c.fy = fy - 1; });
+    const cols = [qs[0], qs[1], h1, qs[2], qs[3], h2];
+    cols.forEach((c) => { c.drill = true; c.drillFy = fy; });
+    return { cols, qs };
+  };
+  const prevYear = yearByQuarter(curFY - 1, true);
+  const curYear = yearByQuarter(curFY, false);
+  const cq = curYear.qs;
+  const drillPrev = prevYear.cols;
+  const drill = curYear.cols;
 
   // Consensus columns for the model years, chained for YoY
   const cons = [];
@@ -112,7 +150,114 @@ function buildActuals(raw) {
     : fyA[+lastA.fiscalYear];
   const latestShares = n(lastQ?.weightedAverageShsOutDil) ?? n(lastA.weightedAverageShsOutDil);
 
-  return { fyA, hist: incA.map((r) => fyA[+r.fiscalYear]), drill, cons, consFy, curFY, ltm, lastA, lastQ, latestShares, nReportedQ: cq.filter((c) => c.kind === "A").length };
+  return { fyA, hist: incA.map((r) => fyA[+r.fiscalYear]), drill, drillPrev, cons, consFy, curFY, ltm, lastA, lastQ, latestShares, nReportedQ: cq.filter((c) => c.kind === "A").length };
+}
+
+// ---------- regression: operating profit on revenue ----------
+// OLS of year-over-year changes, dEBIT = a + b * dRevenue, over the last n fiscal years.
+// Changes rather than levels: levels of two growing series correlate whether or not they are
+// related. b is the statistical incremental margin. Also reports the log-change elasticity
+// (operating leverage): dln EBIT = a + b * dln Revenue, on years with positive EBIT.
+const T90 = [[1, 6.314], [2, 2.92], [3, 2.353], [4, 2.132], [5, 2.015], [6, 1.943], [7, 1.895], [8, 1.86], [9, 1.833], [10, 1.812], [12, 1.782], [15, 1.753], [20, 1.725], [30, 1.697]];
+const tcrit = (df) => { let t = 1.645; for (const [d, v] of T90) if (df >= d) t = v; return df < 1 ? null : t; };
+function ols(pts, icpt) {
+  const k = pts.length; if (k < (icpt ? 3 : 2)) return null;
+  const mx = icpt ? pts.reduce((s, p) => s + p.x, 0) / k : 0, my = icpt ? pts.reduce((s, p) => s + p.y, 0) / k : 0;
+  let sxx = 0, sxy = 0, syy = 0;
+  pts.forEach((p) => { sxx += (p.x - mx) ** 2; sxy += (p.x - mx) * (p.y - my); syy += (p.y - my) ** 2; });
+  if (!(sxx > 0)) return null;
+  const beta = sxy / sxx, alpha = my - beta * mx;
+  const ssr = pts.reduce((s, p) => s + (p.y - alpha - beta * p.x) ** 2, 0);
+  const df = k - (icpt ? 2 : 1);
+  const se = df > 0 ? Math.sqrt(ssr / df / sxx) : null;
+  const yMean = pts.reduce((s, p) => s + p.y, 0) / k;
+  const sst = pts.reduce((s, p) => s + (p.y - yMean) ** 2, 0);
+  const r2 = sst > 0 ? 1 - ssr / sst : null;
+  const tc = tcrit(df);
+  return { n: k, beta, alpha, se, t: se ? beta / se : null, r2, df, lo: se && tc ? beta - tc * se : null, hi: se && tc ? beta + tc * se : null };
+}
+// Refit once without points whose residual exceeds 2 standard errors (one-off charges, disposals)
+function trimmed(pts, fitFn, resid) {
+  const f0 = fitFn(pts); if (!f0) return { fit: null, used: pts, dropped: [] };
+  const r = pts.map((p) => resid(f0, p));
+  const sd = Math.sqrt(r.reduce((s, e) => s + e * e, 0) / Math.max(pts.length - 2, 1));
+  const keep = pts.filter((p, i) => Math.abs(r[i]) <= 2 * sd);
+  if (keep.length === pts.length || keep.length < 5) return { fit: f0, used: pts, dropped: [] };
+  return { fit: fitFn(keep) || f0, used: keep, dropped: pts.filter((p) => !keep.includes(p)) };
+}
+function regressIncr(m, nYears, icpt, robust) {
+  const last = m.curFY - 1;
+  const pts = [], lpts = [];
+  for (let fy = last - nYears + 1; fy <= last; fy++) {
+    const c = m.fyA[fy], p = m.fyA[fy - 1];
+    if (!c || !p) continue;
+    const r1 = rev(c), r0 = rev(p), e1 = ebit(c), e0 = ebit(p);
+    if (![r1, r0, e1, e0].every(isNum)) continue;
+    pts.push({ fy, x: r1 - r0, y: e1 - e0 });
+    if (e1 > 0 && e0 > 0 && r1 > 0 && r0 > 0) lpts.push({ fy, x: Math.log(r1 / r0), y: Math.log(e1 / e0) });
+  }
+  const t = robust ? trimmed(pts, (ps) => ols(ps, icpt), (f, p) => p.y - f.alpha - f.beta * p.x) : { fit: ols(pts, icpt), dropped: [] };
+  return { fit: t.fit, dropped: t.dropped.map((p) => p.fy), elast: ols(lpts, true), pts, icpt, nYears };
+}
+
+// Cost-structure regression (operating leverage). Cash operating costs (revenue - EBIT - D&A) are
+// split into a fixed part that drifts with time and a part that scales with revenue:
+//   cost_t = F0 + d * t + v * revenue_t
+// v = variable cost ratio (contribution margin = 1 - v); F0 + d*t = fixed cash costs in year t.
+// High fixed costs mean profit moves more than sales (DOL = contribution / EBIT > 1), and the
+// incremental margin then depends on growth, so a single dEBIT/dRevenue slope fits poorly.
+function inv3(a) {
+  const [[a0, a1, a2], [b0, b1, b2], [c0, c1, c2]] = a;
+  const det = a0 * (b1 * c2 - b2 * c1) - a1 * (b0 * c2 - b2 * c0) + a2 * (b0 * c1 - b1 * c0);
+  if (!isFinite(det) || Math.abs(det) < 1e-12) return null;
+  return [
+    [(b1 * c2 - b2 * c1) / det, (a2 * c1 - a1 * c2) / det, (a1 * b2 - a2 * b1) / det],
+    [(b2 * c0 - b0 * c2) / det, (a0 * c2 - a2 * c0) / det, (a2 * b0 - a0 * b2) / det],
+    [(b0 * c1 - b1 * c0) / det, (a1 * c0 - a0 * c1) / det, (a0 * b1 - a1 * b0) / det],
+  ];
+}
+function costRegress(m, nYears, robust) {
+  const last = m.curFY - 1, all = [];
+  for (let fy = last - nYears + 1; fy <= last; fy++) {
+    const c = m.fyA[fy]; if (!c) continue;
+    const r = rev(c), e = ebit(c), d = da(c) ?? 0;
+    if (![r, e].every(isNum)) continue;
+    all.push({ fy, t: fy - last, rev: r, cost: r - e - d, ebit: e, da: d });
+  }
+  const fitFn = (ps) => costFit(ps);
+  const tr = robust ? trimmed(all, fitFn, (f, p) => (p.cost - (f.b0 + f.b1 * p.t + f.v * p.rev / 1e9) * 1e9) / 1e9) : { fit: fitFn(all), used: all, dropped: [] };
+  const pts = all, f = tr.fit;
+  const B = all[all.length - 1];
+  if (!f || !B || B.t !== 0) return { pts, fit: null, dropped: [] };
+  const v = f.v;
+  const contribution = B.rev * (1 - v);
+  // anchor fixed costs to the base year actuals so the forecast starts from reported EBIT
+  const fixedB = B.cost - v * B.rev;
+  const fixedShare = div(fixedB + B.da, B.cost + B.da); // D&A counted as fixed
+  const dol = div(contribution, B.ebit);
+  const valid = v > 0 && v < 1 && fixedB > 0;
+  return {
+    pts, dropped: tr.dropped.map((p) => p.fy), fit: f,
+    fixedB, fixedShare, dol, contribution, fixedGrowth: valid ? clamp(f.drift / fixedB, -0.1, 0.25) : null, valid,
+    profile: !valid ? "unclear" : (fixedShare > 0.5 || (isNum(dol) && dol > 2)) ? "high" : fixedShare < 0.3 ? "low" : "mid",
+  };
+}
+function costFit(pts) {
+  const k = pts.length; if (k < 5) return null;
+  // scale to billions for numerical stability
+  const S = 1e9, X = pts.map((p) => [1, p.t, p.rev / S]), Y = pts.map((p) => p.cost / S);
+  const XtX = [0, 1, 2].map((i) => [0, 1, 2].map((j) => X.reduce((s, x) => s + x[i] * x[j], 0)));
+  const XtY = [0, 1, 2].map((i) => X.reduce((s, x, r) => s + x[i] * Y[r], 0));
+  const iv = inv3(XtX); if (!iv) return null;
+  const bta = iv.map((row) => row.reduce((s, v, j) => s + v * XtY[j], 0));
+  const res = Y.map((y, r) => y - X[r].reduce((s, x, j) => s + x * bta[j], 0));
+  const ssr = res.reduce((s, e) => s + e * e, 0), df = k - 3;
+  const yM = Y.reduce((a, b) => a + b, 0) / k, sst = Y.reduce((s, y) => s + (y - yM) ** 2, 0);
+  const s2 = df > 0 ? ssr / df : null;
+  const se = (j) => (s2 != null ? Math.sqrt(Math.max(s2 * iv[j][j], 0)) : null);
+  const v = bta[2], drift = bta[1] * S;
+  const tc = tcrit(df);
+  return { n: k, v, b0: bta[0], b1: bta[1], seV: se(2), vLo: tc && se(2) != null ? v - tc * se(2) : null, vHi: tc && se(2) != null ? v + tc * se(2) : null, drift, seDrift: se(1) != null ? se(1) * S : null, r2: sst > 0 ? 1 - ssr / sst : null, df };
 }
 
 // ---------- driver model: P&L -> cash flow -> balance sheet ----------
@@ -220,10 +365,26 @@ function runModel(m, inp, opts) {
   const dflt = { life: clamp(Math.round(1 / rateDflt), 3, 40), rem: rateDflt, kd: isNum(debt(B)) && debt(B) > 0 ? clamp(intExpB / debt(B), 0, 0.15) : 0.05, ky: isNum(cashST(B)) && cashST(B) > 0 ? clamp(intIncB / cashST(B), 0, 0.08) : 0.03, px: isNum(opts?.price) && opts.price > 0 ? opts.price : null };
 
   // ----- cost method -----
-  const method = ["incr", "fixvar", "segment"].includes(inp.costMethod) ? inp.costMethod : "incr";
+  const regCfg = { n: 10, icpt: false, robust: true, ...(inp.reg || {}) };
+  const reg = regressIncr(m, regCfg.n, regCfg.icpt, regCfg.robust);
+  const cost = costRegress(m, regCfg.n, regCfg.robust);
+  reg.cost = cost;
+  fys.forEach((fy) => { setD("rb", fy, reg.fit ? reg.fit.beta : histIncr); setD("ra", fy, reg.fit && regCfg.icpt ? reg.fit.alpha : 0); });
   const histIncrEbitda = (() => { const h = hist3(B.fy - 3); const r = h ? div(sub(sum(ebitB, daB), ebitda(h)), sub(revB, rev(h))) : null; return isNum(r) ? r : null; })();
   const cashCostB = revB - ebitB - daB;
-  fys.forEach((fy) => { setD("var", fy, clamp(1 - (histIncrEbitda ?? 0.35), 0.2, 0.95)); setD("fg", fy, 0.03); });
+  // fixed + variable defaults come from the cost-structure regression when it gives a sensible split
+  const costOk = cost.valid && cost.fit && cost.fit.v >= 0.05 && cost.fit.v <= 0.98;
+  // Method follows the cost structure unless the user picked one: high fixed costs -> fixed + variable
+  // (incremental margins swing with growth); mostly variable -> regression slope; unclear -> consensus-led
+  const autoMethod = !costOk ? "incr" : cost.profile === "low" ? (reg.fit && reg.fit.r2 > 0.5 ? "regress" : "incr") : "fixvar";
+  const method = ["incr", "regress", "fixvar", "segment"].includes(inp.costMethod) ? inp.costMethod : autoMethod;
+  const vEst = costOk ? cost.fit.v : null;
+  fys.forEach((fy) => {
+    setD("var", fy, costOk ? cost.fit.v : clamp(1 - (histIncrEbitda ?? 0.35), 0.2, 0.95));
+    // fixed costs grow at the historical rate, capped at ~inflation: growth above that was discretionary
+    // expansion (headcount, stores, marketing) that management can and often does stop
+    setD("fg", fy, costOk && isNum(cost.fixedGrowth) ? Math.min(cost.fixedGrowth, FIXED_GROWTH_CAP) : FIXED_GROWTH_CAP);
+  });
   const segE0 = {}; lines.forEach((L) => { const v = ov["se0:" + L.name + "|" + B.fy]; segE0[L.name] = isNum(v) ? v : null; });
   lines.forEach((L) => fys.forEach((fy) => setD("si:" + L.name, fy, isNum(segE0[L.name]) && isNum(L.base) && L.base ? segE0[L.name] / L.base : div(ebitB, revB))));
   fys.forEach((fy) => setD("ua", fy, 0));
@@ -260,6 +421,7 @@ function runModel(m, inp, opts) {
 
     let ebitV, fixedV = null, varV = null, segE = null, uaV = null;
     if (method === "incr") ebitV = prev.ebit + I("incr", fy) * dRev;
+    else if (method === "regress") ebitV = prev.ebit + I("ra", fy) + I("rb", fy) * dRev;
     else if (method === "fixvar") {
       fixedV = prev.fixed * (1 + I("fg", fy)); varV = r * I("var", fy);
       ebitV = r - varV - fixedV - daV;
@@ -293,6 +455,8 @@ function runModel(m, inp, opts) {
     const tl = apV + drV + debtV + otherL;
     out[fy] = {
       fy, rev: r, gm, cogs, ebit: ebitV, da: daV, daExist, daNew, capex: capexV, intExp, intInc, pretax, tax: taxV, ni, sbc, dNwc, cfo: cfoV, fcf: fcfV, div: divV, bb: bbV, acq: acqV, dIss,
+      cashCost: r - ebitV - daV, varC: method === "fixvar" ? varV : isNum(vEst) ? vEst * r : null,
+      fixC: method === "fixvar" ? fixedV : isNum(vEst) ? r - ebitV - daV - vEst * r : null,
       cash, debt: debtV, equity, shares: sharesAvg, sharesEnd, eps: div(ni, sharesAvg), fixed: fixedV, var: varV, segE, ua: uaV, check: ta - tl - equity,
       ctx: {
         ...FY_CTX, kind: "E", model: true, fy, label: "FY" + fy,
@@ -307,7 +471,7 @@ function runModel(m, inp, opts) {
   // chain YoY: first model year compares with the last reported year
   let pc = B;
   fys.forEach((fy) => { out[fy].ctx.p = pc; pc = out[fy].ctx; });
-  return { fys, B, basis, field, lines, R, out, I, D, ov, method, scal, dflt, fixed0, fixedNeg, uaBase, segE0, histLine, consRev };
+  return { fys, B, basis, field, lines, R, out, I, D, ov, method, autoMethod, methodAuto: !["incr", "regress", "fixvar", "segment"].includes(inp.costMethod), vEst, reg, regCfg, scal, dflt, fixed0, fixedNeg, uaBase, segE0, histLine, consRev };
 }
 
 // ---------- DCF (Damodaran-style FCFF) ----------

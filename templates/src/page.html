@@ -134,6 +134,8 @@ input.in { width: 76px; border: 1px solid transparent; background: var(--in-bg);
 input.in.ov { font-weight: 700; border-color: var(--in-ink); }
 input.in:focus { outline: 2px solid var(--accent); outline-offset: 0; }
 tr.chk td.bad { color: var(--neg); font-weight: 700; }
+td.flag { color: var(--neg); }
+td.flag span { cursor: help; }
 
 .panels { display: grid; gap: 16px; }
 .panel { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding-inline: 16px; padding-block: 14px 16px; display: grid; gap: 12px; min-width: 0; }
@@ -155,6 +157,16 @@ tr.chk td.bad { color: var(--neg); font-weight: 700; }
 .flags { display: grid; gap: 6px; margin: 0; padding-left: 18px; color: var(--muted); }
 .flags li.warn { color: var(--neg); }
 .save { color: var(--muted); font-size: 12px; }
+.verdict { color: var(--ink) !important; background: var(--band); border-radius: 6px; padding: 10px 12px; max-width: none !important; }
+svg.scatter { width: 100%; height: auto; display: block; overflow: visible; }
+svg.scatter text { fill: var(--muted); font: 11px var(--body); }
+svg.scatter .grid { stroke: var(--line); stroke-width: 1; }
+svg.scatter .zero { stroke: var(--faint); stroke-width: 1; }
+svg.scatter .fitline { stroke: var(--ink); stroke-width: 2; stroke-dasharray: 5 4; }
+svg.scatter .pt { fill: var(--accent); stroke: var(--surface); stroke-width: 2; }
+svg.scatter .pt.last { fill: var(--est-ink); }
+svg.scatter .pt.out { fill: none; stroke: var(--neg); stroke-width: 1.5; }
+svg.scatter .ptlab { fill: var(--ink); font-weight: 600; }
 
 footer.foot { color: var(--muted); font-size: 12px; line-height: 1.5; display: grid; gap: 6px; }
 @media (max-width: 600px) {
@@ -200,6 +212,7 @@ footer.foot { color: var(--muted); font-size: 12px; line-height: 1.5; display: g
   <div class="sheet"><table id="tbl"></table></div>
 
   <div class="panels">
+    <section class="panel" id="regp" hidden></section>
     <section class="panel" id="settings" hidden></section>
     <section class="panel" id="dcf" hidden></section>
   </div>
@@ -218,9 +231,11 @@ footer.foot { color: var(--muted); font-size: 12px; line-height: 1.5; display: g
 (function () {
   const $ = (id) => document.getElementById(id);
   const SERVER = "FMP";
-  const state = { ticker: "", years: 15, drill: true, raw: null, act: null, prof: null, mkt: null, inp: null, mdl: null, dcf: null, busy: false, matrix: null, segErr: null, uid: null };
+  const state = { sec: {}, secStatus: "", sampleOk: false, ticker: "", years: 15, drill: true, raw: null, act: null, prof: null, mkt: null, inp: null, mdl: null, dcf: null, busy: false, matrix: null, segErr: null, uid: null };
   const use = (name) => { try { return window.claude?.use ? window.claude.use(name) : Promise.resolve(null); } catch (e) { return Promise.resolve(null); } };
-  const mcpP = use("mcp"), dlP = use("downloads"), dbP = use("db"), userP = use("user");
+  const mcpP = use("mcp"), dlP = use("downloads"), dbP = use("db"), userP = use("user"), sampleP = use("sample");
+  const EDGAR = "Edgar Tools";
+  sampleP.then((x) => { state.sampleOk = !!x; if (x && state.act) render(); }).catch(() => {});
 
   const store = {
     get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
@@ -303,6 +318,7 @@ footer.foot { color: var(--muted); font-size: 12px; line-height: 1.5; display: g
   const SECTIONS = () => [
     { title: "Income statement", rows: [
       { l: "Revenue", v: rev, f: "usd", yoy: true, key: true, g: { k: "rev", u: "mm" } },
+      ...seasonRows(rev),
       { l: "Cost of revenue", v: (c) => nn(c.i?.costOfRevenue), f: "usd", ind: 1 },
       { l: "Gross profit", v: (c) => nn(c.i?.grossProfit), f: "usd", yoy: true },
       { l: "Gross margin", v: pctRev((c) => nn(c.i?.grossProfit)), f: "pct", ratio: true, inp: { k: "gm", u: "pct" }, g: { k: "gm", u: "pct" } },
@@ -310,6 +326,7 @@ footer.foot { color: var(--muted); font-size: 12px; line-height: 1.5; display: g
       { l: "SG&A", v: (c) => nn(c.i?.sellingGeneralAndAdministrativeExpenses), f: "usd", yoy: true, ind: 1 },
       { l: "Total operating expenses", v: (c) => nn(c.i?.operatingExpenses), f: "usd", yoy: true },
       { l: "Operating income (EBIT)", v: ebit, f: "usd", yoy: true, key: true },
+      ...seasonRows(ebit),
       { l: "Operating margin", v: pctRev(ebit), f: "pct", ratio: true, g: { k: "om", u: "pct" } },
       { l: "D&A", v: da, f: "usd", ind: 1, g: { k: "da", u: "mm" } },
       { l: "EBITDA", v: ebitda, f: "usd", yoy: true },
@@ -321,6 +338,7 @@ footer.foot { color: var(--muted); font-size: 12px; line-height: 1.5; display: g
       { l: "Income tax", v: (c) => nn(c.i?.incomeTaxExpense), f: "usd", ind: 1 },
       { l: "Effective tax rate", v: taxRate, f: "pct", ratio: true, inp: { k: "tax", u: "pct" }, g: { k: "tax", u: "pct" } },
       { l: "Net income", v: (c) => nn(c.i?.netIncome), f: "usd", yoy: true, key: true },
+      ...seasonRows((c) => nn(c?.i?.netIncome)),
       { l: "Net margin", v: pctRev((c) => nn(c.i?.netIncome)), f: "pct", ratio: true },
       { l: "Diluted shares (mm)", v: (c) => nn(c.i?.weightedAverageShsOutDil), f: "sh", yoy: true, g: { k: "sh", u: "sh" } },
       { l: "Diluted EPS", v: (c) => nn(c.i?.epsDiluted), f: "eps", yoy: true, key: true, g: { k: "eps", u: "eps" } },
@@ -406,6 +424,15 @@ footer.foot { color: var(--muted); font-size: 12px; line-height: 1.5; display: g
     ]},
   ];
   const pos = (v) => (isNum(v) && v > 0 ? v : null);
+  // Seasonality: each quarter / half as a share of its fiscal year (current year: of our full-year forecast),
+  // next to the same period a year earlier
+  const share = (fn, c) => { const t = c?.fyRef ? fn(c.fyRef) : null; const v = fn(c || {}); return isNum(v) && isNum(t) && t > 0 ? v / t : null; };
+  function seasonRows(fn) {
+    return [
+      { l: "% of full year", drillOnly: true, ind: 1, ratio: true, f: "pct", v: (c) => share(fn, c) },
+      { l: "same period last year", drillOnly: true, ind: 1, ratio: true, f: "pct", v: (c) => share(fn, c.p) },
+    ];
+  }
   function fwdEpsGrowth(c) {
     const e0 = nn(c.i?.epsDiluted), e1 = nn(c.nx?.i?.epsDiluted), e2 = nn(c.nx?.nx?.i?.epsDiluted);
     if (isNum(e0) && e0 > 0 && isNum(e2) && e2 > 0) return Math.sqrt(e2 / e0) - 1;
@@ -439,14 +466,21 @@ footer.foot { color: var(--muted); font-size: 12px; line-height: 1.5; display: g
 
     const mb = (v, label) => '<button type="button" class="mini" data-act="method" data-v="' + v + '" aria-pressed="' + (M.method === v) + '">' + label + "</button>";
     const costRows = [];
+    const prof = M.reg.cost.profile;
+    const profTxt = { high: "high fixed costs", mid: "mixed fixed and variable costs", low: "mostly variable costs", unclear: "a cost structure history can't pin down" }[prof];
+    const mName = { incr: "incremental margin", regress: "regression slope", fixvar: "fixed + variable costs", segment: "segment EBIT" };
+    costRows.push({ note: (M.methodAuto ? "Chosen automatically: " : "You chose " + mName[M.method] + ". Suggested: ") + (M.methodAuto ? mName[M.method] : mName[M.autoMethod]) + ", because the regression shows " + profTxt + (isNum(M.reg.cost.dol) && M.reg.cost.valid ? " (operating leverage " + M.reg.cost.dol.toFixed(1) + "×)" : "") + ". Details are in the panel below the table." + (M.methodAuto ? "" : ' <button type="button" class="mini" data-act="method" data-v="auto">Let the cost structure decide</button>'), html: true });
     if (M.method === "incr") {
       costRows.push({ l: "Incremental EBIT margin (ΔEBIT ÷ Δrevenue)", hv: (c) => div(sub(ebit(c), ebit(c.p || {})), sub(rev(c), rev(c.p || {}))), inp: { k: "incr", u: "pct" }, f: "pct", ratio: true });
+    } else if (M.method === "regress") {
+      costRows.push({ note: "Defaults are the regression slope from the panel below the table (" + M.regCfg.n + " years" + (M.regCfg.robust ? ", outlier years excluded" : "") + ")." });
+      costRows.push({ l: "Incremental EBIT margin (regression slope)", hv: (c) => div(sub(ebit(c), ebit(c.p || {})), sub(rev(c), rev(c.p || {}))), inp: { k: "rb", u: "pct" }, f: "pct", ratio: true });
+      if (M.regCfg.icpt) costRows.push({ l: "Cost drift with flat sales (intercept)", inp: { k: "ra", u: "mm" }, f: "usd", ind: 1 });
     } else if (M.method === "fixvar") {
+      const cr = M.reg.cost;
+      costRows.push({ note: cr.valid ? "Defaults come from the cost-structure regression below: variable costs " + (cr.fit.v * 100).toFixed(0) + "% of revenue. Fixed cash costs grew " + (cr.fixedGrowth * 100).toFixed(1) + "% a year historically" + (cr.fixedGrowth > FIXED_GROWTH_CAP ? "; the default is capped at " + (FIXED_GROWTH_CAP * 100).toFixed(0) + "% (about inflation), so type the historical rate in if the spending keeps growing" : "") + ". D&A is a fixed cost, taken from the capex schedule." : "The cost-structure regression couldn't separate fixed from variable costs for this company, so defaults are rough. Set the variable-cost ratio by judgment." });
       costRows.push({ l: "Variable costs, % of revenue", inp: { k: "var", u: "pct" }, f: "pct", ratio: true });
-      costRows.push({ l: "Fixed cash costs, growth", inp: { k: "fg", u: "pct" }, f: "pct", ratio: true });
-      costRows.push({ l: "Variable costs", mv: MV((o) => o.var), f: "usd", ind: 1 });
-      costRows.push({ l: "Fixed cash costs", hv: (c) => (c === M.B ? M.fixed0 : null), mv: MV((o) => o.fixed), f: "usd", ind: 1 });
-      costRows.push({ l: "D&A (from the capex schedule, fixed)", hv: (c) => (c === M.B ? da(c) : null), mv: MV((o) => o.da), f: "usd", ind: 1 });
+      costRows.push({ l: "Fixed cash costs, growth", hv: (c) => (isNum(M.vEst) ? growth(fixedEst(c), fixedEst(c.p || {})) : null), inp: { k: "fg", u: "pct" }, f: "pct", ratio: true });
       if (M.fixedNeg) costRows.push({ note: "The variable-cost ratio is above total cash costs in the base year, so fixed costs start at zero. Lower the first year's variable-cost ratio." });
     } else {
       costRows.push({ note: "FMP doesn't report segment profit. Enter each segment's last-year operating income from the 10-K segment note; segments left blank use the company margin. Corporate costs are the residual." });
@@ -458,6 +492,18 @@ footer.foot { color: var(--muted); font-size: 12px; line-height: 1.5; display: g
       costRows.push({ l: "Unallocated / corporate", hv: (c) => (c === M.B ? M.uaBase : null), mv: MV((o) => o.ua), f: "usd" });
       costRows.push({ l: "growth", ind: 1, inp: { k: "ua", u: "pct" }, f: "pct", ratio: true });
     }
+    // Cost structure, history and forecast side by side (history split with the regression's variable-cost ratio)
+    const vh = M.vEst;
+    const fixedEst = (c) => (isNum(vh) && isNum(rev(c)) && isNum(ebit(c)) ? rev(c) - ebit(c) - (da(c) ?? 0) - vh * rev(c) : null);
+    const fyStruct = (o) => o; // readability
+    costRows.push({ grp: "Cost structure" + (isNum(vh) ? " · history split at " + (vh * 100).toFixed(0) + "% variable" : "") });
+    costRows.push({ l: "Variable costs", hv: (c) => (isNum(vh) && isNum(rev(c)) ? vh * rev(c) : null), mv: MV((o) => fyStruct(o).varC), f: "usd", ind: 1 });
+    costRows.push({ l: "Fixed cash costs", hv: fixedEst, mv: MV((o) => o.fixC), f: "usd", ind: 1 });
+    costRows.push({ l: "D&A (fixed; forecast from the capex schedule)", hv: da, mv: MV((o) => o.da), f: "usd", ind: 1 });
+    costRows.push({ l: "Contribution margin", hv: (c) => (isNum(vh) ? 1 - vh : null), mv: MV((o) => (isNum(o.varC) ? 1 - o.varC / o.rev : null)), f: "pct", ratio: true });
+    costRows.push({ l: "Fixed costs incl. D&A, % of revenue", hv: (c) => { const f = fixedEst(c); return isNum(f) ? (f + (da(c) ?? 0)) / rev(c) : null; }, mv: MV((o) => (isNum(o.fixC) ? (o.fixC + o.da) / o.rev : null)), f: "pct", ratio: true });
+    costRows.push({ l: "Degree of operating leverage (contribution ÷ EBIT)", hv: (c) => (isNum(vh) && ebit(c) > 0 ? ((1 - vh) * rev(c)) / ebit(c) : null), mv: MV((o) => (isNum(o.varC) && o.ebit > 0 ? (o.rev - o.varC) / o.ebit : null)), f: "x", ratio: true });
+    costRows.push({ grp: "Operating profit" });
     costRows.push({ l: "EBIT", hv: ebit, mv: MV((o) => o.ebit), f: "usd", key: true });
     costRows.push({ l: "EBIT margin", ind: 1, hv: pctRev(ebit), mv: MV((o) => div(o.ebit, o.rev)), f: "pct", ratio: true });
     costRows.push({ l: "EBIT growth", ind: 1, hv: (c) => growth(ebit(c), ebit(c.p || {})), mv: (fy) => growth(M.out[fy].ebit, fy === M.fys[0] ? ebit(M.B) : M.out[fy - 1].ebit), f: "yoy", sign: true });
@@ -466,20 +512,22 @@ footer.foot { color: var(--muted); font-size: 12px; line-height: 1.5; display: g
 
     return [
       { title: "Forecast drivers · revenue build", ctl: " " + bb("segment", "By segment", M.basis === "segment", !hasProd) + bb("geo", "By region", M.basis === "geo", !hasGeo) + bb("total", "Total", M.basis === "total", false), rows: revRows, driver: true },
-      { title: "Forecast drivers · operating profit", ctl: " " + mb("incr", "Incremental margin") + mb("fixvar", "Fixed + variable costs") + mb("segment", "Segment EBIT"), rows: costRows, driver: true },
+      { title: "Forecast drivers · operating profit", ctl: " " + mb("incr", "Incremental margin") + mb("regress", "Regression slope") + mb("fixvar", "Fixed + variable costs") + mb("segment", "Segment EBIT"), rows: costRows, driver: true },
     ];
   }
   const dol = (e1, e0, r1, r0) => { const ge = growth(e1, e0), gr = growth(r1, r0); return isNum(ge) && isNum(gr) && Math.abs(gr) > 0.001 ? ge / gr : null; };
 
-  function segmentRows(cols, field) {
+  function segmentRows(cols, field, profit) {
     // current lines first (by latest value), then lines the company stopped reporting
     const latest = {}, lastIx = {};
     cols.forEach((c, j) => Object.entries(c[field] || {}).forEach(([k, v]) => { if (isNum(v)) { latest[k] = v; lastIx[k] = j; } }));
     const names = Object.keys(latest).sort((a, b) => lastIx[b] - lastIx[a] || latest[b] - latest[a]);
     if (!names.length) return null;
     const tot = (c) => { const vs = Object.values(c[field] || {}).filter(isNum); return vs.length ? vs.reduce((s, x) => s + x, 0) : null; };
-    const rows = names.map((nm) => ({ l: nm, v: (c) => nn(c[field]?.[nm]), pv: (c) => nn(c.p?.[field]?.[nm]), f: "usd", yoy: true, ind: 1 }));
-    rows.push({ l: "Total of segments", v: tot, f: "usd", key: true });
+    const rows = names.map((nm) => ({ l: nm, v: (c) => nn(c[field]?.[nm]), pv: (c) => nn(c.p?.[field]?.[nm]), f: "usd", yoy: true, ind: 1, flagF: field }));
+    rows.push({ l: "Total of segments", v: tot, f: "usd", key: true, flagF: field });
+    if (profit) return rows;
+    rows.push({ l: "Segments as % of revenue", v: (c) => div(tot(c), rev(c)), f: "pct", ratio: true, ind: 1, flagF: field });
     rows.push({ grp: "Mix (% of segment total)" });
     names.forEach((nm) => rows.push({ l: nm, v: (c) => div(nn(c[field]?.[nm]), tot(c)), f: "pct", ratio: true, ind: 1 }));
     return rows;
@@ -498,7 +546,12 @@ footer.foot { color: var(--muted); font-size: 12px; line-height: 1.5; display: g
   function columns() {
     const A = state.act, M = state.mdl;
     const hist = A.hist.slice(-state.years);
-    const drill = state.drill ? A.drill : [];
+    const drill = state.drill ? [...A.drillPrev, ...A.drill] : [];
+    const curRef = M ? M.out[A.curFY].ctx : A.cons[0];
+    drill.forEach((c) => {
+      c.fyRef = c.drillFy === A.curFY ? curRef : A.fyA[c.drillFy];
+      if (c.p && !c.p.fyRef) c.p.fyRef = A.fyA[c.drillFy - 1];
+    });
     const model = M ? M.fys.map((fy) => M.out[fy].ctx) : [];
     const guide = [guideCtx()];
     const cons = A.cons;
@@ -508,7 +561,7 @@ footer.foot { color: var(--muted); font-size: 12px; line-height: 1.5; display: g
     cons.forEach((c, j) => { c.nx = cons[j + 1] || null; });
     guide[0].nx = null;
     const cols = [...hist, ...drill, ...model, ...guide, ...cons];
-    const firsts = new Set([hist.length, hist.length + drill.length, hist.length + drill.length + model.length, hist.length + drill.length + model.length + 1]);
+    const firsts = new Set([hist.length, hist.length + (drill.length ? A.drillPrev.length : 0), hist.length + drill.length, hist.length + drill.length + model.length, hist.length + drill.length + model.length + 1]);
     return { hist, drill, model, guide, cons, cols, firsts };
   }
 
@@ -550,7 +603,8 @@ footer.foot { color: var(--muted); font-size: 12px; line-height: 1.5; display: g
     const drillBtn = '<button type="button" class="mini" data-act="drill" aria-pressed="' + state.drill + '">' + (state.drill ? "Hide quarters" : "Show Q1–Q4, H1, H2") + "</button>";
     out.push('<tr class="groups"><td>' + esc(state.ticker) + (state.drill ? "" : drillBtn) + "</td>" +
       span(hist.length, "", "Reported · " + hist.length + " years") +
-      span(drill.length, "kC bnd", "FY" + A.curFY + " by quarter · " + A.nReportedQ + " of 4 reported " + drillBtn) +
+      span(drill.length ? A.drillPrev.length : 0, "bnd", "FY" + (A.curFY - 1) + " by quarter · reported " + drillBtn + secBtn()) +
+      span(drill.length ? A.drill.length : 0, "kC bnd", "FY" + A.curFY + " by quarter · " + A.nReportedQ + " of 4 reported") +
       span(model.length, "kE bnd", "Our forecast") +
       span(guide.length, "kG bnd", "Guidance") +
       span(cons.length, "kC bnd", "Consensus") + "</tr>");
@@ -559,6 +613,7 @@ footer.foot { color: var(--muted); font-size: 12px; line-height: 1.5; display: g
       ...driverSections(),
       { title: "Revenue by segment (reported)", rows: segmentRows(cols, "prod"), empty: state.segErr || "No product or segment breakdown reported for this company." },
       { title: "Revenue by region (reported)", rows: segmentRows(cols, "geo"), empty: state.segErr || "No geographic breakdown reported for this company." },
+      ...(cols.some((c) => c.segEbit) ? [{ title: "Segment operating profit (SEC earnings releases)", rows: segmentRows(cols, "segEbit", true) }] : []),
       ...SECTIONS(),
     ];
     const blanks = cols.map((c, j) => '<td class="' + cc[j] + '"></td>').join("");
@@ -569,10 +624,13 @@ footer.foot { color: var(--muted); font-size: 12px; line-height: 1.5; display: g
       matrix.push([s.title.toUpperCase(), ...cols.map((c) => c.label + c.kind)]);
       if (!s.rows) { out.push('<tr class="note"><td colspan="' + (cols.length + 1) + '"><div class="notetext">' + esc(s.empty) + "</div></td></tr>"); return; }
       s.rows.forEach((r) => {
+        if (r.drillOnly && !state.drill) return;
         if (r.grp) { out.push('<tr class="grp"><td>' + esc(r.grp) + "</td>" + blanks + "</tr>"); matrix.push([r.grp]); return; }
-        if (r.note) { out.push('<tr class="note"><td colspan="' + (cols.length + 1) + '"><div class="notetext">' + esc(r.note) + "</div></td></tr>"); return; }
+        if (r.note) { out.push('<tr class="note"><td colspan="' + (cols.length + 1) + '"><div class="notetext">' + (r.html ? r.note : esc(r.note)) + "</div></td></tr>"); return; }
         const cells = cols.map((c, j) => {
           if (s.fyOnly && c.type !== "FY") return cellOut(null);
+          if (r.drillOnly && !c.drill) return cellOut(null);
+          if (r.flagF && c.segBad?.[r.flagF]) { const o = cellOut(r.v(c), r.f); const b = c.segBad[r.flagF]; o.cls = "flag"; o.html = '<span title="Segments add up to ' + Math.round(b.q * 100) + "% of this period's revenue versus " + Math.round(b.norm * 100) + '% normally. The upstream figure is probably wrong.">⚠ ' + o.html + "</span>"; return o; }
           if (c.model) {
             if (r.inp) return { html: inputHTML("m", r.inp.k, c.fy, r.inp.u), cls: "in", val: inVal("m", r.inp.k, c.fy) };
             if (r.mv) return cellOut(r.mv(c.fy), r.f, r.sign || r.chk);
@@ -610,11 +668,80 @@ footer.foot { color: var(--muted); font-size: 12px; line-height: 1.5; display: g
     $("tbl").innerHTML = "<tbody>" + out.join("") + "</tbody>";
     state.matrix = matrix;
     $("copy").disabled = false; $("csv").disabled = false;
-    renderSettings(); renderDcf(); renderHeader();
+    renderReg(); renderSettings(); renderDcf(); renderHeader();
     if (focusKey) {
       const el = document.querySelector('input.in[data-s="' + focusKey[0] + '"][data-k="' + CSS.escape(focusKey[1]) + '"][data-fy="' + focusKey[2] + '"]');
       if (el) { el.focus(); if (sel) el.select(); }
     }
+  }
+
+  // ---------- regression panel: how operating profit responds to revenue ----------
+  function renderReg() {
+    const M = state.mdl, el = $("regp");
+    if (!M) { el.hidden = true; return; }
+    el.hidden = false;
+    const cfg = M.regCfg, rg = M.reg, f = rg.fit, cr = rg.cost, cf = cr.fit;
+    const pct = (v, dp = 1) => (isNum(v) ? (v * 100).toFixed(dp) + "%" : "–");
+    const kv = (k, v, cls) => "<span>" + k + '</span><b class="' + (cls || "") + '">' + v + "</b>";
+    const win = [5, 10, 15, 20].map((n) => '<button type="button" class="mini" data-act="regn" data-v="' + n + '" aria-pressed="' + (cfg.n === n) + '">' + n + "y</button>").join("");
+    const tog = (k, label) => '<button type="button" class="mini" data-act="regt" data-v="' + k + '" aria-pressed="' + !!cfg[k] + '">' + label + "</button>";
+    const use = (m, label) => '<button type="button" class="btn" data-act="method" data-v="' + m + '"' + (M.method === m ? " disabled" : "") + ">" + (M.method === m ? "In use" : label) + "</button>";
+    const B = M.B, revB = rev(B);
+    // what the cost structure implies the incremental margin is at different growth rates
+    let lev = "";
+    if (cr.valid) {
+      lev = '<div class="tablewrap"><table class="sens"><tbody><tr class="sec"><td>Revenue growth</td><td>0%</td><td>5%</td><td>10%</td><td>20%</td></tr>';
+      const rowsG = [0, 0.05, 0.1, 0.2].map((g) => {
+        const r1 = revB * (1 + g), e1 = r1 * (1 - cf.v) - cr.fixedB * (1 + cr.fixedGrowth) - (da(B) ?? 0);
+        return { g, e1, inc: g ? (e1 - ebit(B)) / (r1 - revB) : null, eg: growth(e1, ebit(B)) };
+      });
+      lev += "<tr><td>Incremental EBIT margin</td>" + rowsG.map((x) => "<td>" + (x.inc == null ? "n/a" : pct(x.inc)) + "</td>").join("") + "</tr>";
+      lev += "<tr><td>EBIT growth</td>" + rowsG.map((x) => "<td>" + (isNum(x.eg) ? FMT.yoy(x.eg) : "–") + "</td>").join("") + "</tr></tbody></table></div>";
+    }
+    const verdict = {
+      high: "<b>High fixed costs.</b> About " + pct(cr.fixedShare, 0) + " of costs (with D&amp;A) don't move with sales, so EBIT moves roughly " + (isNum(cr.dol) ? cr.dol.toFixed(1) : "–") + "× as much as revenue. The incremental margin isn't a constant here: it rises with growth and collapses when sales stall (see the table). Forecast with <b>fixed + variable costs</b>.",
+      mid: "<b>Mixed cost base.</b> About " + pct(cr.fixedShare, 0) + " of costs are fixed and operating leverage is " + (isNum(cr.dol) ? cr.dol.toFixed(1) : "–") + "×. Both methods are reasonable; compare them.",
+      low: "<b>Mostly variable costs.</b> Only about " + pct(cr.fixedShare, 0) + " of costs are fixed, so each extra dollar of sales earns a fairly steady margin. The <b>regression slope</b> is a sound forecast driver.",
+      unclear: "<b>History can't separate fixed from variable costs</b>" + (cf ? " (variable ratio comes out at " + pct(cf.v, 0) + " with negative fixed costs)" : "") + ". That usually means the business changed underneath the numbers: asset sales or refranchising, a big mix shift, or one-off charges inside reported EBIT. Try a window that starts after the change, use segment EBIT from SEC releases, or set the variable-cost ratio by judgment.",
+    }[cr.profile];
+    const dropTxt = (d) => (d && d.length ? "Excluded as outliers: FY" + d.join(", FY") : "No years excluded");
+    el.innerHTML = '<header><h2>How operating profit responds to revenue</h2><span>' + win + tog("robust", "Exclude outlier years") + tog("icpt", "Cost drift (intercept)") + "</span></header>" +
+      '<p class="verdict">' + verdict + "</p>" +
+      '<div class="grid3">' +
+      '<div class="kv"><h3 style="grid-column:1/-1">Incremental margin · ΔEBIT on Δrevenue</h3>' +
+      (f ? kv("Slope = incremental EBIT margin", pct(f.beta), "big") + kv("90% range", pct(f.lo) + " to " + pct(f.hi)) + kv("R²", isNum(f.r2) ? f.r2.toFixed(2) : "–", f.r2 < 0.5 ? "neg" : "") + kv("t-statistic", isNum(f.t) ? f.t.toFixed(1) : "–") + (cfg.icpt ? kv("Intercept: cost drift per year", FMT.usd(f.alpha) ?? "–") : "") + kv("Years used", f.n - (rg.dropped?.length || 0) + " of " + f.n) + '<span class="src">' + dropTxt(rg.dropped) + "</span>" : kv("Not enough history", "–")) +
+      (rg.elast ? kv("Operating leverage, log-change fit", rg.elast.beta.toFixed(2) + "×") + '<span class="src">1% more revenue has gone with ' + rg.elast.beta.toFixed(2) + "% more EBIT (R² " + (rg.elast.r2 ?? 0).toFixed(2) + ")</span>" : "") +
+      '<span></span><b>' + use("regress", "Use the slope") + "</b></div>" +
+      '<div class="kv"><h3 style="grid-column:1/-1">Cost structure · fixed vs variable</h3>' +
+      (cf ? kv("Variable costs, % of revenue", pct(cf.v), "big") + kv("90% range", pct(cf.vLo) + " to " + pct(cf.vHi)) + kv("Contribution margin", pct(1 - cf.v)) + kv("Fixed cash costs, FY" + B.fy, cr.valid ? FMT.usd(cr.fixedB) : "n/m") + kv("Fixed-cost growth per year", cr.valid ? pct(cr.fixedGrowth) : "n/m") + kv("Fixed share of costs (incl. D&amp;A)", cr.valid ? pct(cr.fixedShare, 0) : "n/m") + kv("Operating leverage (contribution ÷ EBIT)", cr.valid && isNum(cr.dol) ? cr.dol.toFixed(2) + "×" : "n/m") + kv("R²", isNum(cf.r2) ? cf.r2.toFixed(3) : "–") + '<span class="src">Cash costs = revenue − EBIT − D&amp;A, regressed on revenue and a time trend. ' + dropTxt(cr.dropped) + "</span>" : kv("Not enough history", "–")) +
+      '<span></span><b>' + use("fixvar", "Use fixed + variable") + "</b></div>" +
+      '<div style="min-width:0"><h3>ΔEBIT vs Δrevenue by year</h3>' + scatter(rg) + "</div>" +
+      "</div>" + (lev ? "<h3>Incremental margin implied by the cost structure, FY" + (B.fy + 1) + "</h3>" + lev : "");
+  }
+  function scatter(rg) {
+    const pts = rg.pts; if (!pts.length) return '<p>Not enough history.</p>';
+    const W = 420, H = 260, m = { l: 52, r: 12, t: 12, b: 34 };
+    const xs = pts.map((p) => p.x), ys = pts.map((p) => p.y);
+    const ext = (a) => { let lo = Math.min(0, ...a), hi = Math.max(0, ...a); const pad = (hi - lo) * 0.08 || 1; return [lo - pad, hi + pad]; };
+    const [x0, x1] = ext(xs), [y0, y1] = ext(ys);
+    const X = (v) => m.l + ((v - x0) / (x1 - x0)) * (W - m.l - m.r), Y = (v) => H - m.b - ((v - y0) / (y1 - y0)) * (H - m.t - m.b);
+    const ticks = (lo, hi) => { const step = Math.pow(10, Math.floor(Math.log10((hi - lo) / 4))); const st = [1, 2, 5, 10].map((k) => k * step).find((k) => (hi - lo) / k <= 5); const out = []; for (let v = Math.ceil(lo / st) * st; v <= hi; v += st) out.push(v); return out; };
+    const lab = (v) => { if (Math.abs(v) < 1) return "0"; const b = v / 1e9; return Math.abs(b) >= 1 ? b.toFixed(Math.abs(b) < 10 ? 1 : 0) + "B" : (v / 1e6).toFixed(0) + "M"; };
+    const dropped = new Set(rg.dropped || []);
+    let g = "";
+    ticks(x0, x1).forEach((v) => { g += '<line x1="' + X(v) + '" x2="' + X(v) + '" y1="' + m.t + '" y2="' + (H - m.b) + '" class="grid"/><text x="' + X(v) + '" y="' + (H - m.b + 14) + '" text-anchor="middle">' + lab(v) + "</text>"; });
+    ticks(y0, y1).forEach((v) => { g += '<line x1="' + m.l + '" x2="' + (W - m.r) + '" y1="' + Y(v) + '" y2="' + Y(v) + '" class="grid"/><text x="' + (m.l - 6) + '" y="' + (Y(v) + 4) + '" text-anchor="end">' + lab(v) + "</text>"; });
+    g += '<line x1="' + X(0) + '" x2="' + X(0) + '" y1="' + m.t + '" y2="' + (H - m.b) + '" class="zero"/><line x1="' + m.l + '" x2="' + (W - m.r) + '" y1="' + Y(0) + '" y2="' + Y(0) + '" class="zero"/>';
+    const f = rg.fit;
+    if (f) { const a = rg.icpt ? f.alpha : 0; g += '<line x1="' + X(x0) + '" y1="' + Y(a + f.beta * x0) + '" x2="' + X(x1) + '" y2="' + Y(a + f.beta * x1) + '" class="fitline"/>'; }
+    const last = pts[pts.length - 1];
+    pts.forEach((p) => {
+      const tip = "FY" + p.fy + ": revenue " + (p.x >= 0 ? "+" : "") + lab(p.x) + ", EBIT " + (p.y >= 0 ? "+" : "") + lab(p.y) + (dropped.has(p.fy) ? " (excluded)" : "");
+      g += '<circle cx="' + X(p.x) + '" cy="' + Y(p.y) + '" r="' + (p === last ? 6 : 4.5) + '" class="' + (dropped.has(p.fy) ? "pt out" : p === last ? "pt last" : "pt") + '" data-tip="' + esc(tip) + '"><title>' + esc(tip) + "</title></circle>";
+    });
+    g += '<text x="' + X(last.x) + '" y="' + (Y(last.y) - 10) + '" text-anchor="middle" class="ptlab">FY' + last.fy + "</text>";
+    g += '<text x="' + (W - m.r) + '" y="' + (H - 4) + '" text-anchor="end">Change in revenue</text><text x="' + m.l + '" y="' + (m.t - 2) + '" text-anchor="start" dy="-1">Change in EBIT</text>';
+    return '<svg class="scatter" viewBox="0 0 ' + W + " " + H + '" role="img" aria-label="Scatter of yearly change in EBIT against change in revenue, with fitted line">' + g + "</svg>";
   }
 
   // ---------- settings panel ----------
@@ -752,7 +879,7 @@ footer.foot { color: var(--muted); font-size: 12px; line-height: 1.5; display: g
   }
 
   // ---------- persistence: your inputs per ticker ----------
-  const blank = () => ({ v: 2, ov: {}, s: {}, dcf: {}, guide: {}, up: {}, basis: null, costMethod: "incr" });
+  const blank = () => ({ v: 3, ov: {}, s: {}, dcf: {}, guide: {}, up: {}, basis: null, costMethod: null });
   const docId = (t) => "model-" + t.replace(/[^A-Za-z0-9_~:@+-]/g, "_");
   async function loadInputs(t) {
     let inp = null;
@@ -763,8 +890,85 @@ footer.foot { color: var(--muted); font-size: 12px; line-height: 1.5; display: g
       if (db && uid) { const snap = await db.collection("data/users/" + uid).doc(docId(t)).get(); if (snap.exists) inp = JSON.parse(snap.data().json); }
     } catch (e) {}
     if (!inp) { try { inp = JSON.parse(store.get("tmpl.inp." + t) || "null"); } catch (e) {} }
-    return Object.assign(blank(), inp || {});
+    if (inp && (inp.v || 0) < 3 && inp.costMethod === "incr") inp.costMethod = null;
+    return Object.assign(blank(), inp || {}, { v: 3 });
   }
+  // ---------- segment detail from SEC earnings releases (EDGAR Tools + Claude) ----------
+  const secDoc = (t) => "sec-" + t.replace(/[^A-Za-z0-9_~:@+-]/g, "_");
+  async function loadSec(t) {
+    try {
+      const db = await dbP, u = await userP, uid = u ? await u.id() : null;
+      if (db && uid) { const snap = await db.collection("data/users/" + uid).doc(secDoc(t)).get(); if (snap.exists) return JSON.parse(snap.data().json); }
+    } catch (e) {}
+    try { return JSON.parse(store.get("tmpl.sec." + t) || "null") || {}; } catch (e) { return {}; }
+  }
+  async function saveSec(t) {
+    const json = JSON.stringify(state.sec);
+    store.set("tmpl.sec." + t, json);
+    try { const db = await dbP; if (db && state.uid) await db.collection("data/users/" + state.uid).doc(secDoc(t)).set({ json, ticker: t, updatedAt: Date.now() }); } catch (e) {}
+  }
+  function secBtn() {
+    if (!state.sampleOk) return "";
+    const n = Object.keys(state.sec || {}).length;
+    return '<button type="button" class="mini" data-act="secfill" title="Read segment revenue and segment operating profit from the company\'s earnings releases on SEC EDGAR"' + (state.secBusy ? " disabled" : "") + ">" + (state.secBusy ? "Reading SEC filings…" : n ? "Refresh from SEC (" + n + " quarters)" : "Fill segments from SEC") + "</button>";
+  }
+  const tablesToText = (htmls) => (htmls || []).map((h) => {
+    const d = new DOMParser().parseFromString(h, "text/html");
+    return [...d.querySelectorAll("tr")].map((tr) => [...tr.cells].map((td) => td.textContent.replace(/\s+/g, " ").trim()).filter(Boolean).join(" | ")).filter(Boolean).join("\n");
+  }).join("\n\n");
+  const SEC_PROMPT = `You read the financial tables of one company's quarterly earnings press release and return JSON only, no prose:
+{"scale_note":"...","periods":[{"period_end":"YYYY-MM-DD","months":3,"revenue_total":0,"geo":{"Name":0},"prod":{"Name":0},"segEbit":{"Name":0}}]}
+Rules:
+- One entry per THREE-MONTH period shown (normally this quarter and the same quarter a year earlier). Skip six-, nine- and twelve-month columns.
+- Convert every value to full currency units using the table's stated scale ("in millions" means multiply by 1,000,000).
+- geo: revenue by reportable operating segment (regions, or brands such as a separately reported brand), including lines like Corporate, Global Brand Divisions or Other when reported, so the map adds up to total revenue. If segments are not regional but a geographic split exists, use that. Never include subtotal or total lines.
+- prod: revenue by product or category for the whole company (for example Footwear, Apparel, Equipment). Omit if not shown at company level.
+- segEbit: operating income / EBIT / segment profit by segment if a table shows it, including the corporate or unallocated line; no totals.
+- Use the company's own labels in title case. Omit any map that is not shown. If there is no segment data at all, return {"periods":[]}.`;
+  async function secFill() {
+    const t = state.ticker, mcp = await mcpP, sample = await sampleP;
+    if (!mcp || !sample || state.secBusy) return;
+    state.secBusy = true; render();
+    const done = (msg) => { state.secBusy = false; setNotice(msg); render(); };
+    let ev;
+    try {
+      const since = new Date(Date.now() - 800 * 864e5).toISOString().slice(0, 10);
+      ev = await call(mcp, "material_events", { company: t, item: "2.02", since, limit: 12 }, false, EDGAR);
+    } catch (e) {
+      const code = e && e.code;
+      return done(code === "server_not_connected" ? "Segment fill needs the EDGAR Tools connector. Add it in claude.ai Settings → Connectors." : code === "not_in_manifest" || code === "consent_required" ? "EDGAR Tools access is off for this page. Allow it in the page's Permissions menu." : "Couldn't list SEC earnings releases (" + esc(e?.message || code || "error") + ").");
+    }
+    const list = (ev?.results || []).filter((r) => r.accession_number).slice(0, 9);
+    if (!list.length) return done("No earnings releases (8-K item 2.02) found on EDGAR for " + esc(t) + ". Foreign filers report on 6-K, which this fill doesn't read yet.");
+    const seen = new Set(Object.values(state.sec).map((x) => x.src?.acc));
+    let read = 0, added = 0, failed = 0;
+    for (const r of list) {
+      if (seen.has(r.accession_number)) continue;
+      setNotice("Reading " + esc(t) + " earnings release filed " + esc(r.filing_date) + "… (" + (++read) + " of " + list.length + ")");
+      try {
+        const sec = await call(mcp, "filing_section", { accession: r.accession_number, section: "earnings_release", tables: "all", prose: "none" }, false, EDGAR);
+        const text = tablesToText(sec?.tables_html).slice(0, 60000);
+        if (!text) continue;
+        const out = await sample.json([{ role: "user", content: SEC_PROMPT + "\n\nTables:\n" + text }], { modelTier: "default" });
+        (out?.periods || []).forEach((p) => {
+          if (!p || !p.period_end || (p.months && p.months !== 3)) return;
+          if (state.sec[p.period_end] && state.sec[p.period_end].src?.filed > r.filing_date) return; // newer release wins
+          const clean = (o) => { const x = {}; Object.entries(o || {}).forEach(([k, v]) => { if (isNum(v)) x[k] = v; }); return Object.keys(x).length ? x : undefined; };
+          state.sec[p.period_end] = { geo: clean(p.geo), prod: clean(p.prod), segEbit: clean(p.segEbit), total: nn(p.revenue_total), src: { acc: r.accession_number, filed: r.filing_date, url: r.sec_url } };
+          added++;
+        });
+      } catch (e) {
+        failed++;
+        if (e && (e.code === "not_granted" || e.code === "rate_limited")) break;
+      }
+    }
+    await saveSec(t);
+    state.raw.secSeg = state.sec;
+    state.act = buildActuals(state.raw);
+    recompute();
+    done(added ? "Read segment detail for " + added + " quarter" + (added > 1 ? "s" : "") + " from SEC earnings releases." + (failed ? " " + failed + " release(s) couldn't be read." : "") : failed ? "Couldn't read the earnings releases (" + failed + " failed)." : "No new quarters found in the earnings releases.");
+  }
+
   let saveTimer = null, saving = Promise.resolve();
   function scheduleSave() {
     const t = state.ticker, json = JSON.stringify(state.inp);
@@ -814,16 +1018,16 @@ footer.foot { color: var(--muted); font-size: 12px; line-height: 1.5; display: g
         return ["Couldn't load " + esc(t) + " (" + esc(e?.message || e?.code || "unknown error") + "). Press Load to try again.", false];
     }
   }
-  async function call(mcp, tool, input, retried) {
+  async function call(mcp, tool, input, retried, server) {
     try {
-      const r = await mcp.callTool(SERVER, tool, input, { cache: { staleTime: 300000, gcTime: 3600000 } });
+      const r = await mcp.callTool(server || SERVER, tool, input, { cache: { staleTime: 300000, gcTime: 3600000 } });
       let p = r.payload;
       if (typeof p === "string") { try { p = JSON.parse(p); } catch (e) {} }
       return p;
     } catch (e) {
       if (e && e.retryable && !retried) {
         await new Promise((res) => setTimeout(res, Math.min(e.retryAfterMs || 0, 8000) + 500 + Math.random() * 1000));
-        return call(mcp, tool, input, true);
+        return call(mcp, tool, input, true, server);
       }
       throw e;
     }
@@ -878,6 +1082,7 @@ footer.foot { color: var(--muted); font-size: 12px; line-height: 1.5; display: g
       tsy: call(mcp, "economics", { endpoint: "treasury-rates", from_date: from }),
       mrp: call(mcp, "economics", { endpoint: "market-risk-premium" }),
       inp: loadInputs(t),
+      secSeg: loadSec(t),
     };
     const keys = Object.keys(jobs);
     const settled = await Promise.allSettled(keys.map((k) => jobs[k]));
@@ -886,6 +1091,7 @@ footer.foot { color: var(--muted); font-size: 12px; line-height: 1.5; display: g
     state.busy = false; $("go").disabled = false; $("go").textContent = "Load";
 
     if (errs.incA) { const [msg, manage] = errorMessage(errs.incA, t); setNotice(msg, manage); $("coMeta").textContent = "No data loaded"; return; }
+    state.raw = raw; state.sec = raw.secSeg || {}; state.secStatus = "";
     const A = buildActuals(raw);
     if (!A) { setNotice("FMP has no financial statements for “" + esc(t) + "”. Check the ticker; non-US listings use a suffix such as 7203.T or SAP.DE."); $("coMeta").textContent = "No data loaded"; return; }
     state.act = A;
@@ -950,9 +1156,12 @@ footer.foot { color: var(--muted); font-size: 12px; line-height: 1.5; display: g
     const b = e.target.closest && e.target.closest("button[data-act]");
     if (!b || !state.inp) return;
     const act = b.dataset.act, v = b.dataset.v;
+    if (act === "secfill") { secFill(); return; }
     if (act === "drill") { state.drill = !state.drill; store.set("tmpl.drill", state.drill ? "1" : "0"); render(); return; }
-    if (act === "basis") state.inp.basis = v;
-    else if (act === "method") state.inp.costMethod = v;
+    if (act === "regn") state.inp.reg = { ...(state.inp.reg || {}), n: +v };
+    else if (act === "regt") { const r = { n: 10, icpt: false, robust: true, ...(state.inp.reg || {}) }; r[v] = !r[v]; state.inp.reg = r; }
+    else if (act === "basis") state.inp.basis = v;
+    else if (act === "method") state.inp.costMethod = v === "auto" ? null : v;
     else if (act === "units") state.inp.up[v] = !state.inp.up[v];
     else if (act === "reset") state.inp = blank();
     else return;
