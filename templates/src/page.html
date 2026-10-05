@@ -186,10 +186,10 @@ td.flag { color: var(--muted); }
 .flags li.warn { color: var(--neg); }
 .save { color: var(--muted); font-size: 12px; }
 .btnrow { display: flex; flex-wrap: wrap; gap: 8px; }
-.notes2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(380px, 100%), 1fr)); gap: 16px; align-items: start; }
+.notes2 { display: grid; grid-template-columns: minmax(0, 1fr); gap: 20px; max-width: 1100px; }
 .notes2 > div { display: grid; gap: 6px; min-width: 0; }
 .notes2 .nh { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 12px; }
-.notes2 textarea { width: 100%; min-height: 62vh; resize: vertical; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); color: var(--ink); font: 14px/1.55 var(--body); padding: 12px 14px; }
+.notes2 textarea { width: 100%; min-height: 220px; resize: vertical; overflow: hidden; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); color: var(--ink); font: 14px/1.55 var(--body); padding: 12px 14px; }
 #notesDraftText { background: var(--est); }
 .notes2 textarea:focus { outline: 2px solid var(--accent); outline-offset: 0; }
 #sheetWrap { min-width: 0; }
@@ -934,11 +934,18 @@ footer.foot .fine { font-size: 11px; max-width: 110ch; }
       '<div><div class="nh"><h3>My notes</h3></div><textarea id="notesText" spellcheck="true" aria-label="My notes" placeholder="Your own view: business, drivers, one-off items, guidance vs consensus, risks, questions to follow up…"></textarea></div></div>';
     $("notesText").value = state.inp.notes || "";
     $("notesDraftText").value = state.inp.notesDraft || "";
+    fitNotes();
   }
+  // the note boxes grow with their text, so the whole draft reads without an inner scroll bar
+  function fitNotes() {
+    ["notesDraftText", "notesText"].forEach((id) => { const t = $(id); if (!t || t.offsetParent === null) return; t.style.height = "auto"; t.style.height = t.scrollHeight + 2 + "px"; });
+  }
+  window.addEventListener("resize", () => fitNotes());
   window.addEventListener("beforeunload", (e) => { if (state.notesBusy) { e.preventDefault(); e.returnValue = ""; } });
   document.addEventListener("input", (e) => {
     if (e.target && e.target.id === "notesText" && state.inp) { state.inp.notes = e.target.value; scheduleSave(); }
     if (e.target && e.target.id === "notesDraftText" && state.inp) { state.inp.notesDraft = e.target.value; scheduleSave(); }
+    if (e.target && (e.target.id === "notesDraftText" || e.target.id === "notesText")) fitNotes();
   });
   const CALL_PROMPT = `Summarise this earnings call transcript for an equity analyst. Return JSON only:
 {"call":"Q2 FY2026","date":"YYYY-MM-DD","topics":["management's main topics, with the numbers given"],"qa_themes":[{"theme":"...","share":"high|medium|low","askers":["Name (Firm)"],"answer":"management's answer, with numbers"}],"guidance":["guidance or targets given, with periods"],"swings":[{"item":"what will move future earnings","direction":"up|down","size":"amount or %, if given","period":"when"}],"pricing_and_demand":["price changes, elasticity or churn comments, demand levers mentioned"],"costs_and_scale":["cost growth, margin, operating leverage, scale or investment comments"],"one_offs":["one-time items mentioned"],"tone":"one sentence on what changed versus prior messaging, if evident"}
@@ -1910,7 +1917,7 @@ Rules:
     if (!b || !state.inp) return;
     const act = b.dataset.act, v = b.dataset.v;
     if (act === "secfill") { secFill(); return; }
-    if (act === "tab") { state.tab = v; store.set("tmpl.tab", v); render(); if (TABLE_TABS.has(v)) { scrollToForecast(); const sh = document.querySelector(".sheet"); if (sh) sh.scrollTop = 0; } return; }
+    if (act === "tab") { state.tab = v; store.set("tmpl.tab", v); render(); if (v === "notes") fitNotes(); if (TABLE_TABS.has(v)) { scrollToForecast(); const sh = document.querySelector(".sheet"); if (sh) sh.scrollTop = 0; } return; }
     if (act === "backup") { backupAll(); return; }
     if (act === "notesdraft") { draftNotes(); return; }
     if (act === "notesprev") { const cur = state.inp.notesDraft; state.inp.notesDraft = state.inp.notesDraftPrev || ""; state.inp.notesDraftPrev = cur || null; scheduleSave(); state.notesFor = null; renderNotes(); return; }
