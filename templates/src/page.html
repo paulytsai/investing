@@ -166,6 +166,11 @@ td.flag { color: var(--muted); }
 .flags li.warn { color: var(--neg); }
 .save { color: var(--muted); font-size: 12px; }
 .btnrow { display: flex; flex-wrap: wrap; gap: 8px; }
+#sheetWrap { min-width: 0; }
+.tabs { display: flex; flex-wrap: wrap; gap: 2px; border-bottom: 1px solid var(--line); }
+.tabs button { border: 0; border-bottom: 3px solid transparent; background: transparent; color: var(--muted); font: 600 14px var(--display); padding: 9px 14px 8px; cursor: pointer; }
+.tabs button[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--accent); }
+.tabs button:hover { color: var(--ink); }
 .saved { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; color: var(--muted); font-size: 12.5px; }
 .saved .mini { margin-left: 0; }
 .verdict { color: var(--ink) !important; background: var(--band); border-radius: 6px; padding: 10px 12px; max-width: none !important; }
@@ -222,7 +227,8 @@ footer.foot .fine { font-size: 11px; max-width: 110ch; }
     <span><span class="sw">1.0</span>Input: type over it, clear it to restore the default</span>
     <span class="save" id="saveState"></span>
   </div>
-  <div class="sheet"><table id="tbl"></table></div>
+  <nav class="tabs" id="tabs" role="tablist" aria-label="Model sections"></nav>
+  <div id="sheetWrap"><div class="sheet"><table id="tbl"></table></div></div>
 
   <div class="panels">
     <section class="panel" id="regp" hidden></section>
@@ -246,7 +252,7 @@ footer.foot .fine { font-size: 11px; max-width: 110ch; }
 (function () {
   const $ = (id) => document.getElementById(id);
   const SERVER = "FMP";
-  const state = { showFc: true, sec: {}, secStatus: "", sampleOk: false, ticker: "", years: 15, drill: true, raw: null, act: null, prof: null, mkt: null, inp: null, mdl: null, dcf: null, busy: false, matrix: null, segErr: null, uid: null };
+  const state = { tab: "model", showFc: true, sec: {}, secStatus: "", sampleOk: false, ticker: "", years: 15, drill: true, raw: null, act: null, prof: null, mkt: null, inp: null, mdl: null, dcf: null, busy: false, matrix: null, segErr: null, uid: null };
   const use = (name) => { try { return window.claude?.use ? window.claude.use(name) : Promise.resolve(null); } catch (e) { return Promise.resolve(null); } };
   const mcpP = use("mcp"), dlP = use("downloads"), dbP = use("db"), userP = use("user"), sampleP = use("sample");
   const EDGAR = "Edgar Tools";
@@ -461,6 +467,22 @@ footer.foot .fine { font-size: 11px; max-width: 110ch; }
     return isNum(e0) && e0 > 0 && isNum(e1) ? e1 / e0 - 1 : null;
   }
 
+  // ---------- tabs ----------
+  const TABS = [["model", "Model"], ["drivers", "Drivers"], ["segments", "Segments"], ["cost", "Cost structure"], ["valuation", "Valuation"], ["settings", "Settings"]];
+  const TAB_OF = { "Income statement": "model", "Our forecast vs consensus": "model", "Cash flow": "model", "Balance sheet": "model", "Cost drivers (% of revenue)": "drivers", "Working capital & returns": "drivers", "Valuation at today's price": "valuation" };
+  const tabOf = (sec) => sec.tab || TAB_OF[sec.title] || (sec.driver ? "drivers" : /^Revenue by|^Segment operating/.test(sec.title) ? "segments" : "model");
+  const TABLE_TABS = new Set(["model", "drivers", "segments", "valuation"]);
+  function renderTabs() {
+    $("tabs").innerHTML = TABS.map(([k, label]) => '<button type="button" role="tab" data-act="tab" data-v="' + k + '" aria-selected="' + (state.tab === k) + '">' + label + "</button>").join("");
+  }
+  // which blocks show on the active tab
+  function applyTab() {
+    const t = state.tab, loaded = !!state.act;
+    $("sheetWrap").hidden = loaded && !TABLE_TABS.has(t);
+    const vis = { regp: "cost", settings: "settings", pe: "valuation", dcf: "valuation" };
+    Object.entries(vis).forEach(([id, tab]) => { const el = $(id); if (el && el.dataset.ready === "1") el.hidden = t !== tab; });
+  }
+
   // ---------- forecast driver sections (built from the model) ----------
   function driverSections() {
     const M = state.mdl; if (!M) return [];
@@ -644,7 +666,7 @@ footer.foot .fine { font-size: 11px; max-width: 110ch; }
 
   function render() {
     const A = state.act, M = state.mdl;
-    if (!A) { placeholder(); state.xrows = null; $("xlsx").disabled = true; $("pdf").disabled = true; $("settings").hidden = true; $("dcf").hidden = true; return; }
+    if (!A) { renderTabs(); placeholder(); state.xrows = null; $("xlsx").disabled = true; $("pdf").disabled = true; $("settings").hidden = true; $("dcf").hidden = true; return; }
     // keep focus on the same input across re-renders
     const ae = document.activeElement;
     const focusKey = ae && ae.classList && ae.classList.contains("in") ? [ae.dataset.s, ae.dataset.k, ae.dataset.fy] : null;
@@ -652,7 +674,7 @@ footer.foot .fine { font-size: 11px; max-width: 110ch; }
 
     const { hist, drill, model, guide, cons, cols, firsts } = columns();
     const cc = cols.map((c, j) => colCls(c, j, firsts));
-    const out = [], xrows = [];
+    const outAll = [], xrows = [];
     const span = (n, cls, html) => (n ? '<td colspan="' + n + '" class="' + cls + '">' + html + "</td>" : "");
     const drillBtn = '<button type="button" class="mini" data-act="drill" aria-pressed="' + state.drill + '">' + (state.drill ? "Hide quarters" : "Show Q1–Q4, H1, H2") + "</button>";
     const fcBtn = M ? '<button type="button" class="mini" data-act="fc" aria-pressed="' + state.showFc + '">' + (state.showFc ? "Collapse" : "Show our forecast") + "</button>" : "";
@@ -678,6 +700,8 @@ footer.foot .fine { font-size: 11px; max-width: 110ch; }
     head.push('<tr class="yrs"><td>Line item</td>' + headCells + "</tr>");
     secs.forEach((s) => {
       if (s.modelOnly && !M) return;
+      const show = tabOf(s) === state.tab;
+      const out = show ? outAll : [];
       out.push('<tr class="sec"><td>' + esc(s.title) + (s.ctl || "") + "</td>" + blanks + "</tr>");
       xrows.push({ t: "sec", label: s.title });
       if (!s.rows) { out.push('<tr class="note"><td colspan="' + (cols.length + 1) + '"><div class="notetext">' + esc(s.empty) + "</div></td></tr>"); return; }
@@ -731,10 +755,12 @@ footer.foot .fine { font-size: 11px; max-width: 110ch; }
         }
       });
     });
-    $("tbl").innerHTML = "<thead>" + head.join("") + "</thead><tbody>" + out.join("") + "</tbody>";
+    $("tbl").innerHTML = "<thead>" + head.join("") + "</thead><tbody>" + outAll.join("") + "</tbody>";
     state.xrows = xrows; state.xcols = cols.map((c) => ({ label: c.label, kind: c.kind, type: c.type }));
     $("xlsx").disabled = false; $("pdf").disabled = false;
     renderReg(); renderSettings(); renderPe(); renderDcf(); renderHeader();
+    ["regp", "settings", "pe", "dcf"].forEach((id) => { const el = $(id); el.dataset.ready = el.hidden ? "0" : "1"; });
+    renderTabs(); applyTab();
     if (focusKey) {
       const el = document.querySelector('input.in[data-s="' + focusKey[0] + '"][data-k="' + CSS.escape(focusKey[1]) + '"][data-fy="' + focusKey[2] + '"]');
       if (el) { el.focus(); if (sel) el.select(); }
@@ -1440,6 +1466,7 @@ Rules:
     if (!b || !state.inp) return;
     const act = b.dataset.act, v = b.dataset.v;
     if (act === "secfill") { secFill(); return; }
+    if (act === "tab") { state.tab = v; store.set("tmpl.tab", v); render(); if (TABLE_TABS.has(v)) { scrollToForecast(); const sh = document.querySelector(".sheet"); if (sh) sh.scrollTop = 0; } return; }
     if (act === "backup") { backupAll(); return; }
     if (act === "restore") { $("restoreFile").click(); return; }
     if (act === "open") { load(v); window.scrollTo({ top: 0 }); return; }
@@ -1840,6 +1867,7 @@ Rules:
   const sy = +store.get("tmpl.years"); if ([10, 15, 20, 30].includes(sy)) setYears(sy);
   if (store.get("tmpl.drill") === "0") state.drill = false;
   if (store.get("tmpl.fc") === "0") state.showFc = false;
+  { const tb = (location.hash || "").slice(1) || store.get("tmpl.tab"); if (["model", "drivers", "segments", "cost", "valuation", "settings"].includes(tb)) state.tab = tb; }
   const start = store.get("tmpl.ticker") || "MSFT";
   $("ticker").value = start;
   render();
