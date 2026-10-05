@@ -1,0 +1,520 @@
+<title>Company Model Template</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Libre+Franklin:wght@500;600;700&family=Source+Sans+3:ital,wght@0,400;0,600;0,700;1,400&display=swap">
+<style>
+/* Layout: one compact header (ticker input + valuation strip), then a single
+   ledger table — sections stacked, years across, sticky line-item column. */
+:root {
+  --bg: #f4f6f9;
+  --surface: #ffffff;
+  --ink: #16202c;
+  --muted: #5b6676;
+  --faint: #8a94a3;
+  --line: #dde2ea;
+  --band: #e9eef5;
+  --accent: #1d4f91;
+  --accent-ink: #ffffff;
+  --neg: #b1271d;
+  --pos: #1b6a3d;
+  --key: #f7f9fc;
+  --warn-bg: #fff5d9;
+  --warn-ink: #6b4d00;
+  --display: "Libre Franklin", "Helvetica Neue", Arial, sans-serif;
+  --body: "Source Sans 3", "Segoe UI", Arial, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f141a; --surface: #151b23; --ink: #e5e9ef; --muted: #9aa5b4; --faint: #6c7686;
+    --line: #29313c; --band: #1b232e; --accent: #82aae4; --accent-ink: #0f141a;
+    --neg: #f08b82; --pos: #79c99f; --key: #18202a; --warn-bg: #3a3017; --warn-ink: #f3dc9b;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f141a; --surface: #151b23; --ink: #e5e9ef; --muted: #9aa5b4; --faint: #6c7686;
+  --line: #29313c; --band: #1b232e; --accent: #82aae4; --accent-ink: #0f141a;
+  --neg: #f08b82; --pos: #79c99f; --key: #18202a; --warn-bg: #3a3017; --warn-ink: #f3dc9b;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font-family: var(--body); font-size: 14px; }
+.wrap { max-width: 1240px; margin: 0 auto; padding-inline: 16px; padding-block: 20px 48px; display: grid; gap: 16px; }
+
+header.top { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 12px 24px; }
+.co { min-width: 0; display: grid; gap: 2px; }
+.co .eyebrow { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.co h1 { margin: 0; font-family: var(--display); font-weight: 700; font-size: 24px; line-height: 1.15; text-wrap: balance; }
+.co .meta { color: var(--muted); font-size: 13px; }
+
+form.controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.tick { display: flex; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); overflow: hidden; }
+.tick input { border: 0; background: transparent; color: var(--ink); font: 600 15px var(--body); text-transform: uppercase; letter-spacing: .04em; width: 110px; padding: 8px 10px; }
+.tick input:focus { outline: none; }
+.tick:focus-within { outline: 2px solid var(--accent); outline-offset: 1px; }
+.tick button { border: 0; background: var(--accent); color: var(--accent-ink); font: 600 13px var(--body); padding: 0 14px; cursor: pointer; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; background: var(--surface); }
+.seg button { border: 0; background: transparent; color: var(--muted); font: 600 13px var(--body); padding: 8px 12px; cursor: pointer; }
+.seg button[aria-pressed="true"] { background: var(--band); color: var(--ink); }
+.btn { border: 1px solid var(--line); background: var(--surface); color: var(--ink); font: 600 13px var(--body); padding: 8px 12px; border-radius: 6px; cursor: pointer; }
+button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.btn:disabled, .tick button:disabled { opacity: .5; cursor: default; }
+
+.strip { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); background: var(--surface); border: 1px solid var(--line); border-radius: 8px; }
+.strip div { padding: 10px 14px; border-right: 1px solid var(--line); display: grid; gap: 2px; min-width: 0; }
+.strip div:last-child { border-right: 0; }
+.strip span { font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.strip b { font-family: var(--display); font-weight: 600; font-size: 17px; font-variant-numeric: tabular-nums; }
+
+.notice { padding: 10px 14px; border-radius: 8px; background: var(--warn-bg); color: var(--warn-ink); line-height: 1.45; }
+.notice button { margin-left: 8px; }
+
+.sheet { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; }
+th, td { padding: 4px 12px; white-space: nowrap; text-align: right; border-bottom: 1px solid var(--line); }
+th:first-child, td:first-child { text-align: left; position: sticky; left: 0; background: var(--surface); z-index: 1; min-width: 220px; border-right: 1px solid var(--line); }
+tr.sec td { background: var(--band); font-family: var(--display); font-weight: 600; font-size: 12px; letter-spacing: .04em; color: var(--ink); padding-top: 9px; padding-bottom: 7px; }
+tr.sec td:first-child { background: var(--band); text-transform: uppercase; letter-spacing: .08em; }
+tr.sub td { color: var(--muted); font-size: 12px; font-style: italic; border-bottom-color: transparent; padding-top: 0; }
+tr.sub td:first-child { padding-left: 28px; }
+tr.ratio td { color: var(--muted); font-style: italic; }
+tr.key td { font-weight: 700; background: var(--key); }
+tr.key td:first-child { background: var(--key); }
+tr.grp td { color: var(--muted); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; padding-top: 10px; border-bottom-color: transparent; }
+td.ind1:first-child { padding-left: 24px; }
+td .na { color: var(--faint); }
+td.neg { color: var(--neg); }
+td.pos { color: var(--pos); }
+tr.note td { color: var(--muted); font-style: italic; text-align: left; white-space: normal; }
+.loading td:not(:first-child) { color: var(--faint); }
+
+footer.foot { color: var(--muted); font-size: 12px; line-height: 1.5; display: grid; gap: 4px; }
+@media (max-width: 600px) {
+  th:first-child, td:first-child { min-width: 160px; }
+  .co h1 { font-size: 20px; }
+}
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <div class="co">
+      <div class="eyebrow" id="eyebrow">Company model</div>
+      <h1 id="coName">Enter a ticker</h1>
+      <div class="meta" id="coMeta">Historical P&amp;L, cash flow and balance sheet with YoY and key drivers</div>
+    </div>
+    <form class="controls" id="form" autocomplete="off">
+      <div class="tick">
+        <input id="ticker" name="ticker" aria-label="Ticker" placeholder="TICKER" maxlength="16" spellcheck="false">
+        <button type="submit" id="go">Load</button>
+      </div>
+      <div class="seg" role="group" aria-label="Period">
+        <button type="button" id="pA" aria-pressed="true">Annual</button>
+        <button type="button" id="pQ" aria-pressed="false">Quarterly</button>
+      </div>
+      <button type="button" class="btn" id="copy" disabled>Copy for Excel</button>
+      <button type="button" class="btn" id="csv" disabled hidden>Download CSV</button>
+    </form>
+  </header>
+
+  <div class="strip" id="strip"></div>
+  <div class="notice" id="notice" hidden></div>
+  <div class="sheet"><table id="tbl"></table></div>
+
+  <footer class="foot">
+    <div id="units"></div>
+    <div>Source: Financial Modeling Prep (company filings), pulled live through your FMP connector. Costs are shown as positive numbers; cash outflows are negative. Quarterly YoY compares with the same quarter a year earlier; quarterly return and leverage ratios are annualized (×4).</div>
+  </footer>
+</div>
+
+<script>
+(function () {
+  const $ = (id) => document.getElementById(id);
+  const SERVER = "FMP";
+  const state = { ticker: "", period: "annual", data: null, busy: false, matrix: null };
+  let mcpP = null, dlP = null;
+  try { mcpP = window.claude?.use ? window.claude.use("mcp") : Promise.resolve(null); } catch (e) { mcpP = Promise.resolve(null); }
+  try { dlP = window.claude?.use ? window.claude.use("downloads") : Promise.resolve(null); } catch (e) { dlP = Promise.resolve(null); }
+
+  const store = {
+    get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
+    set(k, v) { try { localStorage.setItem(k, v); } catch (e) {} },
+  };
+
+  // ---------- formatting ----------
+  let DP = 0; // decimals for currency in millions
+  const isNum = (v) => typeof v === "number" && isFinite(v);
+  const paren = (s, neg) => (neg ? "(" + s + ")" : s);
+  const nf = (v, dp) => Math.abs(v).toLocaleString("en-US", { minimumFractionDigits: dp, maximumFractionDigits: dp });
+  const FMT = {
+    usd: (v) => paren(nf(v / 1e6, DP), v < 0),
+    pct: (v) => paren(nf(v * 100, 1) + "%", v < 0),
+    yoy: (v) => (v < 0 ? "−" : "+") + nf(v * 100, 1) + "%",
+    pp: (v) => (v < 0 ? "−" : "+") + nf(v * 100, 1) + " pp",
+    eps: (v) => paren(nf(v, 2), v < 0),
+    sh: (v) => nf(v / 1e6, 1),
+    days: (v) => paren(nf(v, 0), v < 0),
+    x: (v) => paren(nf(v, 1) + "x", v < 0),
+  };
+  const fmt = (v, f) => (isNum(v) && v !== 0 ? FMT[f](v) : null);
+  const div = (a, b) => (isNum(a) && isNum(b) && b !== 0 ? a / b : null);
+  const sub = (a, b) => (isNum(a) && isNum(b) ? a - b : null);
+  const sum = (...xs) => (xs.every(isNum) ? xs.reduce((s, x) => s + x, 0) : null);
+  const growth = (a, b) => (isNum(a) && isNum(b) && b !== 0 ? (a - b) / Math.abs(b) : null);
+  const n = (v) => (isNum(v) ? v : null);
+
+  // ---------- template rows ----------
+  // v(c) returns the value for one column context c = {i, b, c, prod, geo, p (prior-year ctx), A (annualize), D (days)}
+  const da = (c) => n(c.c?.depreciationAndAmortization) ?? n(c.i?.depreciationAndAmortization);
+  const rev = (c) => n(c.i?.revenue);
+  const ebit = (c) => n(c.i?.operatingIncome);
+  const ebitda = (c) => sum(ebit(c), da(c));
+  const cashST = (c) => n(c.b?.cashAndShortTermInvestments) ?? sum(n(c.b?.cashAndCashEquivalents), n(c.b?.shortTermInvestments));
+  const debt = (c) => n(c.b?.totalDebt);
+  const capex = (c) => n(c.c?.capitalExpenditure) ?? n(c.c?.investmentsInPropertyPlantAndEquipment);
+  const cfo = (c) => n(c.c?.netCashProvidedByOperatingActivities) ?? n(c.c?.operatingCashFlow);
+  const fcf = (c) => n(c.c?.freeCashFlow) ?? sum(cfo(c), capex(c));
+  const taxRate = (c) => div(n(c.i?.incomeTaxExpense), n(c.i?.incomeBeforeTax));
+  const ar = (c) => n(c.b?.accountsReceivables) || n(c.b?.netReceivables);
+  const pctRev = (fn) => (c) => div(fn(c), rev(c));
+
+  const SECTIONS = [
+    { title: "Income statement", rows: [
+      { l: "Revenue", v: rev, f: "usd", yoy: true, key: true },
+      { l: "Cost of revenue", v: (c) => n(c.i?.costOfRevenue), f: "usd", ind: 1 },
+      { l: "Gross profit", v: (c) => n(c.i?.grossProfit), f: "usd", yoy: true },
+      { l: "Gross margin", v: pctRev((c) => n(c.i?.grossProfit)), f: "pct", ratio: true },
+      { l: "R&D", v: (c) => n(c.i?.researchAndDevelopmentExpenses), f: "usd", yoy: true, ind: 1 },
+      { l: "SG&A", v: (c) => n(c.i?.sellingGeneralAndAdministrativeExpenses), f: "usd", yoy: true, ind: 1 },
+      { l: "Total operating expenses", v: (c) => n(c.i?.operatingExpenses), f: "usd", yoy: true },
+      { l: "Operating income (EBIT)", v: ebit, f: "usd", yoy: true, key: true },
+      { l: "Operating margin", v: pctRev(ebit), f: "pct", ratio: true },
+      { l: "D&A", v: da, f: "usd", ind: 1 },
+      { l: "EBITDA", v: ebitda, f: "usd", yoy: true },
+      { l: "EBITDA margin", v: pctRev(ebitda), f: "pct", ratio: true },
+      { l: "Interest expense", v: (c) => n(c.i?.interestExpense), f: "usd", ind: 1 },
+      { l: "Other income / (expense)", v: (c) => sub(n(c.i?.incomeBeforeTax), ebit(c)), f: "usd", ind: 1 },
+      { l: "Pre-tax income", v: (c) => n(c.i?.incomeBeforeTax), f: "usd" },
+      { l: "Income tax", v: (c) => n(c.i?.incomeTaxExpense), f: "usd", ind: 1 },
+      { l: "Effective tax rate", v: taxRate, f: "pct", ratio: true },
+      { l: "Net income", v: (c) => n(c.i?.netIncome), f: "usd", yoy: true, key: true },
+      { l: "Net margin", v: pctRev((c) => n(c.i?.netIncome)), f: "pct", ratio: true },
+      { l: "Diluted shares (mm)", v: (c) => n(c.i?.weightedAverageShsOutDil), f: "sh", yoy: true },
+      { l: "Diluted EPS", v: (c) => n(c.i?.epsDiluted), f: "eps", yoy: true, key: true },
+    ]},
+    { title: "Cost drivers (% of revenue)", rows: [
+      { l: "Cost of revenue", v: pctRev((c) => n(c.i?.costOfRevenue)), f: "pct" },
+      { l: "R&D", v: pctRev((c) => n(c.i?.researchAndDevelopmentExpenses)), f: "pct" },
+      { l: "SG&A", v: pctRev((c) => n(c.i?.sellingGeneralAndAdministrativeExpenses)), f: "pct" },
+      { l: "D&A", v: pctRev(da), f: "pct" },
+      { l: "Stock-based comp", v: pctRev((c) => n(c.c?.stockBasedCompensation)), f: "pct" },
+      { l: "Capex", v: pctRev((c) => (isNum(capex(c)) ? -capex(c) : null)), f: "pct" },
+      { l: "Opex growth less revenue growth", v: (c) => sub(growth(n(c.i?.operatingExpenses), n(c.p?.i?.operatingExpenses)), growth(rev(c), rev(c.p || {}))), f: "pp", ratio: true },
+      { l: "Incremental operating margin", v: (c) => div(sub(ebit(c), ebit(c.p || {})), sub(rev(c), rev(c.p || {}))), f: "pct", ratio: true },
+    ]},
+    { title: "Cash flow", rows: [
+      { l: "Net income", v: (c) => n(c.c?.netIncome) ?? n(c.i?.netIncome), f: "usd" },
+      { l: "D&A", v: da, f: "usd", ind: 1 },
+      { l: "Stock-based comp", v: (c) => n(c.c?.stockBasedCompensation), f: "usd", ind: 1 },
+      { l: "Change in working capital", v: (c) => n(c.c?.changeInWorkingCapital), f: "usd", ind: 1 },
+      { l: "Other operating items", v: (c) => { const parts = [n(c.c?.netIncome), da(c), n(c.c?.stockBasedCompensation), n(c.c?.changeInWorkingCapital)]; return parts.every(isNum) && isNum(cfo(c)) ? cfo(c) - parts.reduce((s, x) => s + x, 0) : null; }, f: "usd", ind: 1 },
+      { l: "Cash from operations", v: cfo, f: "usd", yoy: true, key: true },
+      { l: "Capex", v: capex, f: "usd", ind: 1 },
+      { l: "Free cash flow", v: fcf, f: "usd", yoy: true, key: true },
+      { l: "FCF margin", v: pctRev(fcf), f: "pct", ratio: true },
+      { l: "FCF / net income", v: (c) => div(fcf(c), n(c.i?.netIncome)), f: "pct", ratio: true },
+      { l: "Capex / D&A", v: (c) => div(isNum(capex(c)) ? -capex(c) : null, da(c)), f: "x", ratio: true },
+      { l: "FCF per share", v: (c) => div(fcf(c), n(c.i?.weightedAverageShsOutDil)), f: "eps", yoy: true },
+      { l: "Acquisitions", v: (c) => n(c.c?.acquisitionsNet), f: "usd" },
+      { l: "Share repurchases", v: (c) => n(c.c?.commonStockRepurchased), f: "usd" },
+      { l: "Dividends", v: (c) => n(c.c?.netDividendsPaid) ?? n(c.c?.commonDividendsPaid), f: "usd" },
+      { l: "Net debt issuance / (repayment)", v: (c) => n(c.c?.netDebtIssuance), f: "usd" },
+    ]},
+    { title: "Balance sheet", rows: [
+      { l: "Cash & short-term investments", v: cashST, f: "usd" },
+      { l: "Receivables", v: ar, f: "usd", ind: 1 },
+      { l: "Inventory", v: (c) => n(c.b?.inventory), f: "usd", ind: 1 },
+      { l: "Total current assets", v: (c) => n(c.b?.totalCurrentAssets), f: "usd" },
+      { l: "PP&E, net", v: (c) => n(c.b?.propertyPlantEquipmentNet), f: "usd", ind: 1 },
+      { l: "Goodwill & intangibles", v: (c) => n(c.b?.goodwillAndIntangibleAssets), f: "usd", ind: 1 },
+      { l: "Total assets", v: (c) => n(c.b?.totalAssets), f: "usd", key: true },
+      { l: "Accounts payable", v: (c) => n(c.b?.accountPayables), f: "usd", ind: 1 },
+      { l: "Deferred revenue", v: (c) => sum(n(c.b?.deferredRevenue) ?? 0, n(c.b?.deferredRevenueNonCurrent) ?? 0) || null, f: "usd", ind: 1 },
+      { l: "Total debt", v: debt, f: "usd", ind: 1 },
+      { l: "Total liabilities", v: (c) => n(c.b?.totalLiabilities), f: "usd" },
+      { l: "Shareholders' equity", v: (c) => n(c.b?.totalStockholdersEquity), f: "usd", key: true },
+      { l: "Net debt / (net cash)", v: (c) => sub(debt(c), cashST(c)), f: "usd" },
+    ]},
+    { title: "Working capital & returns", rows: [
+      { l: "Days sales outstanding", v: (c) => { const r = div(ar(c), rev(c)); return r == null ? null : r * c.D; }, f: "days" },
+      { l: "Days inventory", v: (c) => { const r = div(n(c.b?.inventory), n(c.i?.costOfRevenue)); return r == null ? null : r * c.D; }, f: "days" },
+      { l: "Days payable", v: (c) => { const r = div(n(c.b?.accountPayables), n(c.i?.costOfRevenue)); return r == null ? null : r * c.D; }, f: "days" },
+      { l: "Cash conversion cycle", v: (c) => { const g = (x, y) => { const r = div(x, y); return r == null ? 0 : r * c.D; }; if (!isNum(rev(c))) return null; return g(ar(c), rev(c)) + g(n(c.b?.inventory), n(c.i?.costOfRevenue)) - g(n(c.b?.accountPayables), n(c.i?.costOfRevenue)); }, f: "days" },
+      { l: "Return on equity", v: (c) => { const r = div(n(c.i?.netIncome), n(c.b?.totalStockholdersEquity)); return r == null || n(c.b?.totalStockholdersEquity) < 0 ? null : r * c.A; }, f: "pct" },
+      { l: "Return on invested capital", v: (c) => { const t = taxRate(c); const tr = isNum(t) && t >= 0 && t <= 0.5 ? t : 0.21; const ic = sum(debt(c), n(c.b?.totalStockholdersEquity)); const icn = isNum(ic) && isNum(cashST(c)) ? ic - cashST(c) : null; const r = isNum(icn) && icn > 0 ? div(ebit(c), icn) : null; return r == null ? null : r * (1 - tr) * c.A; }, f: "pct" },
+      { l: "Net debt / EBITDA", v: (c) => div(sub(debt(c), cashST(c)), isNum(ebitda(c)) ? ebitda(c) * c.A : null), f: "x" },
+    ]},
+  ];
+
+  // ---------- data ----------
+  const keyOf = (r) => (r.period || "FY") + "|" + String(r.fiscalYear);
+  const priorKey = (r) => (r.period || "FY") + "|" + String(Number(r.fiscalYear) - 1);
+  const colLabel = (r) => (r.period === "FY" || !r.period ? "FY" + r.fiscalYear : r.period + " FY" + String(r.fiscalYear).slice(-2));
+
+  function build(raw, period) {
+    const annual = period === "annual";
+    const SHOW = annual ? 6 : 8;
+    const by = (arr) => { const m = {}; (Array.isArray(arr) ? arr : []).forEach((r) => { if (r && r.fiscalYear != null) m[keyOf(r)] = r; }); return m; };
+    const inc = (Array.isArray(raw.inc) ? raw.inc : []).filter((r) => r && r.fiscalYear != null).sort((a, b) => String(a.date).localeCompare(String(b.date)));
+    const bs = by(raw.bs), cf = by(raw.cf), prod = by(raw.prod), geo = by(raw.geo);
+    const ctx = {};
+    inc.forEach((r) => { const k = keyOf(r); ctx[k] = { k, i: r, b: bs[k], c: cf[k], prod: prod[k]?.data, geo: geo[k]?.data, A: annual ? 1 : 4, D: annual ? 365 : 91.25, label: colLabel(r), date: r.date }; });
+    inc.forEach((r) => { ctx[keyOf(r)].p = ctx[priorKey(r)] || null; });
+    const cols = inc.slice(-SHOW).map((r) => ctx[keyOf(r)]);
+    return { cols, annual };
+  }
+
+  function segmentRows(cols, field) {
+    const latest = {};
+    cols.forEach((c) => Object.entries(c[field] || {}).forEach(([k, v]) => { if (isNum(v)) latest[k] = v; }));
+    const names = Object.keys(latest).sort((a, b) => latest[b] - latest[a]);
+    if (!names.length) return null;
+    const rows = names.map((nm) => ({ l: nm, v: (c) => n(c[field]?.[nm]), pv: (c) => n(c.p?.[field]?.[nm]), f: "usd", yoy: true, ind: 1 }));
+    rows.push({ l: "Total of segments", v: (c) => { const vs = Object.values(c[field] || {}).filter(isNum); return vs.length ? vs.reduce((s, x) => s + x, 0) : null; }, f: "usd", key: true });
+    rows.push({ grp: "Mix (% of segment total)" });
+    names.forEach((nm) => rows.push({ l: nm, v: (c) => { const vs = Object.values(c[field] || {}).filter(isNum); const t = vs.reduce((s, x) => s + x, 0); return div(n(c[field]?.[nm]), t); }, f: "pct", ratio: true, ind: 1 }));
+    return rows;
+  }
+
+  // ---------- render ----------
+  function cellHTML(v, f, signColor) {
+    const s = fmt(v, f);
+    if (s == null) return { html: '<span class="na">–</span>', cls: "", text: "" };
+    let cls = "";
+    if (signColor && isNum(v)) cls = v < 0 ? "neg" : "pos";
+    return { html: s, cls, text: v };
+  }
+
+  function render() {
+    const tbl = $("tbl");
+    const d = state.data;
+    const cols = d ? d.cols : Array.from({ length: state.period === "annual" ? 6 : 8 }, () => null);
+    const labels = cols.map((c) => (c ? c.label : "—"));
+    const out = [];
+    const matrix = [];
+    const esc = (s) => String(s).replace(/[&<>"]/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[ch]));
+
+    const secs = [];
+    if (d) {
+      const prodRows = segmentRows(d.cols, "prod");
+      const geoRows = segmentRows(d.cols, "geo");
+      secs.push({ title: "Revenue drivers · by product / segment", rows: prodRows, empty: state.segErr || "No product or segment breakdown reported for this company." });
+      secs.push({ title: "Revenue drivers · by geography", rows: geoRows, empty: state.segErr || "No geographic breakdown reported for this company." });
+    }
+    secs.push(...SECTIONS);
+
+    secs.forEach((s) => {
+      out.push('<tr class="sec"><td>' + esc(s.title) + "</td>" + labels.map((l) => "<td>" + esc(l) + "</td>").join("") + "</tr>");
+      matrix.push([s.title.toUpperCase(), ...labels]);
+      if (!s.rows) {
+        out.push('<tr class="note"><td colspan="' + (cols.length + 1) + '">' + esc(s.empty) + "</td></tr>");
+        return;
+      }
+      s.rows.forEach((r) => {
+        if (r.grp) { out.push('<tr class="grp"><td colspan="' + (cols.length + 1) + '">' + esc(r.grp) + "</td></tr>"); matrix.push([r.grp]); return; }
+        const cls = [r.key ? "key" : "", r.ratio ? "ratio" : "", !d ? "loading" : ""].join(" ").trim();
+        const cells = cols.map((c) => (c ? cellHTML(r.v(c), r.f, r.f === "pp") : cellHTML(null)));
+        out.push('<tr class="' + cls + '"><td class="' + (r.ind ? "ind1" : "") + '">' + esc(r.l) + "</td>" + cells.map((x) => '<td class="' + x.cls + '">' + x.html + "</td>").join("") + "</tr>");
+        matrix.push([(r.ind ? "  " : "") + r.l, ...cells.map((x) => exportVal(x.text, r.f))]);
+        if (r.yoy) {
+          const ycells = cols.map((c) => {
+            if (!c || !c.p) return cellHTML(null);
+            const prev = r.pv ? r.pv(c) : r.v(c.p);
+            return cellHTML(growth(r.v(c), prev), "yoy", true);
+          });
+          out.push('<tr class="sub"><td>% yoy</td>' + ycells.map((x) => '<td class="' + x.cls + '">' + x.html + "</td>").join("") + "</tr>");
+          matrix.push(["    % yoy", ...ycells.map((x) => exportVal(x.text, "yoy"))]);
+        }
+      });
+    });
+    tbl.innerHTML = "<tbody>" + out.join("") + "</tbody>";
+    state.matrix = d ? matrix : null;
+    $("copy").disabled = !d;
+    $("csv").disabled = !d;
+  }
+
+  function exportVal(v, f) {
+    if (!isNum(v)) return "";
+    if (f === "usd") return +(v / 1e6).toFixed(3);
+    if (f === "sh") return +(v / 1e6).toFixed(3);
+    return +v.toFixed(4);
+  }
+
+  // ---------- header / valuation ----------
+  function renderHeader(prof) {
+    const d = state.data;
+    const strip = $("strip");
+    if (!d || !d.cols.length) { strip.innerHTML = ""; strip.hidden = true; return; }
+    strip.hidden = false;
+    const cols = d.cols;
+    const last = cols[cols.length - 1];
+    const ltmCols = d.annual ? [last] : cols.slice(-4);
+    const ltm = (fn) => { const vs = ltmCols.map(fn); return vs.every(isNum) ? vs.reduce((s, x) => s + x, 0) : null; };
+    const ltmLabel = d.annual ? last.label : "LTM";
+    const price = n(prof?.price), mcap = n(prof?.marketCap);
+    const ev = isNum(mcap) && isNum(debt(last)) && isNum(cashST(last)) ? mcap + debt(last) - cashST(last) : null;
+    const eps = ltm((c) => n(c.i?.epsDiluted));
+    const items = [
+      ["Price", isNum(price) ? (prof.currency || "") + " " + price.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : null],
+      ["Market cap", isNum(mcap) ? big(mcap) : null],
+      ["Enterprise value", isNum(ev) ? big(ev) : null],
+      ["P/E (" + ltmLabel + ")", fmtX(div(price, eps))],
+      ["EV / Sales", fmtX(div(ev, ltm(rev)))],
+      ["EV / EBITDA", fmtX(div(ev, ltm(ebitda)))],
+      ["FCF yield", (() => { const y = div(ltm(fcf), mcap); return isNum(y) ? FMT.pct(y) : null; })()],
+      ["Net debt / EBITDA", fmtX(div(sub(debt(last), cashST(last)), ltm(ebitda)))],
+    ];
+    strip.innerHTML = items.map(([k, v]) => "<div><span>" + k + "</span><b>" + (v ?? "–") + "</b></div>").join("");
+  }
+  const fmtX = (v) => (isNum(v) && v > 0 ? v.toFixed(1) + "x" : isNum(v) ? "n/m" : null);
+  const big = (v) => (Math.abs(v) >= 1e12 ? (v / 1e12).toFixed(2) + "T" : Math.abs(v) >= 1e9 ? (v / 1e9).toFixed(1) + "B" : (v / 1e6).toFixed(0) + "M");
+
+  function setNotice(html, withManage) {
+    const el = $("notice");
+    if (!html) { el.hidden = true; el.innerHTML = ""; return; }
+    el.hidden = false;
+    el.innerHTML = html + (withManage ? ' <button type="button" class="btn" id="manage">Open permissions</button>' : "");
+    if (withManage) $("manage").onclick = async () => {
+      try { const p = await window.claude.use("permissions"); if (p?.manage) await p.manage(); } catch (e) { setNotice("Open this page's Permissions menu and allow the FMP connector, then press Load."); }
+    };
+  }
+
+  function errorMessage(e, t) {
+    const code = e && e.code;
+    switch (code) {
+      case "server_not_connected": case "selection_required":
+        return ["This template reads numbers through the FMP (Financial Modeling Prep) connector. Add FMP in claude.ai Settings → Connectors, then press Load.", false];
+      case "needs_reauth":
+        return ["Your FMP connector needs to be reconnected. Reconnect it in claude.ai Settings → Connectors, then press Load.", false];
+      case "not_in_manifest": case "consent_required":
+        return ["FMP access is turned off for this page. Allow it, then press Load.", true];
+      case "blocked_by_policy": case "approval_required":
+        return ["Your organization's policy blocks the FMP connector here.", false];
+      case "server_unavailable": case "rate_limited":
+        return ["FMP didn't answer just now. Press Load to try again.", false];
+      case "tool_error":
+        return ["FMP couldn't return data for " + t + ": " + (e.message || "unknown error") + ". Check the ticker; non-US listings use a suffix such as 7203.T or SAP.DE.", false];
+      default:
+        return ["Couldn't load " + t + " (" + (e?.message || code || "unknown error") + "). Press Load to try again.", false];
+    }
+  }
+
+  async function call(mcp, tool, input, retried) {
+    try {
+      const r = await mcp.callTool(SERVER, tool, input, { cache: { staleTime: 300000, gcTime: 3600000 } });
+      let p = r.payload;
+      if (typeof p === "string") { try { p = JSON.parse(p); } catch (e) {} }
+      return p;
+    } catch (e) {
+      if (e && e.retryable && !retried) {
+        await new Promise((res) => setTimeout(res, Math.min(e.retryAfterMs || 0, 8000) + 500 + Math.random() * 1000));
+        return call(mcp, tool, input, true);
+      }
+      throw e;
+    }
+  }
+
+  async function load(ticker) {
+    const t = (ticker || "").trim().toUpperCase();
+    if (!t || state.busy) return;
+    state.ticker = t; $("ticker").value = t; store.set("tmpl.ticker", t);
+    const mcp = await mcpP;
+    if (!mcp) {
+      setNotice("This template pulls numbers live through the FMP connector, which this view can't reach. Open it in claude.ai with the FMP (Financial Modeling Prep) connector added.");
+      return;
+    }
+    state.busy = true; $("go").disabled = true; $("go").textContent = "Loading…";
+    setNotice("");
+    const annual = state.period === "annual";
+    const per = annual ? "annual" : "quarter";
+    const lim = annual ? 7 : 12;
+    $("coName").textContent = t; $("coMeta").textContent = "Loading " + (annual ? "annual" : "quarterly") + " financials…";
+    state.data = null; render(); $("strip").hidden = true;
+    const jobs = {
+      inc: call(mcp, "statements", { endpoint: "income-statement", symbol: t, period: per, limit: lim }),
+      bs: call(mcp, "statements", { endpoint: "balance-sheet-statement", symbol: t, period: per, limit: lim }),
+      cf: call(mcp, "statements", { endpoint: "cashflow-statement", symbol: t, period: per, limit: lim }),
+      prod: call(mcp, "statements", { endpoint: "revenue-product-segmentation", symbol: t, period: per, structure: "flat" }),
+      geo: call(mcp, "statements", { endpoint: "revenue-geographic-segments", symbol: t, period: per, structure: "flat" }),
+      prof: call(mcp, "company", { endpoint: "profile-symbol", symbol: t }),
+    };
+    const keys = Object.keys(jobs);
+    const settled = await Promise.allSettled(keys.map((k) => jobs[k]));
+    const raw = {}, errs = {};
+    settled.forEach((s, ix) => { if (s.status === "fulfilled") raw[keys[ix]] = s.value; else errs[keys[ix]] = s.reason; });
+    state.busy = false; $("go").disabled = false; $("go").textContent = "Load";
+
+    if (errs.inc) {
+      const [msg, manage] = errorMessage(errs.inc, t);
+      setNotice(msg, manage); $("coMeta").textContent = "No data loaded"; return;
+    }
+    if (!Array.isArray(raw.inc) || !raw.inc.length) {
+      setNotice("FMP has no financial statements for “" + t + "”. Check the ticker; non-US listings use a suffix such as 7203.T or SAP.DE.");
+      $("coMeta").textContent = "No data loaded"; return;
+    }
+    state.segErr = errs.prod || errs.geo ? "Segment data couldn't be loaded from FMP for this company." : null;
+    state.data = build(raw, state.period);
+    const prof = Array.isArray(raw.prof) ? raw.prof[0] : raw.prof;
+    const lastInc = raw.inc.slice().sort((a, b) => String(b.date).localeCompare(String(a.date)))[0];
+    const maxRev = Math.max(...state.data.cols.map((c) => Math.abs(rev(c) || 0)));
+    DP = maxRev < 2e9 ? 1 : 0;
+    const cur = lastInc.reportedCurrency || prof?.currency || "USD";
+    $("eyebrow").textContent = [prof?.symbol || t, prof?.exchange, prof?.sector, prof?.industry].filter(Boolean).join(" · ");
+    $("coName").textContent = prof?.companyName || t;
+    const fyEnd = lastInc.date ? new Date(lastInc.date + "T00:00:00").toLocaleDateString("en-US", { month: "long", day: "numeric" }) : "";
+    $("coMeta").textContent = (annual ? "Annual" : "Quarterly") + " · latest period ended " + (lastInc.date || "–") + (annual && fyEnd ? " (fiscal year ends " + fyEnd + ")" : "") + " · filed " + (lastInc.filingDate || "–");
+    $("units").textContent = "Figures in " + cur + " millions except per-share data, ratios and days." + (prof?.currency && prof.currency !== cur ? " Statements are reported in " + cur + "; the share price is in " + prof.currency + ", so valuation multiples mix currencies." : "");
+    render();
+    renderHeader(prof);
+    if (errs.prof) setNotice("Price and market cap couldn't be loaded, so valuation multiples are blank.");
+  }
+
+  // ---------- export ----------
+  function toTSV(m) { return m.map((r) => r.map((x) => String(x ?? "").replace(/\t/g, " ")).join("\t")).join("\n"); }
+  function toCSV(m) { return m.map((r) => r.map((x) => { const s = String(x ?? ""); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; }).join(",")).join("\n"); }
+  $("copy").addEventListener("click", () => {
+    if (!state.matrix) return;
+    const txt = toTSV([[state.ticker + " (" + state.period + ", millions)"], ...state.matrix]);
+    const btn = $("copy");
+    const done = (ok) => { btn.textContent = ok ? "Copied" : "Copy failed"; setTimeout(() => (btn.textContent = "Copy for Excel"), 1600); };
+    try { navigator.clipboard.writeText(txt).then(() => done(true), () => done(false)); } catch (e) { done(false); }
+  });
+  dlP.then((dl) => {
+    if (!dl) return;
+    const b = $("csv"); b.hidden = false;
+    b.addEventListener("click", async () => {
+      if (!state.matrix) return;
+      try { await dl.save({ filename: state.ticker + "_" + state.period + "_model.csv", data: toCSV([[state.ticker + " (" + state.period + ", millions)"], ...state.matrix]) }); } catch (e) {}
+    });
+  }).catch(() => {});
+
+  // ---------- wiring ----------
+  $("form").addEventListener("submit", (e) => { e.preventDefault(); load($("ticker").value); });
+  const setPeriod = (p) => {
+    if (state.period === p || state.busy) return;
+    state.period = p; store.set("tmpl.period", p);
+    $("pA").setAttribute("aria-pressed", String(p === "annual"));
+    $("pQ").setAttribute("aria-pressed", String(p === "quarter"));
+    if (state.ticker) load(state.ticker); else render();
+  };
+  $("pA").addEventListener("click", () => setPeriod("annual"));
+  $("pQ").addEventListener("click", () => setPeriod("quarter"));
+
+  const savedP = store.get("tmpl.period");
+  if (savedP === "quarter") { state.period = "quarter"; $("pA").setAttribute("aria-pressed", "false"); $("pQ").setAttribute("aria-pressed", "true"); }
+  const start = store.get("tmpl.ticker") || "MSFT";
+  $("ticker").value = start;
+  $("strip").hidden = true;
+  render();
+  load(start);
+})();
+</script>
