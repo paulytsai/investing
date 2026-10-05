@@ -260,6 +260,7 @@ function sumSeg(ds) {
 const estToI = (e) => ({ revenue: n(e.revenueAvg), operatingIncome: n(e.ebitAvg), netIncome: n(e.netIncomeAvg), epsDiluted: n(e.epsAvg), sellingGeneralAndAdministrativeExpenses: n(e.sgaExpenseAvg), _ebitda: n(e.ebitdaAvg), _nAnalysts: n(e.numAnalystsEps) ?? n(e.numAnalystsRevenue) });
 const FY_CTX = { A: 1, D: 365, type: "FY" }, Q_CTX = { A: 4, D: 91.25, type: "Q" }, H_CTX = { A: 2, D: 182.5, type: "H" };
 const MODEL_YEARS = 5;
+const CONS_YEARS = 3; // consensus shown (and used for default drivers) for the current year + 2
 
 function buildActuals(raw) {
   const incA = asc(raw.incA), bsA = byKey(raw.bsA), cfA = byKey(raw.cfA), prodA = byKey(raw.prodA), geoA = byKey(raw.geoA);
@@ -278,6 +279,7 @@ function buildActuals(raw) {
   (Array.isArray(raw.estA) ? raw.estA : []).forEach((e) => {
     const dd = (Date.parse(e.date) - baseA) / 864e5; if (!(dd > 180)) return;
     const fy = +lastA.fiscalYear + Math.round(dd / 365.25);
+    if (fy >= curFY + CONS_YEARS) return;
     consFy[fy] = { ...FY_CTX, kind: "C", fy, label: "FY" + fy, i: estToI(e), date: e.date };
   });
 
@@ -311,7 +313,7 @@ function buildActuals(raw) {
   // Consensus columns for the model years, chained for YoY
   const cons = [];
   let prevC = fyA[curFY - 1] || null;
-  for (let k = 0; k < MODEL_YEARS; k++) {
+  for (let k = 0; k < CONS_YEARS; k++) {
     const fy = curFY + k;
     const c = consFy[fy] ? { ...consFy[fy] } : { ...FY_CTX, kind: "C", fy, label: "FY" + fy };
     c.p = prevC; prevC = c; c.consCol = true; cons.push(c);
@@ -371,9 +373,11 @@ function runModel(m, inp, opts) {
   const up = inp.up || {};
   const lines = names.map((name) => ({ name, base: histLine(name, B), units: !!up[name] && name !== RECON, vals: {}, g: {}, unitsV: {}, asp: {} }));
   lines.forEach((L) => {
-    let prev = L.base, prevU = ov["u0:" + L.name + "|" + B.fy];
+    let prev = L.base, prevU = ov["u0:" + L.name + "|" + B.fy], prevDg = null;
     fys.forEach((fy) => {
-      const dg = L.name === RECON ? 0 : consG(fy) ?? lineCagr(L.name) ?? 0.04;
+      // consensus growth while it exists, then carry the last year's default forward
+      const dg = L.name === RECON ? 0 : consG(fy) ?? prevDg ?? lineCagr(L.name) ?? 0.04;
+      prevDg = dg;
       setD("g:" + L.name, fy, dg); setD("ug:" + L.name, fy, dg); setD("pg:" + L.name, fy, 0);
       let g;
       if (L.units) {
@@ -411,7 +415,7 @@ function runModel(m, inp, opts) {
     setD("gm", fy, gmB); setD("tax", fy, taxB); setD("sbc", fy, sbcB); setD("capex", fy, capexPct);
     setD("pay", fy, payB); setD("bb", fy, bbB); setD("acq", fy, 0); setD("dIss", fy, 0); setD("oth", fy, 0);
     setD("dso", fy, dso0); setD("dio", fy, dio0); setD("dpo", fy, dpo0); setD("dr", fy, drp0);
-    setD("incr", fy, consIncr(fy) ?? histIncr);
+    setD("incr", fy, consIncr(fy) ?? D["incr|" + (fy - 1)] ?? histIncr);
   });
 
   // ----- scalar settings -----
