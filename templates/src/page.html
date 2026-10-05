@@ -167,6 +167,7 @@ svg.scatter .pt { fill: var(--accent); stroke: var(--surface); stroke-width: 2; 
 svg.scatter .pt.last { fill: var(--est-ink); }
 svg.scatter .pt.out { fill: none; stroke: var(--neg); stroke-width: 1.5; }
 svg.scatter .ptlab { fill: var(--ink); font-weight: 600; }
+.multiples { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
 
 footer.foot { color: var(--muted); font-size: 12px; line-height: 1.5; display: grid; gap: 6px; }
 @media (max-width: 600px) {
@@ -318,6 +319,8 @@ footer.foot { color: var(--muted); font-size: 12px; line-height: 1.5; display: g
   const SECTIONS = () => [
     { title: "Income statement", rows: [
       { l: "Revenue", v: rev, f: "usd", yoy: true, key: true, g: { k: "rev", u: "mm" } },
+      { l: "consensus high", v: (c) => (c.kind === "C" ? nn(c.i?._revHi) : null), f: "usd", ind: 1, ratio: true },
+      { l: "consensus low", v: (c) => (c.kind === "C" ? nn(c.i?._revLo) : null), f: "usd", ind: 1, ratio: true },
       ...seasonRows(rev),
       { l: "Cost of revenue", v: (c) => nn(c.i?.costOfRevenue), f: "usd", ind: 1 },
       { l: "Gross profit", v: (c) => nn(c.i?.grossProfit), f: "usd", yoy: true },
@@ -342,6 +345,8 @@ footer.foot { color: var(--muted); font-size: 12px; line-height: 1.5; display: g
       { l: "Net margin", v: pctRev((c) => nn(c.i?.netIncome)), f: "pct", ratio: true },
       { l: "Diluted shares (mm)", v: (c) => nn(c.i?.weightedAverageShsOutDil), f: "sh", yoy: true, g: { k: "sh", u: "sh" } },
       { l: "Diluted EPS", v: (c) => nn(c.i?.epsDiluted), f: "eps", yoy: true, key: true, g: { k: "eps", u: "eps" } },
+      { l: "consensus high", v: (c) => (c.kind === "C" ? nn(c.i?._epsHi) : null), f: "eps", ind: 1, ratio: true },
+      { l: "consensus low", v: (c) => (c.kind === "C" ? nn(c.i?._epsLo) : null), f: "eps", ind: 1, ratio: true },
       { l: "Analysts in EPS consensus", v: (c) => (c.kind === "C" ? nn(c.i?._nAnalysts) : null), f: "int", ratio: true },
     ]},
     { title: "Our forecast vs consensus", rows: [
@@ -468,14 +473,20 @@ footer.foot { color: var(--muted); font-size: 12px; line-height: 1.5; display: g
     const costRows = [];
     const prof = M.reg.cost.profile;
     const profTxt = { high: "high fixed costs", mid: "mixed fixed and variable costs", low: "mostly variable costs", unclear: "a cost structure history can't pin down" }[prof];
-    const mName = { incr: "incremental margin", regress: "regression slope", fixvar: "fixed + variable costs", segment: "segment EBIT" };
-    costRows.push({ note: (M.methodAuto ? "Chosen automatically: " : "You chose " + mName[M.method] + ". Suggested: ") + (M.methodAuto ? mName[M.method] : mName[M.autoMethod]) + ", because the regression shows " + profTxt + (isNum(M.reg.cost.dol) && M.reg.cost.valid ? " (operating leverage " + M.reg.cost.dol.toFixed(1) + "×)" : "") + ". Details are in the panel below the table." + (M.methodAuto ? "" : ' <button type="button" class="mini" data-act="method" data-v="auto">Let the cost structure decide</button>'), html: true });
+    const mName = { incr: "incremental margin", regress: "Mars & Co scale slopes", fixvar: "fixed + variable costs", segment: "segment EBIT" };
+    const why = M.autoMethod === "regress" ? "cost lines track revenue along clear scale curves (cost-weighted R² " + M.slopeR2.toFixed(2) + ")" : "scale curves don't fit well (cost-weighted R² " + M.slopeR2.toFixed(2) + ") and the fixed/variable regression shows " + profTxt + (isNum(M.reg.cost.dol) && M.reg.cost.valid ? " (operating leverage " + M.reg.cost.dol.toFixed(1) + "×)" : "");
+    costRows.push({ note: (M.methodAuto ? "Chosen automatically: " : "You chose " + mName[M.method] + ". Suggested: ") + (M.methodAuto ? mName[M.method] : mName[M.autoMethod]) + ", because " + why + ". Details are in the panel below the table." + (M.methodAuto ? "" : ' <button type="button" class="mini" data-act="method" data-v="auto">Let the cost structure decide</button>'), html: true });
     if (M.method === "incr") {
       costRows.push({ l: "Incremental EBIT margin (ΔEBIT ÷ Δrevenue)", hv: (c) => div(sub(ebit(c), ebit(c.p || {})), sub(rev(c), rev(c.p || {}))), inp: { k: "incr", u: "pct" }, f: "pct", ratio: true });
     } else if (M.method === "regress") {
-      costRows.push({ note: "Defaults are the regression slope from the panel below the table (" + M.regCfg.n + " years" + (M.regCfg.robust ? ", outlier years excluded" : "") + ")." });
-      costRows.push({ l: "Incremental EBIT margin (regression slope)", hv: (c) => div(sub(ebit(c), ebit(c.p || {})), sub(rev(c), rev(c.p || {}))), inp: { k: "rb", u: "pct" }, f: "pct", ratio: true });
-      if (M.regCfg.icpt) costRows.push({ l: "Cost drift with flat sales (intercept)", inp: { k: "ra", u: "mm" }, f: "usd", ind: 1 });
+      const sl = M.reg.slopes;
+      costRows.push({ note: "Mars & Co scale slopes: each cost line's cost per dollar of revenue is multiplied by its slope every time revenue doubles. 90% means 10% lower unit cost per doubling (scale economies); 100% means the line stays a constant share of revenue. Fitted on FY" + sl.years[0] + "–FY" + sl.years[sl.years.length - 1] + (sl.usedBreak ? " (after the FY" + sl.brk.fy + " break in the revenue trend)" : "") + ". Lines without a reliable fit (R² below 0.3) default to 100%. Cost of revenue follows its curve through the gross margin row." });
+      M.costLines.forEach((L) => {
+        const lineCost = (fy) => (L.key === "cogs" ? M.out[fy].ctx.i.costOfRevenue : M.slopeCost[L.key][fy]);
+        costRows.push({ l: L.label, hv: L.get, mv: lineCost, f: "usd" });
+        costRows.push({ l: "slope per doubling of revenue", ind: 1, inp: { k: "sl:" + L.key, u: "pct" }, f: "pct", ratio: true });
+        costRows.push({ l: "% of revenue", ind: 1, hv: (c) => div(L.get(c), rev(c)), mv: (fy) => div(lineCost(fy), M.out[fy].rev), f: "pct", ratio: true });
+      });
     } else if (M.method === "fixvar") {
       const cr = M.reg.cost;
       costRows.push({ note: cr.valid ? "Defaults come from the cost-structure regression below: variable costs " + (cr.fit.v * 100).toFixed(0) + "% of revenue. Fixed cash costs grew " + (cr.fixedGrowth * 100).toFixed(1) + "% a year historically" + (cr.fixedGrowth > FIXED_GROWTH_CAP ? "; the default is capped at " + (FIXED_GROWTH_CAP * 100).toFixed(0) + "% (about inflation), so type the historical rate in if the spending keeps growing" : "") + ". D&A is a fixed cost, taken from the capex schedule." : "The cost-structure regression couldn't separate fixed from variable costs for this company, so defaults are rough. Set the variable-cost ratio by judgment." });
@@ -512,7 +523,7 @@ footer.foot { color: var(--muted); font-size: 12px; line-height: 1.5; display: g
 
     return [
       { title: "Forecast drivers · revenue build", ctl: " " + bb("segment", "By segment", M.basis === "segment", !hasProd) + bb("geo", "By region", M.basis === "geo", !hasGeo) + bb("total", "Total", M.basis === "total", false), rows: revRows, driver: true },
-      { title: "Forecast drivers · operating profit", ctl: " " + mb("incr", "Incremental margin") + mb("regress", "Regression slope") + mb("fixvar", "Fixed + variable costs") + mb("segment", "Segment EBIT"), rows: costRows, driver: true },
+      { title: "Forecast drivers · operating profit", ctl: " " + mb("incr", "Incremental margin") + mb("regress", "Scale slopes (Mars & Co)") + mb("fixvar", "Fixed + variable costs") + mb("segment", "Segment EBIT"), rows: costRows, driver: true },
     ];
   }
   const dol = (e1, e0, r1, r0) => { const ge = growth(e1, e0), gr = growth(r1, r0); return isNum(ge) && isNum(gr) && Math.abs(gr) > 0.001 ? ge / gr : null; };
@@ -698,25 +709,64 @@ footer.foot { color: var(--muted); font-size: 12px; line-height: 1.5; display: g
       lev += "<tr><td>Incremental EBIT margin</td>" + rowsG.map((x) => "<td>" + (x.inc == null ? "n/a" : pct(x.inc)) + "</td>").join("") + "</tr>";
       lev += "<tr><td>EBIT growth</td>" + rowsG.map((x) => "<td>" + (isNum(x.eg) ? FMT.yoy(x.eg) : "–") + "</td>").join("") + "</tr></tbody></table></div>";
     }
-    const verdict = {
-      high: "<b>High fixed costs.</b> About " + pct(cr.fixedShare, 0) + " of costs (with D&amp;A) don't move with sales, so EBIT moves roughly " + (isNum(cr.dol) ? cr.dol.toFixed(1) : "–") + "× as much as revenue. The incremental margin isn't a constant here: it rises with growth and collapses when sales stall (see the table). Forecast with <b>fixed + variable costs</b>.",
+    const slopeLead = rg.slopes && M.slopesUsable ? "<b>Scale curves fit well</b> (cost-weighted R² " + M.slopeR2.toFixed(2) + "), so the forecast runs each cost line off its own slope. " : "";
+    const verdict0 = {
+      high: "<b>High fixed costs.</b> About " + pct(cr.fixedShare, 0) + " of costs (with D&amp;A) don't move with sales, so EBIT moves roughly " + (isNum(cr.dol) ? cr.dol.toFixed(1) : "–") + "× as much as revenue. The incremental margin isn't a constant here: it rises with growth and collapses when sales stall (see the table).",
       mid: "<b>Mixed cost base.</b> About " + pct(cr.fixedShare, 0) + " of costs are fixed and operating leverage is " + (isNum(cr.dol) ? cr.dol.toFixed(1) : "–") + "×. Both methods are reasonable; compare them.",
-      low: "<b>Mostly variable costs.</b> Only about " + pct(cr.fixedShare, 0) + " of costs are fixed, so each extra dollar of sales earns a fairly steady margin. The <b>regression slope</b> is a sound forecast driver.",
+      low: "<b>Mostly variable costs.</b> Only about " + pct(cr.fixedShare, 0) + " of costs are fixed, so each extra dollar of sales earns a fairly steady margin.",
       unclear: "<b>History can't separate fixed from variable costs</b>" + (cf ? " (variable ratio comes out at " + pct(cf.v, 0) + " with negative fixed costs)" : "") + ". That usually means the business changed underneath the numbers: asset sales or refranchising, a big mix shift, or one-off charges inside reported EBIT. Try a window that starts after the change, use segment EBIT from SEC releases, or set the variable-cost ratio by judgment.",
     }[cr.profile];
+    const mNames = { incr: "incremental margin", regress: "Mars &amp; Co scale slopes", fixvar: "fixed + variable costs" };
+    const verdict = slopeLead + verdict0 + " Suggested method: <b>" + mNames[M.autoMethod] + "</b>" + (M.method !== M.autoMethod ? " (you are using " + (mNames[M.method] || "segment EBIT") + ")" : "") + ".";
     const dropTxt = (d) => (d && d.length ? "Excluded as outliers: FY" + d.join(", FY") : "No years excluded");
-    el.innerHTML = '<header><h2>How operating profit responds to revenue</h2><span>' + win + tog("robust", "Exclude outlier years") + tog("icpt", "Cost drift (intercept)") + "</span></header>" +
+    const sl = rg.slopes;
+    const readSlope = (L) => !L.fit ? "no data" : !L.reliable ? "no reliable scale effect" : L.fit.slope < 0.97 ? "scale economies" : L.fit.slope > 1.03 ? "growing faster than revenue" : "moves with revenue";
+    const slTable = '<div class="tablewrap"><table class="sens"><tbody><tr class="sec"><td>Cost line</td><td>% of revenue</td><td>Slope per doubling</td><td>90% range</td><td>R²</td><td>Forecast default</td><td>Reading</td></tr>' +
+      sl.lines.filter((L) => isNum(L.base) && L.base !== 0).map((L) => "<tr><td>" + esc(L.label) + "</td><td>" + pct(L.share) + "</td><td><b>" + (L.fit ? pct(L.fit.slope) : "–") + "</b></td><td>" + (L.fit && L.fit.slopeLo ? pct(L.fit.slopeLo, 0) + "–" + pct(L.fit.slopeHi, 0) : "–") + "</td><td>" + (L.fit && isNum(L.fit.r2) ? L.fit.r2.toFixed(2) : "–") + "</td><td>" + pct(L.dflt) + "</td><td>" + readSlope(L) + (L.dropped.length ? " · excl. FY" + L.dropped.join(", FY") : "") + "</td></tr>").join("") +
+      "</tbody></table></div>";
+    const brkTxt = sl.brk ? "Revenue trend breaks at FY" + sl.brk.fy + ": " + pct(sl.brk.before) + " a year before, " + pct(sl.brk.after) + " after (log-linear fits). " + (sl.usedBreak ? "Slopes use FY" + sl.brk.fy + " onward." : cfg.afterBreak ? "Too few years after the break to fit on, so the whole window is used." : "The whole window is used; turn on “Fit after break” to use only the recent regime.") + " Look for the business event behind it (disposals, refranchising, acquisitions, a new channel)." : "No break in the revenue trend over FY" + sl.years[0] + "–FY" + sl.years[sl.years.length - 1] + (isNum(sl.cagr) ? " (" + pct(sl.cagr) + " a year)" : "") + ".";
+    el.innerHTML = '<header><h2>How costs and operating profit respond to revenue</h2><span>' + win + tog("robust", "Exclude outlier years") + tog("afterBreak", "Fit after break") + tog("icpt", "Cost drift (intercept)") + "</span></header>" +
       '<p class="verdict">' + verdict + "</p>" +
+      "<h3>Scale slopes (Mars &amp; Co) · ln(cost ÷ revenue) on ln(revenue), slope = 2<sup>b</sup></h3>" +
+      "<p>" + brkTxt + " Revenue stands in for volume, so price and mix changes blur the curves: treat them as directional. " + use("regress", "Use scale slopes") + "</p>" + slTable +
+      '<div class="multiples">' + slopeCharts(sl) + "</div>" +
       '<div class="grid3">' +
       '<div class="kv"><h3 style="grid-column:1/-1">Incremental margin · ΔEBIT on Δrevenue</h3>' +
       (f ? kv("Slope = incremental EBIT margin", pct(f.beta), "big") + kv("90% range", pct(f.lo) + " to " + pct(f.hi)) + kv("R²", isNum(f.r2) ? f.r2.toFixed(2) : "–", f.r2 < 0.5 ? "neg" : "") + kv("t-statistic", isNum(f.t) ? f.t.toFixed(1) : "–") + (cfg.icpt ? kv("Intercept: cost drift per year", FMT.usd(f.alpha) ?? "–") : "") + kv("Years used", f.n - (rg.dropped?.length || 0) + " of " + f.n) + '<span class="src">' + dropTxt(rg.dropped) + "</span>" : kv("Not enough history", "–")) +
       (rg.elast ? kv("Operating leverage, log-change fit", rg.elast.beta.toFixed(2) + "×") + '<span class="src">1% more revenue has gone with ' + rg.elast.beta.toFixed(2) + "% more EBIT (R² " + (rg.elast.r2 ?? 0).toFixed(2) + ")</span>" : "") +
-      '<span></span><b>' + use("regress", "Use the slope") + "</b></div>" +
+      "</div>" +
       '<div class="kv"><h3 style="grid-column:1/-1">Cost structure · fixed vs variable</h3>' +
       (cf ? kv("Variable costs, % of revenue", pct(cf.v), "big") + kv("90% range", pct(cf.vLo) + " to " + pct(cf.vHi)) + kv("Contribution margin", pct(1 - cf.v)) + kv("Fixed cash costs, FY" + B.fy, cr.valid ? FMT.usd(cr.fixedB) : "n/m") + kv("Fixed-cost growth per year", cr.valid ? pct(cr.fixedGrowth) : "n/m") + kv("Fixed share of costs (incl. D&amp;A)", cr.valid ? pct(cr.fixedShare, 0) : "n/m") + kv("Operating leverage (contribution ÷ EBIT)", cr.valid && isNum(cr.dol) ? cr.dol.toFixed(2) + "×" : "n/m") + kv("R²", isNum(cf.r2) ? cf.r2.toFixed(3) : "–") + '<span class="src">Cash costs = revenue − EBIT − D&amp;A, regressed on revenue and a time trend. ' + dropTxt(cr.dropped) + "</span>" : kv("Not enough history", "–")) +
       '<span></span><b>' + use("fixvar", "Use fixed + variable") + "</b></div>" +
       '<div style="min-width:0"><h3>ΔEBIT vs Δrevenue by year</h3>' + scatter(rg) + "</div>" +
       "</div>" + (lev ? "<h3>Incremental margin implied by the cost structure, FY" + (B.fy + 1) + "</h3>" + lev : "");
+  }
+  function slopeCharts(sl) {
+    const ls = sl.lines.filter((L) => L.fit && L.pts.length >= 4 && isNum(L.base) && L.base > 0);
+    if (!ls.length) return "";
+    const used = new Set(sl.years);
+    return ls.map((L) => {
+      const W = 300, H = 190, m = { l: 46, r: 10, t: 22, b: 30 };
+      const pts = L.pts.map((p) => ({ fy: p.fy, x: Math.log(p.drv), y: Math.log(p.unit), drv: p.drv, unit: p.unit }));
+      const xs = pts.map((p) => p.x), ys = pts.map((p) => p.y);
+      let x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
+      const px = (x1 - x0) * 0.08 || 0.1, py = (y1 - y0) * 0.15 || 0.05; x0 -= px; x1 += px; y0 -= py; y1 += py;
+      const X = (v) => m.l + ((v - x0) / (x1 - x0)) * (W - m.l - m.r), Y = (v) => H - m.b - ((v - y0) / (y1 - y0)) * (H - m.t - m.b);
+      let g = "";
+      [y0 + py, (y0 + y1) / 2, y1 - py].forEach((v) => { g += '<line x1="' + m.l + '" x2="' + (W - m.r) + '" y1="' + Y(v) + '" y2="' + Y(v) + '" class="grid"/><text x="' + (m.l - 5) + '" y="' + (Y(v) + 4) + '" text-anchor="end">' + (Math.exp(v) * 100).toFixed(1) + "%</text>"; });
+      [x0 + px, x1 - px].forEach((v) => { const b = Math.exp(v) / 1e9; g += '<text x="' + X(v) + '" y="' + (H - m.b + 14) + '" text-anchor="middle">' + (b >= 10 ? b.toFixed(0) : b.toFixed(1)) + "B</text>"; });
+      g += '<text x="' + (W - m.r) + '" y="' + (H - 4) + '" text-anchor="end">Revenue (log)</text>';
+      const f = L.fit;
+      g += '<line x1="' + X(x0) + '" y1="' + Y(f.a + f.b * x0) + '" x2="' + X(x1) + '" y2="' + Y(f.a + f.b * x1) + '" class="fitline"/>';
+      const drop = new Set(L.dropped);
+      pts.forEach((p, i) => {
+        const out = !used.has(p.fy) || drop.has(p.fy);
+        const tip = "FY" + p.fy + ": revenue " + (p.drv / 1e9).toFixed(1) + "B, " + L.label + " " + (p.unit * 100).toFixed(1) + "% of revenue" + (out ? " (not in fit)" : "");
+        g += '<circle cx="' + X(p.x) + '" cy="' + Y(p.y) + '" r="' + (i === pts.length - 1 ? 5.5 : 4) + '" class="' + (out ? "pt out" : i === pts.length - 1 ? "pt last" : "pt") + '"><title>' + esc(tip) + "</title></circle>";
+      });
+      g += '<text x="' + m.l + '" y="13" class="ptlab">' + esc(L.label) + " · slope " + (f.slope * 100).toFixed(0) + "% · R² " + (f.r2 ?? 0).toFixed(2) + "</text>";
+      return '<svg class="scatter" viewBox="0 0 ' + W + " " + H + '" role="img" aria-label="' + esc(L.label) + ' as a share of revenue against revenue, log scales, with fitted cost curve">' + g + "</svg>";
+    }).join("");
   }
   function scatter(rg) {
     const pts = rg.pts; if (!pts.length) return '<p>Not enough history.</p>';
@@ -1159,7 +1209,7 @@ Rules:
     if (act === "secfill") { secFill(); return; }
     if (act === "drill") { state.drill = !state.drill; store.set("tmpl.drill", state.drill ? "1" : "0"); render(); return; }
     if (act === "regn") state.inp.reg = { ...(state.inp.reg || {}), n: +v };
-    else if (act === "regt") { const r = { n: 10, icpt: false, robust: true, ...(state.inp.reg || {}) }; r[v] = !r[v]; state.inp.reg = r; }
+    else if (act === "regt") { const r = { n: 10, icpt: false, robust: true, afterBreak: true, ...(state.inp.reg || {}) }; r[v] = !r[v]; state.inp.reg = r; }
     else if (act === "basis") state.inp.basis = v;
     else if (act === "method") state.inp.costMethod = v === "auto" ? null : v;
     else if (act === "units") state.inp.up[v] = !state.inp.up[v];

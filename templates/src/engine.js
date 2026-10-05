@@ -28,7 +28,7 @@ const defRev = (c) => (c.b ? (n(c.b.deferredRevenue) ?? 0) + (n(c.b.deferredReve
 const yy = (fy) => String(fy).slice(-2);
 const asc = (a) => (Array.isArray(a) ? a : []).filter((r) => r && r.fiscalYear != null && r.date).sort((x, y) => String(x.date).localeCompare(String(y.date)));
 const byKey = (a) => { const m = {}; (Array.isArray(a) ? a : []).forEach((r) => { if (r && r.fiscalYear != null) m[(r.period || "FY") + "|" + r.fiscalYear] = r; }); return m; };
-const META = new Set(["date", "symbol", "reportedCurrency", "cik", "filingDate", "acceptedDate", "fiscalYear", "period", "_nAnalysts"]);
+const META = new Set(["_revLo", "_revHi", "_epsLo", "_epsHi", "date", "symbol", "reportedCurrency", "cik", "filingDate", "acceptedDate", "fiscalYear", "period", "_nAnalysts"]);
 const AVG = new Set(["weightedAverageShsOut", "weightedAverageShsOutDil"]);
 function sumRecs(recs) {
   if (!recs.length || recs.some((r) => !r)) return undefined;
@@ -43,7 +43,7 @@ function sumSeg(ds) {
   Object.keys(ds[0]).forEach((k) => { const vs = ds.map((d) => d[k]); if (vs.every(isNum)) out[k] = vs.reduce((a, b) => a + b, 0); });
   return out;
 }
-const estToI = (e) => ({ revenue: n(e.revenueAvg), operatingIncome: n(e.ebitAvg), netIncome: n(e.netIncomeAvg), epsDiluted: n(e.epsAvg), sellingGeneralAndAdministrativeExpenses: n(e.sgaExpenseAvg), _ebitda: n(e.ebitdaAvg), _nAnalysts: n(e.numAnalystsEps) ?? n(e.numAnalystsRevenue) });
+const estToI = (e) => ({ _revLo: n(e.revenueLow), _revHi: n(e.revenueHigh), _epsLo: n(e.epsLow), _epsHi: n(e.epsHigh), revenue: n(e.revenueAvg), operatingIncome: n(e.ebitAvg), netIncome: n(e.netIncomeAvg), epsDiluted: n(e.epsAvg), sellingGeneralAndAdministrativeExpenses: n(e.sgaExpenseAvg), _ebitda: n(e.ebitdaAvg), _nAnalysts: n(e.numAnalystsEps) ?? n(e.numAnalystsRevenue) });
 const FY_CTX = { A: 1, D: 365, type: "FY" }, Q_CTX = { A: 4, D: 91.25, type: "Q" }, H_CTX = { A: 2, D: 182.5, type: "H" };
 const MODEL_YEARS = 5;
 const CONS_YEARS = 3;
@@ -260,6 +260,79 @@ function costFit(pts) {
   return { n: k, v, b0: bta[0], b1: bta[1], seV: se(2), vLo: tc && se(2) != null ? v - tc * se(2) : null, vHi: tc && se(2) != null ? v + tc * se(2) : null, drift, seDrift: se(1) != null ? se(1) * S : null, r2: sst > 0 ? 1 - ssr / sst : null, df };
 }
 
+// ---------- Mars & Co scale slopes ----------
+// A cost line's slope is the multiplier on its unit cost each time the volume driver doubles:
+//   ln(unit cost) = a + b ln(driver),  slope = 2^b,  cost(x) = cost(x0) * (x/x0)^log2(slope)
+// With public data, revenue stands in for volume, so unit cost = cost / revenue. Each P&L cost line
+// (cost of revenue, R&D, SG&A, other operating costs) gets its own slope. A slope below 100% means
+// scale economies: the line shrinks as a share of revenue as the company grows.
+// Trends are log-linear least squares; a series with an inflection is fitted on the period after the
+// break (split_trend), since a change in perimeter (disposals, refranchising) breaks the curve.
+function logTrendCagr(vals) {
+  if (vals.length < 2 || vals.some((v) => !(v > 0))) return null;
+  const n = vals.length, xb = (n - 1) / 2, ys = vals.map(Math.log), yb = ys.reduce((a, b) => a + b, 0) / n;
+  let sxy = 0, sxx = 0; ys.forEach((y, x) => { sxy += (x - xb) * (y - yb); sxx += (x - xb) ** 2; });
+  return Math.exp(sxy / sxx) - 1;
+}
+function logSse(vals) {
+  const n = vals.length, xb = (n - 1) / 2, ys = vals.map(Math.log), yb = ys.reduce((a, b) => a + b, 0) / n;
+  let sxy = 0, sxx = 0; ys.forEach((y, x) => { sxy += (x - xb) * (y - yb); sxx += (x - xb) ** 2; });
+  const b = sxy / sxx, a = yb - b * xb;
+  return ys.reduce((s, y, x) => s + (y - (a + b * x)) ** 2, 0);
+}
+function splitTrend(vals, minSeg = 4) {
+  if (vals.some((v) => !(v > 0)) || vals.length < 2 * minSeg - 1) return null;
+  let best = null;
+  for (let b = minSeg - 1; b <= vals.length - minSeg; b++) {
+    const sse = logSse(vals.slice(0, b + 1)) + logSse(vals.slice(b));
+    if (!best || sse < best.sse) best = { sse, b };
+  }
+  const whole = logSse(vals);
+  return { breakIndex: best.b, before: logTrendCagr(vals.slice(0, best.b + 1)), after: logTrendCagr(vals.slice(best.b)), sseRatio: whole > 0 ? best.sse / whole : 1 };
+}
+const COST_LINES = [
+  { key: "cogs", label: "Cost of revenue", get: (c) => n(c.i?.costOfRevenue) },
+  { key: "rd", label: "R&D", get: (c) => n(c.i?.researchAndDevelopmentExpenses) },
+  { key: "sga", label: "SG&A", get: (c) => n(c.i?.sellingGeneralAndAdministrativeExpenses) },
+  { key: "oth", label: "Other operating costs", get: (c) => { const op = n(c.i?.operatingExpenses); if (!isNum(op)) return null; return op - (n(c.i?.researchAndDevelopmentExpenses) ?? 0) - (n(c.i?.sellingGeneralAndAdministrativeExpenses) ?? 0); } },
+];
+function fitLogLog(pts) {
+  const k = pts.length; if (k < 4) return null;
+  const xs = pts.map((p) => Math.log(p.drv)), ys = pts.map((p) => Math.log(p.unit));
+  const xb = xs.reduce((a, b) => a + b, 0) / k, yb = ys.reduce((a, b) => a + b, 0) / k;
+  let sxx = 0, sxy = 0; xs.forEach((x, i) => { sxx += (x - xb) ** 2; sxy += (x - xb) * (ys[i] - yb); });
+  if (!(sxx > 0)) return null;
+  const b = sxy / sxx, a = yb - b * xb;
+  const res = ys.map((y, i) => y - a - b * xs[i]);
+  const ssr = res.reduce((s, e) => s + e * e, 0), sst = ys.reduce((s, y) => s + (y - yb) ** 2, 0);
+  const se = k > 2 ? Math.sqrt(ssr / (k - 2) / sxx) : null, tc = tcrit(k - 2);
+  return { n: k, a, b, slope: Math.pow(2, b), r2: sst > 0 ? 1 - ssr / sst : null, se, slopeLo: se && tc ? Math.pow(2, b - tc * se) : null, slopeHi: se && tc ? Math.pow(2, b + tc * se) : null };
+}
+function scaleSlopes(m, nYears, robust, afterBreak) {
+  const last = m.curFY - 1;
+  let years = [];
+  for (let fy = last - nYears + 1; fy <= last; fy++) if (m.fyA[fy] && rev(m.fyA[fy]) > 0) years.push(fy);
+  const revs = years.map((fy) => rev(m.fyA[fy]));
+  const split = splitTrend(revs);
+  // a break counts when two log-linear trends fit clearly better than one and the growth rates differ
+  const brk = split && split.sseRatio < 0.5 && Math.abs(split.after - split.before) > 0.04 ? { fy: years[split.breakIndex], before: split.before, after: split.after } : null;
+  const afterYears = brk ? years.filter((fy) => fy >= brk.fy) : years;
+  const usedBreak = !!(afterBreak && brk && afterYears.length >= 6);
+  if (usedBreak) years = afterYears;
+  const B = m.fyA[last];
+  const lines = COST_LINES.map((L) => {
+    const base = B ? L.get(B) : null;
+    const all = years.map((fy) => { const c = m.fyA[fy], v = L.get(c), r = rev(c); return v > 0 && r > 0 ? { fy, drv: r, unit: v / r, cost: v } : null; }).filter(Boolean);
+    let fit = fitLogLog(all), dropped = [];
+    if (robust && fit) {
+      const t = trimmed(all, fitLogLog, (f, p) => Math.log(p.unit) - f.a - f.b * Math.log(p.drv));
+      fit = t.fit; dropped = t.dropped.map((p) => p.fy);
+    }
+    return { ...L, base, share: div(base, rev(B || {})), fit, pts: all, dropped, usable: !!fit && base > 0 && Math.abs(base) > 0.005 * (rev(B) || 0) };
+  });
+  return { lines, years, brk, usedBreak, cagr: logTrendCagr(revs) };
+}
+
 // ---------- driver model: P&L -> cash flow -> balance sheet ----------
 const RECON = "Other / reconciling items";
 
@@ -365,19 +438,43 @@ function runModel(m, inp, opts) {
   const dflt = { life: clamp(Math.round(1 / rateDflt), 3, 40), rem: rateDflt, kd: isNum(debt(B)) && debt(B) > 0 ? clamp(intExpB / debt(B), 0, 0.15) : 0.05, ky: isNum(cashST(B)) && cashST(B) > 0 ? clamp(intIncB / cashST(B), 0, 0.08) : 0.03, px: isNum(opts?.price) && opts.price > 0 ? opts.price : null };
 
   // ----- cost method -----
-  const regCfg = { n: 10, icpt: false, robust: true, ...(inp.reg || {}) };
+  const regCfg = { n: 10, icpt: false, robust: true, afterBreak: true, ...(inp.reg || {}) };
   const reg = regressIncr(m, regCfg.n, regCfg.icpt, regCfg.robust);
+  // Mars & Co slopes: each cost line follows its own scale curve against revenue
+  const sl = scaleSlopes(m, regCfg.n, regCfg.robust, regCfg.afterBreak);
+  reg.slopes = sl;
+  const slopeOk = (L) => L.usable && L.fit && L.fit.r2 >= 0.3;
+  sl.lines.forEach((L) => { L.dflt = slopeOk(L) ? clamp(L.fit.slope, 0.6, 1.2) : 1; L.reliable = slopeOk(L); });
+  const costLines = sl.lines.filter((L) => isNum(L.base) && L.base !== 0);
+  const slopeR2 = (() => { const ls = costLines.filter((L) => L.fit && L.base > 0); const w = ls.reduce((a, L) => a + L.base, 0); return w > 0 ? ls.reduce((a, L) => a + L.base * Math.max(L.fit.r2 ?? 0, 0), 0) / w : 0; })();
+  const reconB = revB - costLines.reduce((a, L) => a + L.base, 0) - ebitB; // items in neither cost lines nor EBIT
+  const hasCogsLine = costLines.some((L) => L.key === "cogs");
+  fys.forEach((fy) => costLines.forEach((L) => setD("sl:" + L.key, fy, L.dflt)));
+  const slopeCost = {}; // line -> fy -> cost
+  costLines.forEach((L) => {
+    slopeCost[L.key] = {};
+    let pc = L.base, pr = revB;
+    fys.forEach((fy) => {
+      const r = R[fy], s = I("sl:" + L.key, fy);
+      const unit = (pc / pr) * Math.pow(r / pr, Math.log2(s > 0 ? s : 1));
+      slopeCost[L.key][fy] = unit * r; pc = unit * r; pr = r;
+    });
+  });
   const cost = costRegress(m, regCfg.n, regCfg.robust);
   reg.cost = cost;
-  fys.forEach((fy) => { setD("rb", fy, reg.fit ? reg.fit.beta : histIncr); setD("ra", fy, reg.fit && regCfg.icpt ? reg.fit.alpha : 0); });
+
   const histIncrEbitda = (() => { const h = hist3(B.fy - 3); const r = h ? div(sub(sum(ebitB, daB), ebitda(h)), sub(revB, rev(h))) : null; return isNum(r) ? r : null; })();
   const cashCostB = revB - ebitB - daB;
   // fixed + variable defaults come from the cost-structure regression when it gives a sensible split
   const costOk = cost.valid && cost.fit && cost.fit.v >= 0.05 && cost.fit.v <= 0.98;
   // Method follows the cost structure unless the user picked one: high fixed costs -> fixed + variable
   // (incremental margins swing with growth); mostly variable -> regression slope; unclear -> consensus-led
-  const autoMethod = !costOk ? "incr" : cost.profile === "low" ? (reg.fit && reg.fit.r2 > 0.5 ? "regress" : "incr") : "fixvar";
-  const method = ["incr", "regress", "fixvar", "segment"].includes(inp.costMethod) ? inp.costMethod : autoMethod;
+  const slopesUsable = hasCogsLine && slopeR2 >= 0.5;
+  const autoMethod = slopesUsable ? "regress" : costOk && cost.profile !== "low" ? "fixvar" : "incr";
+  let method = ["incr", "regress", "fixvar", "segment"].includes(inp.costMethod) ? inp.costMethod : autoMethod;
+  if (method === "regress" && !hasCogsLine) method = "incr";
+  // under the slope method the gross margin default follows the cost-of-revenue curve
+  if (method === "regress") fys.forEach((fy) => { const c = slopeCost.cogs?.[fy]; if (isNum(c)) setD("gm", fy, 1 - c / R[fy]); });
   const vEst = costOk ? cost.fit.v : null;
   fys.forEach((fy) => {
     setD("var", fy, costOk ? cost.fit.v : clamp(1 - (histIncrEbitda ?? 0.35), 0.2, 0.95));
@@ -421,7 +518,11 @@ function runModel(m, inp, opts) {
 
     let ebitV, fixedV = null, varV = null, segE = null, uaV = null;
     if (method === "incr") ebitV = prev.ebit + I("incr", fy) * dRev;
-    else if (method === "regress") ebitV = prev.ebit + I("ra", fy) + I("rb", fy) * dRev;
+    else if (method === "regress") {
+      // revenue less cost of revenue (from the gross margin, which defaults to its slope curve) and the other lines' curves
+      const opLines = costLines.filter((L) => L.key !== "cogs").reduce((a, L) => a + slopeCost[L.key][fy], 0);
+      ebitV = r - cogs - opLines - reconB * (r / revB);
+    }
     else if (method === "fixvar") {
       fixedV = prev.fixed * (1 + I("fg", fy)); varV = r * I("var", fy);
       ebitV = r - varV - fixedV - daV;
@@ -471,7 +572,7 @@ function runModel(m, inp, opts) {
   // chain YoY: first model year compares with the last reported year
   let pc = B;
   fys.forEach((fy) => { out[fy].ctx.p = pc; pc = out[fy].ctx; });
-  return { fys, B, basis, field, lines, R, out, I, D, ov, method, autoMethod, methodAuto: !["incr", "regress", "fixvar", "segment"].includes(inp.costMethod), vEst, reg, regCfg, scal, dflt, fixed0, fixedNeg, uaBase, segE0, histLine, consRev };
+  return { fys, B, basis, field, lines, R, out, I, D, ov, method, slopeCost, costLines, slopeR2, slopesUsable, reconB, autoMethod, methodAuto: !["incr", "regress", "fixvar", "segment"].includes(inp.costMethod), vEst, reg, regCfg, scal, dflt, fixed0, fixedNeg, uaBase, segE0, histLine, consRev };
 }
 
 // ---------- DCF (Damodaran-style FCFF) ----------
