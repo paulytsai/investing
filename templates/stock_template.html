@@ -308,6 +308,15 @@ const ar = (c) => n(c.b?.accountsReceivables) || n(c.b?.netReceivables);
 const divPaid = (c) => { const v = n(c.c?.netDividendsPaid) ?? n(c.c?.commonDividendsPaid); return isNum(v) ? -v : null; };
 const buyback = (c) => { const v = n(c.c?.commonStockRepurchased); return isNum(v) ? -v : null; };
 const defRev = (c) => (c.b ? (n(c.b.deferredRevenue) ?? 0) + (n(c.b.deferredRevenueNonCurrent) ?? 0) : null);
+// FMP folds lease liabilities into totalDebt on some balance sheets and not on others: count them only where included
+const leaseInDebt = (c) => {
+  const L = n(c?.b?.capitalLeaseObligations), td = n(c?.b?.totalDebt);
+  if (!isNum(L) || L <= 0 || !isNum(td)) return 0;
+  return td >= (n(c.b.shortTermDebt) ?? 0) + (n(c.b.longTermDebt) ?? 0) + L - 1e6 ? L : 0;
+};
+// Content-type investment (e.g. a streamer's film and series spend) is reported inside operating cash flow
+// (FMP otherNonCashItems) while its amortization sits in D&A
+const contSpend = (c) => { const o = n(c?.c?.otherNonCashItems); return isNum(o) && o < 0 ? -o : 0; };
 
 // ---------- building actual / consensus columns ----------
 const yy = (fy) => String(fy).slice(-2);
@@ -331,6 +340,7 @@ function sumSeg(ds) {
 const estToI = (e) => ({ _revLo: n(e.revenueLow), _revHi: n(e.revenueHigh), _epsLo: n(e.epsLow), _epsHi: n(e.epsHigh), revenue: n(e.revenueAvg), operatingIncome: n(e.ebitAvg), netIncome: n(e.netIncomeAvg), epsDiluted: n(e.epsAvg), sellingGeneralAndAdministrativeExpenses: n(e.sgaExpenseAvg), _ebitda: n(e.ebitdaAvg), _nAnalysts: n(e.numAnalystsEps) ?? n(e.numAnalystsRevenue) });
 const FY_CTX = { A: 1, D: 365, type: "FY" }, Q_CTX = { A: 4, D: 91.25, type: "Q" }, H_CTX = { A: 2, D: 182.5, type: "H" };
 const MODEL_YEARS = 5;
+const SH_BAND = 0.06; // largest one-year change in diluted shares accepted from consensus (net income / EPS)
 const CONS_YEARS = 3;
 const FIXED_GROWTH_CAP = 0.03; // consensus shown (and used for default drivers) for the current year + 2
 
@@ -725,6 +735,9 @@ function runModel(m, inp, opts) {
   const taxB = (() => { const t = taxRate(B); return isNum(t) && t > 0 && t < 0.45 ? t : 0.21; })();
   const sbcB = div(n(B.c.stockBasedCompensation), revB) ?? 0;
   const capexPct = avg3((c) => div(-(capex(c) ?? NaN), rev(c)), 0, 0.6, 0.04);
+  // a content-type business: D&A dwarfs capex and the cash spent on the amortized assets sits in operating cash flow
+  const contOn = daB > 3 * Math.abs(capex(B) ?? 0) && contSpend(B) > 0.5 * daB;
+  const contPct = contOn ? avg3((c) => div(contSpend(c), rev(c)), 0, 0.8, 0) : 0;
   const niB = n(B.i.netIncome), fcfB = fcf(B);
   const payB = isNum(niB) && niB > 0 && isNum(divPaid(B)) ? clamp(divPaid(B) / niB, 0, 1.5) : 0;
   const bbB = isNum(fcfB) && fcfB > 0 && isNum(buyback(B)) ? clamp(buyback(B) / fcfB, 0, 1.5) : 0;
@@ -743,7 +756,7 @@ function runModel(m, inp, opts) {
   const lastConsFy = consYears.length ? Math.max(...consYears) : null;
   const lastConsMargin = lastConsFy ? ebit(m.consFy[lastConsFy]) / consRev(lastConsFy) : null;
   fys.forEach((fy) => {
-    setD("gm", fy, gmB); setD("tax", fy, taxB); setD("sbc", fy, sbcB); setD("capex", fy, capexPct);
+    setD("gm", fy, gmB); setD("tax", fy, taxB); setD("sbc", fy, sbcB); setD("capex", fy, capexPct); setD("cont", fy, contPct);
     setD("pay", fy, payB); setD("bb", fy, bbB); setD("acq", fy, 0); setD("dIss", fy, 0); setD("oth", fy, 0);
     setD("dso", fy, dso0); setD("dio", fy, dio0); setD("dpo", fy, dpo0); setD("dr", fy, drp0);
     // after consensus ends, an incremental margin equal to the last consensus EBIT margin keeps that margin
@@ -842,10 +855,10 @@ function runModel(m, inp, opts) {
   fys.forEach((fy) => {
     const r = R[fy], dRev = r - prev.rev;
     const gm = I("gm", fy), cogs = r * (1 - gm);
-    const capexV = I("capex", fy) * r;
+    const capexV = I("capex", fy) * r, contV = Math.max(I("cont", fy) ?? 0, 0) * r;
     // D&A: existing asset base runs off straight-line; each capex vintage depreciates over its useful life (half-year in year one)
     const daExist = Math.max(existLeft, 0) * scal.rem; existLeft -= daExist;
-    vint.push({ amt: capexV, left: capexV, first: true });
+    vint.push({ amt: capexV + contV, left: capexV + contV, first: true });
     let daNew = 0;
     vint.forEach((v) => { const d = Math.min(v.left, (v.amt / scal.life) * (v.first ? 0.5 : 1)); v.left -= d; v.first = false; daNew += d; });
     const daV = daExist + daNew;
@@ -880,20 +893,21 @@ function runModel(m, inp, opts) {
     const sbc = I("sbc", fy) * r;
     const arV = (I("dso", fy) / 365) * r, invV = (I("dio", fy) / 365) * cogs, apV = (I("dpo", fy) / 365) * cogs, drV = I("dr", fy) * r;
     const dNwc = (arV + invV - apV - drV) - (prev.ar + prev.inv - prev.ap - prev.dr);
-    const cfoV = ni + daV + sbc - dNwc;
+    const cfoV = ni + daV + sbc - dNwc - contV;
     const fcfV = cfoV - capexV;
     const divV = I("pay", fy) * Math.max(ni, 0);
     const bbV = I("bb", fy) * Math.max(fcfV, 0);
     const acqV = Math.abs(I("acq", fy)), dIss = I("dIss", fy);
     const cash = prev.cash + fcfV - acqV - divV - bbV + dIss;
     const debtV = prev.debt + dIss;
-    const depBaseV = prev.depBase + capexV - daV;
+    const depBaseV = prev.depBase + capexV + contV - daV;
     const gwV = prev.gw + acqV;
-    // Diluted shares: consensus share count (net income / EPS) while consensus lasts, so EPS matches it;
-    // afterwards stock comp issues shares and buybacks retire them at the buyback price
+    // Diluted shares: consensus share count (net income / EPS) while consensus lasts, so EPS matches it, but only
+    // when that count is within SH_BAND of the prior year (otherwise consensus NI and EPS disagree, and the model keeps
+    // its own count and follows consensus net income); afterwards stock comp issues shares and buybacks retire them
     const mechEnd = isNum(prev.shares) ? prev.shares + (sbc - bbV) / scal.px : null;
     const epsC = n(cy?.i?.epsDiluted), shC = isNum(niC) && isNum(epsC) && epsC > 0 ? niC / epsC : null;
-    const shCok = isNum(shC) && isNum(prev.shares) && Math.abs(shC / prev.shares - 1) < 0.25;
+    const shCok = isNum(shC) && isNum(prev.shares) && Math.abs(shC / prev.shares - 1) < SH_BAND;
     setD("sh", fy, shCok ? shC : isNum(mechEnd) ? (prev.shares + mechEnd) / 2 : null);
     const sharesAvg = I("sh", fy);
     const fixedShares = shCok || isNum(ov["sh|" + fy]);
@@ -903,14 +917,14 @@ function runModel(m, inp, opts) {
     const ta = tca + depBaseV + gwV + otherNCA;
     const tl = apV + drV + debtV + otherL;
     out[fy] = {
-      fy, rev: r, gm, cogs, ebit: ebitV, da: daV, daExist, daNew, capex: capexV, intExp, intInc, pretax, tax: taxV, ni, sbc, dNwc, cfo: cfoV, fcf: fcfV, div: divV, bb: bbV, acq: acqV, dIss,
+      fy, rev: r, gm, cogs, ebit: ebitV, da: daV, daExist, daNew, capex: capexV, cont: contV, shC, shCok, shPrev: prev.shares, intExp, intInc, pretax, tax: taxV, ni, sbc, dNwc, cfo: cfoV, fcf: fcfV, div: divV, bb: bbV, acq: acqV, dIss,
       cashCost: r - ebitV - daV, varC: method === "fixvar" ? varV : isNum(vEst) ? vEst * r : null,
       fixC: method === "fixvar" ? fixedV : isNum(vEst) ? r - ebitV - daV - vEst * r : null,
       cash, debt: debtV, equity, shares: sharesAvg, sharesEnd, eps: div(ni, sharesAvg), fixed: fixedV, var: varV, segE, ua: uaV, check: ta - tl - equity,
       ctx: {
         ...FY_CTX, kind: "E", model: true, fy, label: "FY" + fy,
         i: { revenue: r, costOfRevenue: cogs, grossProfit: r - cogs, operatingExpenses: r - cogs - ebitV, operatingIncome: ebitV, depreciationAndAmortization: daV, interestExpense: intExp, interestIncome: intInc, incomeBeforeTax: pretax, incomeTaxExpense: taxV, netIncome: ni, weightedAverageShsOutDil: sharesAvg, epsDiluted: div(ni, sharesAvg) },
-        c: { netIncome: ni, depreciationAndAmortization: daV, stockBasedCompensation: sbc, changeInWorkingCapital: -dNwc, netCashProvidedByOperatingActivities: cfoV, capitalExpenditure: -capexV, freeCashFlow: fcfV, acquisitionsNet: -acqV, commonStockRepurchased: -bbV, netDividendsPaid: -divV, netDebtIssuance: dIss, _daExist: daExist, _daNew: daNew },
+        c: { netIncome: ni, depreciationAndAmortization: daV, stockBasedCompensation: sbc, changeInWorkingCapital: -dNwc, netCashProvidedByOperatingActivities: cfoV, capitalExpenditure: -capexV, freeCashFlow: fcfV, acquisitionsNet: -acqV, commonStockRepurchased: -bbV, netDividendsPaid: -divV, netDebtIssuance: dIss, _daExist: daExist, _daNew: daNew, _content: contV },
         b: { cashAndShortTermInvestments: cash, accountsReceivables: arV, inventory: invV, totalCurrentAssets: tca, propertyPlantEquipmentNet: depBaseV * ppeShare, goodwillAndIntangibleAssets: gwV + depBaseV * (1 - ppeShare), totalAssets: ta, accountPayables: apV, deferredRevenue: drV, totalDebt: debtV, totalLiabilities: tl, totalStockholdersEquity: equity, _check: ta - tl - equity },
         [field]: basis === "total" ? undefined : Object.fromEntries(lines.filter((L) => L.name !== RECON).map((L) => [L.name, L.vals[fy]])),
       },
@@ -920,7 +934,7 @@ function runModel(m, inp, opts) {
   // chain YoY: first model year compares with the last reported year
   let pc = B;
   fys.forEach((fy) => { out[fy].ctx.p = pc; pc = out[fy].ctx; });
-  return { consAnchored, costSuggest, consFy: m.consFy, fys, B, basis, field, lines, R, out, I, D, ov, method, slopeCost, costLines, slopeR2, slopesUsable, reconB, autoMethod, methodAuto: !["cons", "incr", "regress", "fixvar", "segment"].includes(inp.costMethod), vEst, reg, regCfg, scal, dflt, fixed0, fixedNeg, uaBase, segE0, histLine, consRev };
+  return { consAnchored, costSuggest, consFy: m.consFy, fys, B, basis, contOn, field, lines, R, out, I, D, ov, method, slopeCost, costLines, slopeR2, slopesUsable, reconB, autoMethod, methodAuto: !["cons", "incr", "regress", "fixvar", "segment"].includes(inp.costMethod), vEst, reg, regCfg, scal, dflt, fixed0, fixedNeg, uaBase, segE0, histLine, consRev };
 }
 
 // ---------- DCF (Damodaran-style FCFF) ----------
@@ -948,8 +962,8 @@ function dcfDefaults(mdl, mkt) {
   const rf = isNum(mkt.rf) ? mkt.rf : 0.045;
   return {
     rf, beta: isNum(mkt.beta) && mkt.beta > 0 ? +mkt.beta.toFixed(2) : 1, erp: isNum(mkt.erp) ? mkt.erp : 0.0423, crp: isNum(mkt.crp) ? mkt.crp : 0,
-    kdPre: rf + syn.spread, rating: syn.rating, coverage: cov, tm: 0.25,
-    g: Math.min(0.025, rf), mT: div(last.ebit, last.rev) ?? 0.1, betaT: 1, roicT: null, s2c: null, wacc: null, lti: 1, mid: 0,
+    kdPre: rf + syn.spread, spread: syn.spread, rating: syn.rating, coverage: cov, tm: 0.25,
+    g: Math.min(0.025, rf), mT: div(last.ebit, last.rev) ?? 0.1, betaT: 1, roicT: null, s2c: null, wacc: null, lti: 1, mid: 0, lease: 0,
   };
 }
 
@@ -959,7 +973,16 @@ function runDcf(mdl, mkt, setIn, shift, basis) {
   const d0 = dcfDefaults(mdl, mkt);
   const s = { ...d0 };
   Object.keys(setIn || {}).forEach((k) => { if (isNum(setIn[k])) s[k] = setIn[k]; });
-  const E = mkt.mcap, Dv = mkt.debt ?? 0;
+  // defaults that follow the risk-free rate also follow an overridden one
+  if (!isNum(setIn?.kdPre)) s.kdPre = s.rf + d0.spread;
+  if (!isNum(setIn?.g)) s.g = Math.min(0.025, s.rf);
+  // EBIT and FCFF are after lease costs, so lease liabilities are left out of debt unless the user counts them
+  // (Damodaran's alternative: keep them as debt and add the interest part of lease cost back to EBIT)
+  const B = mdl.B, revB = rev(B);
+  const leaseOn = !!s.lease;
+  const leaseX = leaseOn ? 0 : mkt.lease ?? 0;
+  const E = mkt.mcap, Dv = (mkt.debt ?? 0) - leaseX;
+  const leaseInt = (r) => (leaseOn && (mkt.lease ?? 0) > 0 && revB > 0 ? mkt.lease * (r / revB) * s.kdPre : 0);
   const ke = s.rf + s.beta * (s.erp + s.crp);
   const kdAT = s.kdPre * (1 - s.tm);
   const wE = isNum(E) && E + Dv > 0 ? E / (E + Dv) : 1;
@@ -971,14 +994,27 @@ function runDcf(mdl, mkt, setIn, shift, basis) {
   wacc += shift?.w || 0; waccT += shift?.w || 0;
   const g = s.g + (shift?.g || 0);
 
-  const rows = [];
-  let prevRev = rev(mdl.B);
-  let reinvSum = 0, dRevSum = 0;
-  // sales-to-capital implied by our forecast (used for the fade years, and for the consensus case)
-  mdl.fys.forEach((fy) => { const o = mdl.out[fy]; reinvSum += o.capex - o.da + o.dNwc + o.acq; dRevSum += o.rev - prevRev; prevRev = o.rev; });
-  const s2cDflt = dRevSum > 0 && reinvSum > 0 ? clamp(dRevSum / reinvSum, 0.3, 8) : clamp(div(rev(mdl.B), mkt.ic) ?? 1.5, 0.3, 8);
+  // invested capital at the model's starting balance sheet (fiscal year-end), on the same basis as the bridge:
+  // debt (leases only if counted) + equity + minority - cash - non-operating investments
+  const bB = B.b || {};
+  const icRaw = (debt(B) ?? 0) - (leaseOn ? 0 : leaseInDebt(B)) + (n(bB.totalStockholdersEquity) ?? 0) + (n(bB.minorityInterest) ?? 0) - (cashST(B) ?? 0) - (s.lti ? n(bB.longTermInvestments) ?? 0 : 0);
+  const icB = icRaw > 0 ? icRaw : null;
+  const reinvOf = (o) => o.capex + (o.cont || 0) - o.da + o.dNwc + o.acq;
+  // sales-to-capital: revenue added per $1 reinvested in our forecast's later years (years 3-5), where the
+  // consensus-driven early years and one-off working-capital swings matter least; then all five years; then revenue / IC
+  const ratio = (fysSel) => {
+    let dr = 0, ri = 0;
+    fysSel.forEach((fy) => { const o = mdl.out[fy], pr = fy === mdl.fys[0] ? revB : mdl.out[fy - 1].rev; dr += o.rev - pr; ri += reinvOf(o); });
+    return dr > 0 && ri > 0 ? clamp(dr / ri, 0.3, 8) : null;
+  };
+  let s2cDflt = ratio(mdl.fys.slice(2)), s2cSrc = "our forecast, years 3–5";
+  if (!isNum(s2cDflt)) { s2cDflt = ratio(mdl.fys); s2cSrc = "our forecast, years 1–5"; }
+  const s2cFromModel = isNum(s2cDflt);
+  if (!s2cFromModel) { s2cDflt = clamp(div(revB, icB) ?? 1.5, 0.3, 8); s2cSrc = "revenue ÷ invested capital, since our forecast's reinvestment is not positive"; }
   const s2c = isNum(s.s2c) ? s.s2c : s2cDflt;
-  prevRev = rev(mdl.B);
+
+  const rows = [];
+  let prevRev = revB;
   const useCons = basis === "cons";
   let cg = null, cm = null; // last consensus growth and margin, carried forward
   mdl.fys.forEach((fy, k) => {
@@ -991,55 +1027,85 @@ function runDcf(mdl, mkt, setIn, shift, basis) {
       else { r = prevRev * (1 + (cg ?? growth(o.rev, prevRev) ?? 0)); e = r * (cm ?? div(o.ebit, o.rev)); label = "FY" + fy + "C*"; }
       reinv = (r - prevRev) / s2c;
     } else {
-      r = o.rev; e = o.ebit; reinv = o.capex - o.da + o.dNwc + o.acq; label = "FY" + fy + "E";
+      r = o.rev; e = o.ebit; reinv = reinvOf(o); label = "FY" + fy + "E";
     }
+    const li = leaseInt(r);
+    e += li;
     const nopat = e * (1 - t);
-    rows.push({ yr: k + 1, label, rev: r, g: growth(r, prevRev), margin: div(e, r), ebit: e, tax: t, nopat, reinv, fcff: nopat - reinv, wacc });
+    // bridge from the model's free cash flow (CFO - capex) to FCFF, for the model basis
+    const recon = useCons ? null : { fcf: o.fcf, sbc: o.sbc, nonop: (o.pretax - o.ebit) * (1 - t), acq: o.acq, lease: li * (1 - t) };
+    rows.push({ yr: k + 1, fy, label, rev: r, g: growth(r, prevRev), margin: div(e, r), ebit: e, tax: t, nopat, reinv, fcff: nopat - reinv, wacc, recon, sbc: useCons ? I0(mdl, "sbc", fy) * r : o.sbc });
     prevRev = r;
   });
-  const l5 = rows[rows.length - 1];
-  const g5 = l5.g ?? g, m5 = l5.margin, t5 = l5.tax;
-  for (let k = 6; k <= 10; k++) {
-    const f = (k - 5) / 5;
-    const gk = g5 + (g - g5) * f, mk = m5 + (s.mT - m5) * f, tk = t5 + (s.tm - t5) * f, wk = wacc + (waccT - wacc) * f;
-    const r = prevRev * (1 + gk);
-    const e = r * mk, nopat = e * (1 - tk), reinv = (r - prevRev) / s2c;
-    rows.push({ yr: k, label: "Year " + k, rev: r, g: gk, margin: mk, ebit: e, tax: tk, nopat, reinv, fcff: nopat - reinv, wacc: wk, fade: true });
-    prevRev = r;
-  }
-  // discounting: valuation date = today; year 1 = current fiscal year
-  const elapsed = clamp(mkt.elapsed ?? 0, 0, 0.99);
-  let df = 1;
-  rows.forEach((r, ix) => {
-    const len = ix === 0 ? 1 - elapsed : 1;
-    df = df / Math.pow(1 + r.wacc, len);
-    r.df = s.mid ? df * Math.pow(1 + r.wacc, Math.min(len, 1) / 2) : df;
-    r.pv = r.fcff * r.df;
-  });
-  let ic = mkt.ic;
+  // return on invested capital through year 5, from the fiscal year-end invested capital
+  let ic = icB;
   rows.forEach((r) => { r.icBeg = ic; r.roic = isNum(ic) && ic > 0 ? r.nopat / ic : null; if (isNum(ic)) ic += r.reinv; });
   // Default terminal ROIC: halfway between the model's year-5 ROIC and the stable-period cost of capital
   // (excess returns fade but do not vanish); set it to WACC for Damodaran's no-moat case.
   const roic5 = rows[4]?.roic;
   const roicDflt = isNum(roic5) ? clamp((roic5 + waccT) / 2, waccT, 0.4) : waccT;
   const roicT = isNum(s.roicT) ? s.roicT : roicDflt;
+  // sales-to-capital consistent with the terminal year: reinvestment g / ROIC on revenue growing at g
+  const s2cT = s.mT > 0 && s.tm < 1 && roicT > 0 ? clamp(roicT / (s.mT * (1 - s.tm)), 0.3, 8) : s2c;
+  const l5 = rows[rows.length - 1];
+  const g5 = l5.g ?? g, m5 = div(l5.ebit - leaseInt(l5.rev), l5.rev), t5 = l5.tax, sbc5 = div(l5.sbc, l5.rev) ?? 0;
+  // fade mode: a typed ratio applies to all five years; by default sales-to-capital moves from our forecast's ratio to
+  // the terminal-consistent one, so reinvestment does not jump at either end; when our forecast's reinvestment is not
+  // positive, the reinvestment rate (reinvestment / NOPAT) moves from year 5's to the terminal g / ROIC instead
+  const fadeMode = isNum(s.s2c) ? "user" : s2cFromModel || useCons ? "s2c" : "rate";
+  const rr5 = div(l5.reinv, l5.nopat) ?? 0, rrT = roicT > 0 ? g / roicT : 0;
+  for (let k = 6; k <= 10; k++) {
+    const f = (k - 5) / 5;
+    const gk = g5 + (g - g5) * f, mk = m5 + (s.mT - m5) * f, tk = t5 + (s.tm - t5) * f, wk = wacc + (waccT - wacc) * f;
+    const r = prevRev * (1 + gk);
+    const e = r * mk + leaseInt(r), nopat = e * (1 - tk);
+    let reinv, sk;
+    if (fadeMode === "rate") { reinv = nopat * (rr5 + (rrT - rr5) * f); sk = reinv > 0 ? (r - prevRev) / reinv : null; }
+    else { sk = fadeMode === "user" ? s.s2c : s2c + (s2cT - s2c) * f; reinv = (r - prevRev) / sk; }
+    rows.push({ yr: k, label: "Year " + k, rev: r, g: gk, margin: mk, ebit: e, tax: tk, nopat, reinv, fcff: nopat - reinv, wacc: wk, fade: true, sbc: sbc5 * r, s2c: sk });
+    prevRev = r;
+  }
+  rows.slice(5).forEach((r) => { r.icBeg = ic; r.roic = isNum(ic) && ic > 0 ? r.nopat / ic : null; if (isNum(ic)) ic += r.reinv; });
+  // Year 1 is the current fiscal year. The equity bridge uses the latest balance sheet, which already holds the
+  // cash flow of the quarters reported since the last fiscal year-end, so those are taken out of year 1.
+  const ytd = mkt.ytd;
+  let ytdF = 0;
+  if (ytd && ytd.n > 0) {
+    const t1 = rows[0].tax;
+    ytdF = (ytd.ebit + leaseInt(ytd.rev ?? 0)) * (1 - t1) - (ytd.capex + (mdl.contOn ? ytd.cont : 0) - ytd.da + ytd.dNwc + ytd.acq);
+  }
+  rows.forEach((r, ix) => { r.ytd = ix === 0 ? ytdF : 0; r.cf = r.fcff - r.ytd; });
+  // discounting from today: year k ends k - elapsed years from now (elapsed = time since the last fiscal year-end)
+  const elapsed = Math.max(mkt.elapsed ?? 0, 0);
+  let df = 1, tPrev = 0;
+  rows.forEach((r, ix) => {
+    const tk = Math.max(0, ix + 1 - elapsed), len = tk - tPrev; tPrev = tk;
+    df = df / Math.pow(1 + r.wacc, len);
+    r.t = tk; r.len = len;
+    r.df = s.mid ? df * Math.pow(1 + r.wacc, len / 2) : df;
+    r.pv = r.cf * r.df;
+  });
   const last = rows[rows.length - 1];
-  const revT = last.rev * (1 + g), ebitT = revT * s.mT, nopatT = ebitT * (1 - s.tm);
+  const revT = last.rev * (1 + g), ebitT = revT * s.mT + leaseInt(revT), nopatT = ebitT * (1 - s.tm);
   const reinvRateT = roicT > 0 ? g / roicT : 0;
   const fcffT = nopatT * (1 - reinvRateT);
   const tv = waccT > g ? fcffT / (waccT - g) : null;
   const pvTv = isNum(tv) ? tv * last.df : null;
   const pvSum = rows.reduce((a, r) => a + r.pv, 0);
   const ev = isNum(pvTv) ? pvSum + pvTv : null;
-  const equity = isNum(ev) ? ev - (mkt.debt ?? 0) - (mkt.minority ?? 0) + (mkt.cash ?? 0) + (s.lti ? mkt.lti ?? 0 : 0) : null;
+  const equity = isNum(ev) ? ev - Dv - (mkt.minority ?? 0) + (mkt.cash ?? 0) + (s.lti ? mkt.lti ?? 0 : 0) : null;
   const perShare = div(equity, mkt.shares);
+  // what treating stock comp as a cost is worth: PV of the SBC stream on the same timing, per share
+  const pvSbc = rows.reduce((a, r) => a + (r.sbc || 0) * r.df, 0) + (waccT > g ? (sbc5 * revT) / (waccT - g) * last.df : 0);
   return {
-    basis: useCons ? "cons" : "model", s, d0, ke, keT, kdAT, wE, waccCalc, wacc, waccT, g, roicT, roicDflt, s2c, s2cDflt, rows,
+    basis: useCons ? "cons" : "model", s, d0, ke, keT, kdAT, wE, waccCalc, wacc, waccT, g, roicT, roicDflt, s2c, s2cDflt, s2cSrc, s2cT, fadeMode, rr5, rrT, rows,
     terminal: { rev: revT, ebit: ebitT, nopat: nopatT, reinvRate: reinvRateT, fcff: fcffT, tv, pvTv },
     pvSum, ev, equity, perShare, upside: isNum(perShare) && isNum(mkt.price) ? perShare / mkt.price - 1 : null,
-    tvShare: div(pvTv, ev),
+    tvShare: div(pvTv, ev), debtUsed: Dv, leaseX, icB, ytd: ytd && ytd.n > 0 ? { ...ytd, fcff: ytdF } : null, elapsed,
+    sbcPerShare: div(pvSbc, mkt.shares),
   };
 }
+const I0 = (mdl, k, fy) => mdl.I(k, fy) ?? 0;
 // ENGINE END
 
 </script>
@@ -1075,8 +1141,10 @@ function runDcf(mdl, mkt, setIn, shift, basis) {
     int: (v) => nf(v, 0),
     num: (v) => paren(nf(v, 1), v < 0),
     df: (v) => v.toFixed(3),
+    yrs: (v) => v.toFixed(2),
   };
   const fmt = (v, f) => (isNum(v) && Math.abs(v) > 1e-12 ? FMT[f](v) : null);
+  const fmtDate = (d) => (d ? new Date(String(d).slice(0, 10) + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "–");
   const P = (c) => c.p || {};
   const pctRev = (fn) => (c) => div(fn(c), rev(c));
   const nn = (v) => (isNum(v) ? v : null);
@@ -1171,6 +1239,7 @@ function runDcf(mdl, mkt, setIn, shift, basis) {
       { l: "Revenue", mv: (fy) => { const c = rev(state.act.consFy[fy] || {}); return isNum(c) && c ? state.mdl.out[fy].rev / c - 1 : null; }, f: "pp", sign: true },
       { l: "EBIT", mv: (fy) => { const c = ebit(state.act.consFy[fy] || {}); return isNum(c) && c ? state.mdl.out[fy].ebit / c - 1 : null; }, f: "pp", sign: true },
       { l: "Diluted EPS", mv: (fy) => { const c = nn(state.act.consFy[fy]?.i?.epsDiluted); return isNum(c) && c && isNum(state.mdl.out[fy].eps) ? state.mdl.out[fy].eps / c - 1 : null; }, f: "pp", sign: true },
+      ...(() => { const M = state.mdl; if (!M) return []; const bad = M.fys.filter((fy) => { const o = M.out[fy]; return isNum(o.shC) && !o.shCok && !isNum(M.ov["sh|" + fy]); }); return bad.length ? [{ note: "Consensus net income and consensus EPS disagree for " + bad.map((fy) => { const o = M.out[fy]; return "FY" + fy + " (they imply " + FMT.sh(o.shC) + "m diluted shares, " + FMT.yoy(o.shC / o.shPrev - 1) + " vs the year before)"; }).join(", ") + ". The model keeps its own share count and follows consensus net income, so its EPS differs from consensus EPS there. Type a share count in the Diluted shares row to override." }] : []; })(),
     ], modelOnly: true },
     { title: "Cost drivers (% of revenue)", rows: [
       { l: "Cost of revenue", v: pctRev((c) => nn(c.i?.costOfRevenue)), f: "pct" },
@@ -1179,6 +1248,7 @@ function runDcf(mdl, mkt, setIn, shift, basis) {
       { l: "D&A", v: pctRev(da), f: "pct" },
       { l: "Stock-based comp", v: pctRev((c) => nn(c.c?.stockBasedCompensation)), f: "pct", inp: { k: "sbc", u: "pct" } },
       { l: "Capex", v: pctRev((c) => (isNum(capex(c)) ? -capex(c) : null)), f: "pct", inp: { k: "capex", u: "pct" } },
+      ...(state.mdl?.contOn || Object.keys(state.inp?.ov || {}).some((k) => k.startsWith("cont|")) ? [{ l: "Content / capitalized spend (in operating cash flow)", v: pctRev((c) => contSpend(c) || null), f: "pct", inp: { k: "cont", u: "pct" }, tip: "Cash spent on assets that are amortized through D&A but reported inside operating cash flow, such as a streamer's film and series spend (FMP otherNonCashItems). The forecast spends this % of revenue and amortizes it with the capex vintages." }] : []),
       { l: "Opex growth less revenue growth", v: (c) => sub(growth(nn(c.i?.operatingExpenses), nn(P(c).i?.operatingExpenses)), growth(rev(c), rev(P(c)))), f: "pp", ratio: true, sign: true },
       { l: "Incremental operating margin", v: (c) => div(sub(ebit(c), ebit(P(c))), sub(rev(c), rev(P(c)))), f: "pct", ratio: true },
     ]},
@@ -1187,7 +1257,7 @@ function runDcf(mdl, mkt, setIn, shift, basis) {
       { l: "D&A", v: da, f: "usd", ind: 1 },
       { l: "Stock-based comp", v: (c) => nn(c.c?.stockBasedCompensation), f: "usd", ind: 1 },
       { l: "Change in working capital", v: (c) => nn(c.c?.changeInWorkingCapital), f: "usd", ind: 1 },
-      { l: "Other operating items", v: (c) => { if (c.model) return null; const parts = [nn(c.c?.netIncome), da(c), nn(c.c?.stockBasedCompensation), nn(c.c?.changeInWorkingCapital)]; return parts.every(isNum) && isNum(cfo(c)) ? cfo(c) - parts.reduce((s, x) => s + x, 0) : null; }, f: "usd", ind: 1 },
+      { l: "Other operating items", v: (c) => { if (c.model) return c.c?._content ? -c.c._content : null; const parts = [nn(c.c?.netIncome), da(c), nn(c.c?.stockBasedCompensation), nn(c.c?.changeInWorkingCapital)]; return parts.every(isNum) && isNum(cfo(c)) ? cfo(c) - parts.reduce((s, x) => s + x, 0) : null; }, f: "usd", ind: 1 },
       { l: "Cash from operations", v: cfo, f: "usd", yoy: true, key: true },
       { l: "Capex", v: capex, f: "usd", ind: 1, g: { k: "capex", u: "mmneg" } },
       { l: "Free cash flow", v: fcf, f: "usd", yoy: true, key: true },
@@ -1814,7 +1884,7 @@ Rules:
   // ---------- settings panel ----------
   // Every input saved for this ticker, wherever it is typed, with its default and a way to clear it
   const SET_LBL = { life: ["Useful life of new capex (years)", "num"], rem: ["D&A rate on existing assets", "pct"], kd: ["Interest rate on debt", "pct"], ky: ["Yield on cash", "pct"], px: ["Share price for buybacks and stock comp", "eps"] };
-  const DCF_LBL = { rf: ["Risk-free rate", "pct"], beta: ["Beta", "x"], erp: ["Mature-market equity risk premium", "pct"], crp: ["Country risk premium", "pct"], kdPre: ["Pre-tax cost of debt", "pct"], tm: ["Marginal tax rate", "pct"], wacc: ["WACC override", "pct"], g: ["Stable growth rate", "pct"], mT: ["Target operating margin (year 10)", "pct"], s2c: ["Sales-to-capital, years 6–10", "x"], roicT: ["Return on capital in stable growth", "pct"], betaT: ["Beta in stable growth", "x"], pe: ["Target P/E", "x"], lti: ["Add long-term investments", "bool"], mid: ["Mid-year discounting", "bool"], recov: ["Recovery value shown", "bool"], recrule: ["Leave out P/Es inflated by depressed earnings", "bool"], rpe: ["Recovery P/E", "x"], reps: ["Previous peak EPS", "eps"], ryr: ["Recovery by fiscal year", "int"] };
+  const DCF_LBL = { rf: ["Risk-free rate", "pct"], beta: ["Beta", "x"], erp: ["Mature-market equity risk premium", "pct"], crp: ["Country risk premium", "pct"], kdPre: ["Pre-tax cost of debt", "pct"], tm: ["Marginal tax rate", "pct"], wacc: ["WACC override", "pct"], g: ["Stable growth rate", "pct"], mT: ["Target operating margin (year 10)", "pct"], s2c: ["Sales-to-capital, years 6–10", "x"], roicT: ["Return on capital in stable growth", "pct"], betaT: ["Beta in stable growth", "x"], pe: ["Target P/E", "x"], lti: ["Add long-term investments", "bool"], mid: ["Mid-year discounting", "bool"], lease: ["Count lease liabilities as debt", "bool"], recov: ["Recovery value shown", "bool"], recrule: ["Leave out P/Es inflated by depressed earnings", "bool"], rpe: ["Recovery P/E", "x"], reps: ["Previous peak EPS", "eps"], ryr: ["Recovery by fiscal year", "int"] };
   const PFX_LBL = { g: "revenue growth", ug: "units growth", pg: "price / mix", u0: "units, last reported year (mm)", se0: "segment EBIT, last reported year", si: "segment incremental margin", sl: "slope per doubling of revenue" };
   const KEY_LBL = { em: "EBIT margin", incr: "Incremental EBIT margin", var: "Variable costs, % of revenue", fg: "Fixed cash costs, growth", ua: "Unallocated / corporate costs, growth" };
   const METHOD_LBL = { cons: "consensus EBIT margin", incr: "incremental margin", regress: "scale slopes", fixvar: "fixed + variable costs", segment: "segment EBIT" };
@@ -1838,7 +1908,7 @@ Rules:
     if (Object.keys(I.dcf || {}).length && M && state.mkt) {
       const D0 = runDcf(M, state.mkt, {}, null, I.dcfBasis === "cons" ? "cons" : "model");
       const RV = recoveryValue();
-      const dd = { s2c: D0.s2cDflt, roicT: D0.roicDflt, wacc: D0.waccCalc, pe: peUpside()?.dflt, recov: 0, recrule: 1, rpe: RV?.peDflt, reps: RV?.peak?.eps, ryr: RV?.reachOurs };
+      const dd = { s2c: D0.s2cDflt, roicT: D0.roicDflt, wacc: D0.waccCalc, pe: peUpside()?.dflt, lease: 0, recov: 0, recrule: 1, rpe: RV?.peDflt, reps: RV?.peak?.eps, ryr: RV?.reachOurs };
       Object.keys(I.dcf).forEach((k) => { if (!isNum(I.dcf[k]) || !DCF_LBL[k]) return; const [l, u] = DCF_LBL[k]; rows.push({ where: "Valuation", l, per: k === "pe" ? "FY" + (A.curFY + 1) + "–" + (A.curFY + 2) : /^(recov|recrule|rpe|reps|ryr)$/.test(k) ? "Recovery" : "DCF", v: show(I.dcf[k], u), d: show(k in dd ? dd[k] : D0.s[k], u), s: "d", k, fy: "" }); });
     }
     Object.keys(I.guide?.periods || {}).sort().forEach((pk) => Object.keys(I.guide.periods[pk] || {}).forEach((f) => {
@@ -2013,7 +2083,7 @@ Rules:
   }
   function renderDcf() {
     const M = state.mdl, el = $("dcf");
-    if (!M || !state.mkt) { el.hidden = true; return; }
+    if (!M || !state.mkt) { state.dcf = null; el.hidden = true; return; }
     const basis = state.inp.dcfBasis === "cons" ? "cons" : "model";
     const R = state.dcf = runDcf(M, state.mkt, state.inp.dcf, null, basis);
     const Other = runDcf(M, state.mkt, state.inp.dcf, null, basis === "cons" ? "model" : "cons");
@@ -2029,7 +2099,8 @@ Rules:
     if (R.g > R.s.rf) flags.push(["warn", "Stable growth (" + pct(R.g) + ") is above the risk-free rate (" + pct(R.s.rf) + "). Damodaran caps stable growth at the risk-free rate, since no firm can outgrow the economy forever."]);
     if (isNum(R.tvShare) && R.tvShare > 0.75) flags.push(["warn", "The terminal value is " + pct(R.tvShare, 0) + " of enterprise value, so the answer rests mostly on stable-growth assumptions."]);
     if (R.roicT > R.waccT + 0.05) flags.push(["", "Terminal ROIC of " + pct(R.roicT) + " assumes a durable moat. Set it equal to the terminal cost of capital (" + pct(R.waccT) + ") for the no-excess-returns case."]);
-    flags.push(["", "Reinvestment in the fade years uses a sales-to-capital ratio of " + R.s2c.toFixed(2) + " (default " + R.s2cDflt.toFixed(2) + ", from our forecast years)."]);
+    flags.push(["", R.fadeMode === "user" ? "Reinvestment in the fade years uses your sales-to-capital ratio of " + R.s.s2c.toFixed(2) + " in every year." : R.fadeMode === "rate" ? "Our forecast's reinvestment is not positive, so in the fade years the reinvestment rate (reinvestment ÷ NOPAT) moves from year 5's " + pct(R.rr5) + " to the terminal " + pct(R.rrT) + " (growth ÷ return on capital), so reinvestment does not jump." : "Reinvestment in the fade years uses a sales-to-capital ratio that moves from " + R.s2cDflt.toFixed(2) + " (" + R.s2cSrc + ") in year 5 to " + R.s2cT.toFixed(2) + " in year 10, the ratio consistent with the terminal return on capital (" + pct(R.roicT) + " ÷ (target margin × (1 − marginal tax))), so reinvestment does not jump at either end."]);
+    if (isNum(R.sbcPerShare) && R.sbcPerShare > 0) flags.push(["", "Stock-based compensation is treated as a cost, as Damodaran does, which is why FCFF is below our forecast's free cash flow (see the reconciliation rows). Adding it back would raise the value by about " + cur + " " + R.sbcPerShare.toFixed(2) + " a share, but would ignore the dilution from future grants."]);
     const yr10 = R.rows[R.rows.length - 1];
     if (isNum(yr10.roic)) flags.push(["", "Implied return on capital in year 10: " + pct(yr10.roic) + "."]);
     if (mk.currency && mk.reportCur && mk.currency !== mk.reportCur) flags.push(["warn", "Statements are in " + mk.reportCur + " but the price is in " + mk.currency + ". Convert before relying on per-share value."]);
@@ -2046,11 +2117,22 @@ Rules:
       line("Tax rate on operating income", (r) => r.tax, "pct", false, R.s.tm) +
       line("NOPAT = EBIT × (1 − t)", (r) => r.nopat, "usd", true, T.nopat) +
       line("Reinvestment (capex − D&amp;A + ΔNWC + M&amp;A)", (r) => r.reinv, "usd", false, T.nopat * T.reinvRate) +
+      line("Sales-to-capital (revenue added ÷ reinvestment)", (r) => r.s2c, "x", false, R.s2cT) +
       line("FCFF", (r) => r.fcff, "usd", true, T.fcff) +
+      (R.ytd ? line("Less: already in the " + fmtDate(R.ytd.through) + " balance sheet (" + R.ytd.labels.join(", ") + " reported)", (r) => (r.yr === 1 ? r.ytd : null), "usd", false, null) +
+        line("FCFF still to come", (r) => r.cf, "usd", true, null) : "") +
       line("Cost of capital", (r) => r.wacc, "pct", false, R.waccT) +
+      line("Years from today to the end of the year", (r) => r.t, "yrs", false, null) +
       line("Discount factor", (r) => r.df, "df", false, null) +
       line("Present value of FCFF", (r) => r.pv, "usd", true, T.pvTv) +
       line("Return on invested capital", (r) => r.roic, "pct", false, R.roicT) +
+      (R.basis === "model" ? '<tr class="sec"><td>Reconciliation to our forecast\'s free cash flow</td>' + R.rows.map((r) => '<td class="' + (r.fade ? "fade" : "") + '"></td>').join("") + "<td></td></tr>" +
+        line("Free cash flow, our forecast (CFO − capex)", (r) => r.recon?.fcf, "usd", false, null) +
+        line("− Stock-based comp (a cost in the DCF)", (r) => (r.recon ? -r.recon.sbc : null), "usd", false, null) +
+        line("− Non-operating income after tax (interest, other)", (r) => (r.recon ? -r.recon.nonop : null), "usd", false, null) +
+        line("− Acquisitions", (r) => (r.recon ? -r.recon.acq : null), "usd", false, null) +
+        (R.s.lease ? line("+ Lease interest added back after tax", (r) => r.recon?.lease, "usd", false, null) : "") +
+        line("= FCFF", (r) => (r.recon ? r.recon.fcf - r.recon.sbc - r.recon.nonop - r.recon.acq + r.recon.lease : null), "usd", true, null) : "") +
       "</tbody></table></div>";
 
     // sensitivity: WACC shift x terminal growth shift
@@ -2062,6 +2144,7 @@ Rules:
     sens += "</tbody></table></div>";
 
     el.innerHTML = '<header><h2>DCF · free cash flow to the firm</h2><span>Run on ' + bBtn("model", "Our forecast") + bBtn("cons", "Consensus") + "</span></header>" +
+      '<p>Valued as of ' + fmtDate(new Date().toISOString().slice(0, 10)) + " with the " + fmtDate(mk.bsDate) + " balance sheet. Year 1 is FY" + M.fys[0] + (R.ytd ? ": the full-year forecast less the cash flow of the " + R.ytd.n + " quarter" + (R.ytd.n > 1 ? "s" : "") + " already reported, which sits in that balance sheet" : "") + "; each year is discounted from today to its fiscal year-end (" + R.rows[0].t.toFixed(2) + " years for year 1).</p>" +
       '<p>' + (basis === "cons" ? "Years 1–3 use consensus revenue and EBIT margin; years marked C* carry year 3's growth and margin forward. Consensus has no capex or working-capital estimates, so reinvestment is revenue added ÷ sales-to-capital (" + R.s2c.toFixed(2) + "). Tax rates come from our forecast inputs." : "Years 1–5 come from our forecast: EBIT, and reinvestment from its capex, D&amp;A, working capital and acquisitions.") + " Years 6–10 (shaded) fade growth, margin, tax rate and cost of capital to stable growth.</p>" +
       '<div class="grid3">' +
       '<div class="kv"><h3 style="grid-column:1/-1">Cost of capital</h3>' +
@@ -2073,12 +2156,14 @@ Rules:
       row("Pre-tax cost of debt", "kdPre", "pct", "Rf + spread for synthetic rating " + d0.rating + (isNum(d0.coverage) ? " (interest coverage " + d0.coverage.toFixed(1) + "x)" : " (no interest expense)")) +
       row("Marginal tax rate", "tm", "pct", "Used for the tax shield on debt and in stable growth") +
       out("Debt weight (book debt ÷ debt + market cap)", pct(1 - R.wE)) +
+      '<span>Count lease liabilities as debt</span><b><input type="checkbox" data-act="lease"' + (R.s.lease ? " checked" : "") + "></b>" +
+      '<span class="src">' + (mk.lease > 0 ? "FMP includes " + mm(mk.lease) + " of lease liabilities in debt. Off (default): EBIT is already after lease costs, so leases stay out of debt, the WACC weights and invested capital. On: Damodaran's treatment, leases count as debt and the interest part of lease cost (lease × pre-tax cost of debt) is added back to EBIT. Turn it on for large finance leases, which are true debt." : "FMP's debt figure for this balance sheet has no lease liabilities in it.") + "</span>" +
       out("WACC (calculated)", pct(R.waccCalc, 2)) +
       row("WACC used (optional override)", "wacc", "pct", "") + "</div>" +
       '<div class="kv"><h3 style="grid-column:1/-1">Stable growth</h3>' +
       row("Stable growth rate", "g", "pct", "Should not exceed the risk-free rate") +
       row("Target operating margin (year 10)", "mT", "pct", "Default: our final forecast year's EBIT margin") +
-      row("Sales-to-capital, years 6–10", "s2c", "x", "Revenue added per $1 reinvested") +
+      row("Sales-to-capital, years 6–10", "s2c", "x", "Revenue added per $1 reinvested. " + (R.fadeMode === "rate" ? "Default: none, since our forecast's reinvestment is not positive; the reinvestment rate fades instead (see below)" : "Default: moves from " + R.s2cDflt.toFixed(2) + " (" + R.s2cSrc + ") to " + R.s2cT.toFixed(2) + " (terminal-consistent)") + "; a typed ratio applies to all five years") +
       row("Return on capital in stable growth", "roicT", "pct", "Default " + pct(R.roicDflt) + ": halfway between year-5 ROIC and the stable cost of capital. Reinvestment rate = g ÷ ROIC.") +
       row("Beta in stable growth", "betaT", "x", "Damodaran moves beta toward 1 as the firm matures") +
       out("Cost of capital in stable growth", pct(R.waccT, 2)) +
@@ -2088,7 +2173,7 @@ Rules:
       out("PV of FCFF, years 1–10", mm(R.pvSum)) +
       out("PV of terminal value", mm(T.pvTv)) +
       out("Enterprise value", mm(R.ev)) +
-      out("− Debt", mm(-(mk.debt ?? 0))) +
+      out("− Debt" + (R.leaseX > 0 ? " (leases of " + mm(R.leaseX) + " left out)" : ""), mm(-R.debtUsed)) +
       out("− Minority interest", mm(-(mk.minority ?? 0))) +
       out("+ Cash &amp; short-term investments", mm(mk.cash)) +
       out("+ Long-term investments", R.s.lti ? mm(mk.lti) : "excluded") +
@@ -2439,10 +2524,15 @@ Rules:
     const crpRow = mrp.find((r) => r.country === countryName);
     const mcap = nn(prof?.marketCap), price = nn(prof?.price);
     const dv = debt({ b }), cash = cashST({ b });
+    // quarters already reported in the current fiscal year and included in this balance sheet
+    const qs = (A.drill || []).filter((q) => q.kind === "A" && q.type === "Q" && q.i?.date && q.i.date > A.lastA.date && (!b.date || q.i.date <= b.date));
+    const qsum = (fn) => { const vs = qs.map(fn); return vs.every(isNum) ? vs.reduce((x, y) => x + y, 0) : null; };
+    const ytdParts = { rev: qsum(rev), ebit: qsum(ebit), da: qsum(da), capex: qsum((q) => (isNum(capex(q)) ? -capex(q) : null)), cont: qsum(contSpend), dNwc: qsum((q) => (isNum(nn(q.c?.changeInWorkingCapital)) ? -q.c.changeInWorkingCapital : null)), acq: qsum((q) => -(nn(q.c?.acquisitionsNet) ?? 0)) };
+    const ytd = qs.length && Object.values(ytdParts).every(isNum) ? { ...ytdParts, n: qs.length, through: qs[qs.length - 1].i.date, labels: qs.map((q) => q.label) } : null;
     return {
       price, mcap, beta: nn(prof?.beta), currency: prof?.currency, reportCur: A.lastA.reportedCurrency,
       ev: isNum(mcap) && isNum(dv) && isNum(cash) ? mcap + dv - cash : null,
-      debt: dv, cash, lti: nn(b.longTermInvestments) ?? 0, minority: nn(b.minorityInterest) ?? 0,
+      debt: dv, cash, lti: nn(b.longTermInvestments) ?? 0, minority: nn(b.minorityInterest) ?? 0, lease: leaseInDebt({ b }), bsDate: b.date, ytd,
       shares: A.latestShares, ic: isNum(dv) && isNum(cash) ? dv + (nn(b.totalStockholdersEquity) ?? 0) - cash : null,
       rf: tr ? tr.year10 / 100 : null, rfDate: tr?.date, erp: mature.length ? Math.min(...mature) / 100 : null,
       crp: crpRow ? crpRow.countryRiskPremium / 100 : null, country: crpRow ? countryName : countryName ? countryName + " (no premium found)" : "",
@@ -2691,7 +2781,7 @@ Rules:
       kv("Risk-free rate", R.s.rf, F.pct); kv("Beta", R.s.beta, "0.00"); kv("Mature-market equity risk premium", R.s.erp, F.pct); kv("Country risk premium", R.s.crp, F.pct);
       kv("Cost of equity", R.ke, "0.00%"); kv("Pre-tax cost of debt (" + R.d0.rating + ")", R.s.kdPre, F.pct); kv("Marginal tax rate", R.s.tm, F.pct); kv("WACC", R.wacc, "0.00%");
       y++; d.getCell(y, 1).value = "Stable growth"; d.getCell(y, 1).font = { ...base, bold: true }; y++;
-      kv("Stable growth rate", R.g, F.pct); kv("Target operating margin", R.s.mT, F.pct); kv("Sales-to-capital, years 6–10", R.s2c, "0.00"); kv("Return on capital in stable growth", R.roicT, F.pct); kv("Cost of capital in stable growth", R.waccT, "0.00%");
+      kv("Stable growth rate", R.g, F.pct); kv("Target operating margin", R.s.mT, F.pct); kv("Sales-to-capital, year 6", R.rows[5]?.s2c, "0.00"); kv("Sales-to-capital, year 10 / terminal", R.rows[9]?.s2c, "0.00"); kv("Return on capital in stable growth", R.roicT, F.pct); kv("Cost of capital in stable growth", R.waccT, "0.00%");
       y++;
       const hdr = d.getRow(y); hdr.getCell(1).value = "FCFF build (" + cur + " millions)";
       R.rows.forEach((row, j) => { hdr.getCell(j + 2).value = row.label; }); hdr.getCell(R.rows.length + 2).value = "Terminal";
@@ -2700,12 +2790,20 @@ Rules:
       const T = R.terminal;
       const line = (label, fn, f, tv, bold) => { const rr = d.getRow(y); rr.getCell(1).value = label; rr.getCell(1).font = { ...base, bold }; R.rows.forEach((row, j) => { const c = rr.getCell(j + 2); c.value = xval(fn(row), f); c.numFmt = F[f] || f; c.font = { ...base, bold }; if (row.fade) c.fill = { type: "pattern", pattern: "solid", fgColor: { argb: ARGB.C } }; }); if (tv != null) { const c = rr.getCell(R.rows.length + 2); c.value = xval(tv, f); c.numFmt = F[f] || f; c.font = { ...base, bold }; } y++; };
       line("Revenue", (q) => q.rev, "usd", T.rev); line("Revenue growth", (q) => q.g, "pct", R.g); line("EBIT margin", (q) => q.margin, "pct", R.s.mT); line("EBIT", (q) => q.ebit, "usd", T.ebit);
-      line("Tax rate", (q) => q.tax, "pct", R.s.tm); line("NOPAT", (q) => q.nopat, "usd", T.nopat, true); line("Reinvestment", (q) => q.reinv, "usd", T.nopat * T.reinvRate); line("FCFF", (q) => q.fcff, "usd", T.fcff, true);
-      line("Cost of capital", (q) => q.wacc, "pct", R.waccT); line("Discount factor", (q) => q.df, "df", null); line("Present value", (q) => q.pv, "usd", T.pvTv, true);
+      line("Tax rate", (q) => q.tax, "pct", R.s.tm); line("NOPAT", (q) => q.nopat, "usd", T.nopat, true); line("Reinvestment", (q) => q.reinv, "usd", T.nopat * T.reinvRate); line("Sales-to-capital", (q) => q.s2c, "0.00", R.s2cT); line("FCFF", (q) => q.fcff, "usd", T.fcff, true);
+      if (R.ytd) { line("Less: already in the " + R.ytd.through + " balance sheet (" + R.ytd.labels.join(", ") + ")", (q) => (q.yr === 1 ? q.ytd : null), "usd", null); line("FCFF still to come", (q) => q.cf, "usd", null, true); }
+      line("Cost of capital", (q) => q.wacc, "pct", R.waccT); line("Years from today to year-end", (q) => q.t, "0.00", null); line("Discount factor", (q) => q.df, "df", null); line("Present value", (q) => q.pv, "usd", T.pvTv, true);
+      if (R.basis === "model") {
+        y++; d.getCell(y, 1).value = "Reconciliation to our forecast's free cash flow"; d.getCell(y, 1).font = { ...base, bold: true }; y++;
+        line("Free cash flow, our forecast (CFO − capex)", (q) => q.recon?.fcf, "usd", null); line("− Stock-based comp (a cost in the DCF)", (q) => (q.recon ? -q.recon.sbc : null), "usd", null);
+        line("− Non-operating income after tax", (q) => (q.recon ? -q.recon.nonop : null), "usd", null); line("− Acquisitions", (q) => (q.recon ? -q.recon.acq : null), "usd", null);
+        if (R.s.lease) line("+ Lease interest added back after tax", (q) => q.recon?.lease, "usd", null);
+        line("= FCFF", (q) => (q.recon ? q.recon.fcf - q.recon.sbc - q.recon.nonop - q.recon.acq + q.recon.lease : null), "usd", null, true);
+      }
       y++;
       d.getCell(y, 1).value = "Value"; d.getCell(y, 1).font = { ...base, bold: true }; y++;
       kv("PV of FCFF, years 1–10", xval(R.pvSum, "usd"), F.usd); kv("PV of terminal value", xval(T.pvTv, "usd"), F.usd); kv("Enterprise value", xval(R.ev, "usd"), F.usd);
-      kv("− Debt", xval(-(mk.debt ?? 0), "usd"), F.usd); kv("− Minority interest", xval(-(mk.minority ?? 0), "usd"), F.usd); kv("+ Cash & short-term investments", xval(mk.cash, "usd"), F.usd); kv("+ Long-term investments", R.s.lti ? xval(mk.lti, "usd") : 0, F.usd);
+      kv("− Debt" + (R.leaseX > 0 ? " (leases left out)" : ""), xval(-R.debtUsed, "usd"), F.usd); kv("− Minority interest", xval(-(mk.minority ?? 0), "usd"), F.usd); kv("+ Cash & short-term investments", xval(mk.cash, "usd"), F.usd); kv("+ Long-term investments", R.s.lti ? xval(mk.lti, "usd") : 0, F.usd);
       kv("Equity value", xval(R.equity, "usd"), F.usd); kv("Diluted shares (mm)", xval(mk.shares, "sh"), F.sh); const vpsRow = y; kv("Value per share", R.perShare, "0.00"); kv("Price today", mk.price, "0.00"); kv("Upside / (downside)", R.upside, F.yoy);
       d.getCell(vpsRow, 2).font = { ...base, bold: true };
       if (state.peRes) { y++; kv("Target P/E", state.peRes.pe, '0.0"x"'); state.peRes.years.forEach((yy2) => { kv("Implied price at target P/E, " + yy2.label, yy2.o ? yy2.o.price : null, "0.00"); kv("  upside", yy2.o ? yy2.o.up : null, F.yoy); }); }
