@@ -2,7 +2,10 @@
 
     python templates/build.py   ->  templates/stock_template.html
 
-The translations live in src/i18n/{ja,zh-Hant}.json, keyed by the English text.
+The translations live in src/i18n/{ja,zh-Hant}.json, keyed by the English text. New user-visible text in
+page.html goes through TR("...") and gets an entry in both files; anything missing shows in English.
+The PDF export in Japanese or Chinese loads Noto Sans JP/TC (400 Regular, @expo-google-fonts 0.4.3), published
+next to the page as fonts/NotoSansJP_400Regular.ttf and fonts/NotoSansTC_400Regular.ttf.
 """
 import json
 from pathlib import Path
