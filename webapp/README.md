@@ -42,8 +42,13 @@ until the owner records the FMP display licence in **Admin → Settings**. That 
 redistributing its data to other people needs a data display licence. After that, invited emails (Admin →
 Allowlist) can sign in; open sign-ups are a separate switch.
 
+Edgar Tools' own data follows the same rule with its own licence: until it's recorded, other accounts get filings
+straight from sec.gov.
+
 Billing stays off until the display licence **and** a legal check are recorded, and then the owner switches it on.
-While billing is off, invited users are on the complimentary plan.
+While billing is off, invited users are on the complimentary plan. Stripe's events are still applied while billing
+is off (for the mode of the configured key), so nothing a customer does in Stripe is lost; they just don't grant a
+plan until billing is on. A complimentary plan and a subscription: the better of the two applies.
 
 ## Plans and what's metered
 
@@ -54,8 +59,10 @@ While billing is off, invited users are on the complimentary plan.
 | Plus | 30 | 150 | 6 | 6 | 100 | 4 | 100 | $10 / $15 |
 | Pro | 120 | 1,000 | 25 | 25 | 400 | 15 | 500 | $30 / $45 |
 
-The limits live in the `plans` table and are edited in Admin → Plans. A company counts once per period, however
-often it's reloaded; MSFT, which the page opens on for a first-time visitor, doesn't count. A segment fill or a guidance read counts once per run (it may read several filings). Every
+The limits live in the `plans` table and are edited in Admin → Plans. A company counts once per period, once it
+has returned data (a typo doesn't count), however often it's reloaded; MSFT, which the page opens on for a
+first-time visitor, doesn't count, takes no saved-model slot and its automatic guidance read is free. Users can
+delete saved models from the account menu. A segment fill or a guidance read counts once per run (it may read several filings). Every
 FMP, SEC and Claude call is written to `usage_events` with its cost, so the admin area shows cost against revenue
 per user. There's also a global daily Claude budget (Admin → Settings) that pauses Claude for everyone but the owner.
 
