@@ -1178,8 +1178,8 @@ const I0 = (mdl, k, fy) => mdl.I(k, fy) ?? 0;
   // Calendar months a quarter or half covers, since fiscal years differ by company. A period ending in the first
   // week of a month (52/53-week years) counts as ending the month before.
   const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-  function periodMonths(c, short) {
-    const A = state.act;
+  function periodMonths(c, short, Aopt) {
+    const A = Aopt || state.act;
     if (!A || !c || !(c.type === "Q" || c.type === "H") || !isNum(c.fy)) return "";
     const absMonth = (dt) => { const d = new Date(String(dt).slice(0, 10) + "T00:00:00"); return d.getFullYear() * 12 + d.getMonth() - (d.getDate() <= 7 ? 1 : 0); };
     const fyEnd = absMonth(A.lastA.date) + (c.fy - +A.lastA.fiscalYear) * 12;
@@ -1830,11 +1830,12 @@ Answer the engine's three questions: what is the investment story; what is the e
 Frameworks: story before valuation; explain the chart (why the stock moved); drivers = price × quantity, or demand × distribution; the toll booth: does the company own a chokepoint asset customers cannot replace, is its advantage accumulating or re-earned each year, is there evidence of pricing power; four lenses: Warren Buffett (moat durability and margins, owner earnings, capital allocation, margin of safety), Will Danoff (best of breed, accelerating earnings, upward revisions, beating every time, would you buy it again today), Joel Tillinghast (low debt, real cash flow, reasonable P/E, verifiable from outside), Peter Lynch (a two-minute story, which of his six categories, a buyable price against growth, runway left).
 Source discipline: every number must come from the documents provided; quote it as given and never do arithmetic; name the source briefly in parentheses the first time you use it, e.g. (Q2 FY2026 call), (10-K), (8-K 2026-02-27), (model), (consensus). If a number cannot be sourced, leave it out. Never invent quotes, estimates or price moves.`;
   const NOTES_PROMPT = `Write working notes on this company as a portfolio manager presenting one idea to an experienced investor and trying to convince them: a story in plain English, in full sentences and paragraphs, with no bullet points except where stated, no markdown symbols (# * **) and no rule ids. Use management's own words from the transcripts where they carry the story (short quotes). The investor knows the industry; do not explain basics. Be honest about the weak points: the case is only credible if the bear case is real. No price target and no buy or sell call; the investor decides.
-Use these headings, each on its own line in capitals, each followed by one or two paragraphs:
+Use these headings, each on its own line in capitals, each followed by one or two paragraphs (THE LAST QUARTER and CHECKPOINTS have their own format):
+THE LAST QUARTER: the first section. One line naming the quarter (with its months) and the report date; then revenue and EPS against consensus, saying beat, miss or in line and by how much, exactly as the LAST QUARTER RESULTS document gives them (do not recompute), plus the guidance for the next quarter against consensus if that document gives it; then one or two sentences on what drove the quarter; then the hottest topics as three to five short lines starting with "- ", each the topic and its key number, ranked by how much of the call and Q&A they took.
 THE STORY: two sentences, the one idea and why now.
 THE BUSINESS: what it sells, why customers cannot do without it, whether it is the indispensable number one in its field, and which segments and regions carry the profits (and how concentrated they are).
 WHY NOW: what changed in the numbers and in demand, how the story has changed over the earnings calls, and whether guidance given in earlier calls was delivered.
-THE LATEST CALL: the date and quarter; the topics management spent most time on, with numbers; what the Q&A focused on (name the analysts and firms behind the key questions) and how management answered; which themes are new and which keep coming back.
+WHAT THE Q&A FOCUSED ON: the themes analysts pressed on in the latest call (name the analysts and firms behind the key questions) and how management answered; which themes are new and which keep coming back across the calls. Do not repeat the topic list from THE LAST QUARTER.
 SWINGS TO FUTURE EARNINGS: anything management said will move earnings materially in coming periods (cost step-ups or roll-offs, margin targets, pricing, timing, FX, tax, M&A, restructuring, investment), with size and period, whether consensus seems to reflect it, and any one-off items that distort reported or consensus numbers.
 WHAT DRIVES THE ECONOMICS: the drivers as price × quantity (or demand × distribution); scale effects and operating leverage from the model's cost-line slopes and cost structure; pricing headroom (did price rises hold volume?); which demand levers management is spending on and whether they move demand; trend breaks in the model data and the event behind each; and whether each gap to peers or to the past is structural (outside management's control) or operational (closable by management). Say when public data only supports a directional read.
 VALUATION IN THE CYCLE: where the P/E sits in the company's own ten-year history (use the VALUATION CYCLE document) and the most likely reason it is there; include the recovery value if the document gives one.
@@ -1919,6 +1920,7 @@ Keep the whole draft under 1,300 words.`;
       }
       parts.push("MODEL DATA (" + (A.lastA.reportedCurrency || "USD") + ", millions except per share):\n" + data.join("\n"));
       try { parts.push(valuationDocs(S)); } catch (e) {}
+      try { const cal = await call(mcp, "calendar", { endpoint: "earnings-company", symbol: t, limit: 10 }); const d = lastQuarterDoc(S, cal); if (d) parts.unshift(d); } catch (e) { const d = lastQuarterDoc(S, null); if (d) parts.unshift(d); }
       parts.push("COMPANY DESCRIPTION (FMP):\n" + clip(S.prof?.description, 2500));
       const out = await sample([{ role: "user", content: NOTES_SYSTEM + "\n\nDOCUMENTS FOR " + (S.prof?.companyName || t) + " (" + t + "):\n\n" + parts.join("\n\n") + "\n\nINSTRUCTIONS:\n" + NOTES_PROMPT }], { modelTier: "default" });
       const text = String(out?.text || "").trim();
@@ -1942,6 +1944,38 @@ Keep the whole draft under 1,300 words.`;
     } catch (e) {
       setNotice(e && e.code === "server_not_connected" ? "Drafting notes needs the FMP and EDGAR Tools connectors. Add them in claude.ai Settings → Connectors." : "Couldn't draft " + esc(t) + " notes (" + esc(e?.message || e?.code || "error") + "). Call summaries already done are saved, so the next run continues from there.");
     } finally { state.notesBusy = false; renderNotes(); }
+  }
+  // The last reported quarter against consensus: FMP's earnings report (EPS as the company reports it, usually
+  // adjusted), or, without it, the page's quarterly consensus against reported (GAAP) figures
+  function lastQuarterDoc(S, cal) {
+    const A = S.act, sg = (x) => (x >= 0 ? "+" : "-") + Math.abs(x * 100).toFixed(1) + "%";
+    const verdict = (x) => (!isNum(x) ? "" : Math.abs(x) < 0.005 ? "in line" : x > 0 ? "a beat" : "a miss");
+    const vs = (a, e) => (isNum(a) && isNum(e) && e !== 0 ? (a - e) / Math.abs(e) : null);
+    const qs = [...(A.drillPrev || []), ...(A.drill || [])].filter((q) => q.kind === "A" && q.type === "Q" && q.i?.date).sort((a, b) => String(b.i.date).localeCompare(String(a.i.date)));
+    const qName = (q) => q.label + " (" + periodMonths(q, false, A) + ", quarter ended " + q.i.date + ")";
+    const line = (name, a, e, money) => {
+      const x = vs(a, e);
+      return isNum(a) && isNum(e) ? name + " " + (money ? f0(a) + "m" : a.toFixed(2)) + " against consensus " + (money ? f0(e) + "m" : e.toFixed(2)) + " (" + sg(x) + ", " + verdict(x) + ")" : name + ": no consensus figure";
+    };
+    let d = null;
+    const rows = (Array.isArray(cal) ? cal : []).filter((r) => r && r.date && (isNum(r.epsActual) || isNum(r.revenueActual))).sort((a, b) => String(b.date).localeCompare(String(a.date)));
+    if (rows.length) {
+      const r = rows[0], q = qs.find((x) => x.i.date < r.date);
+      d = "Reported " + r.date + " for " + (q ? qName(q) : "the latest quarter") + ": " + line("revenue", r.revenueActual, r.revenueEstimated, true) + "; " + line("EPS", r.epsActual, r.epsEstimated, false) + ". EPS is as the company reported it in FMP's earnings record, which usually matches its adjusted figure.";
+      const last = rows.slice(0, 4), eb = last.filter((x) => vs(x.epsActual, x.epsEstimated) > 0.005).length, rb = last.filter((x) => vs(x.revenueActual, x.revenueEstimated) > 0.005).length;
+      if (last.length > 1) d += " Over the last " + last.length + " reports, EPS beat consensus " + eb + " times and revenue " + rb + " times.";
+    } else if (qs.length) {
+      const q = qs[0], est = (Array.isArray(S.raw?.estQ) ? S.raw.estQ : []).find((e) => e.date === q.i.date);
+      if (est) d = "Quarter " + qName(q) + ": " + line("revenue", rev(q), nn(est.revenueAvg), true) + "; " + line("reported (GAAP) EPS", nn(q.i.epsDiluted), nn(est.epsAvg), false) + ". Consensus EPS may be on an adjusted basis, so the EPS comparison is only indicative.";
+    }
+    if (!d) return null;
+    // guidance for the next quarter against consensus, when the model has both
+    const nextC = (A.drill || []).find((c) => c.kind === "C" && c.type === "Q");
+    if (nextC) {
+      const n = String(nextC.label).match(/^Q(\d)/)?.[1], g = n ? S.inp.guide?.periods?.["Q" + n + "|" + nextC.fy] : null;
+      if (g && isNum(g.rev)) d += " Guidance for " + nextC.label + " (" + periodMonths(nextC, false, A) + "): revenue " + f0(g.rev) + "m against consensus " + f0(rev(nextC)) + "m (" + sg(vs(g.rev, rev(nextC))) + ")" + (isNum(g.eps) && isNum(nn(nextC.i?.epsDiluted)) ? ", EPS " + g.eps.toFixed(2) + " against " + nextC.i.epsDiluted.toFixed(2) + " (" + sg(vs(g.eps, nextC.i.epsDiluted)) + ")" : "") + ".";
+    }
+    return "LAST QUARTER RESULTS (computed by the page; quote these figures as given):\n" + d;
   }
   // The engine's reverse DCF (frameworks/dcf.py _implied_growth): the constant growth in free cash flow for n years,
   // then stable growth, at which the present value equals today's enterprise value
