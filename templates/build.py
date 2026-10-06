@@ -30,6 +30,18 @@ else:
     # runtime loaded first (a classic, synchronous script, so window.claude exists before the page script runs),
     # and the page's Claude prompts exported as version 1 of the server's prompt registry.
     web = here.parent / "webapp"
+    # wording that only makes sense inside claude.ai, with the web app's version (English source and dictionary
+    # keys change together, so the translations still match)
+    for a, b in (
+        ("pulled live through your FMP connector", "pulled live from FMP"),
+        ("FMPコネクタ経由でリアルタイムに取得しています", "FMPからリアルタイムに取得しています"),
+        ("透過您的 FMP 連接器即時取得", "即時取自 FMP"),
+        ("Drafting needs Claude, available when this page is opened in claude.ai.", "Drafting with Claude isn't included in your plan."),
+        ("下書きにはClaudeが必要です。claude.aiでこのページを開くと利用できます。", "Claude による下書きは、ご利用のプランに含まれていません。"),
+        ("草擬功能需要 Claude，在 claude.ai 中開啟此頁面即可使用。", "您目前的方案不含 Claude 草擬功能。"),
+    ):
+        assert a in page, "web wording: not found: " + a
+        page = page.replace(a, b)
     doc = ('<!doctype html>\n<html lang="en">\n<head>\n<meta charset="utf-8">\n'
            '<meta name="viewport" content="width=device-width,initial-scale=1">\n'
            '<script src="/shim.js"></script>\n</head>\n<body>\n' + page + '\n</body>\n</html>\n')
