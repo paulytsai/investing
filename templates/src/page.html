@@ -1920,7 +1920,7 @@ Rules:
 
   // ---------- all saved models: list, back up, restore ----------
   // Saved records live in this page's data store under the viewer's private area (model-<TICKER>,
-  // sec-<TICKER>), with a copy in this browser.
+  // sec-<TICKER>, calls-<TICKER> for the earnings-call summaries), with a copy in this browser.
   async function listSaved() {
     const out = {};
     try {
@@ -1928,16 +1928,17 @@ Rules:
       if (db && uid) {
         const snap = await db.collection("data/users/" + uid).get();
         snap.docs.forEach((d) => {
-          const m = /^(model|sec)-(.+)$/.exec(d.id); if (!m) return;
-          const data = d.data() || {}, t = data.ticker || m[2];
-          try { (out[t] = out[t] || {})[m[1] === "model" ? "inputs" : "sec"] = JSON.parse(data.json); out[t].updatedAt = Math.max(out[t].updatedAt || 0, data.updatedAt || 0); } catch (e) {}
+          const m = /^(model|sec|calls)-(.+)$/.exec(d.id); if (!m) return;
+          // call summaries are filed under their id's ticker (their ticker field is whichever company was open)
+          const data = d.data() || {}, t = m[1] === "calls" ? m[2] : data.ticker || m[2];
+          try { (out[t] = out[t] || {})[m[1] === "model" ? "inputs" : m[1]] = JSON.parse(data.json); out[t].updatedAt = Math.max(out[t].updatedAt || 0, data.updatedAt || 0); } catch (e) {}
         });
       }
     } catch (e) {}
     try {
       for (let i = 0; i < localStorage.length; i++) {
-        const k = localStorage.key(i), m = /^tmpl\.(inp|sec)\.(.+)$/.exec(k || ""); if (!m) continue;
-        const t = m[2], o = (out[t] = out[t] || {}), key = m[1] === "inp" ? "inputs" : "sec";
+        const k = localStorage.key(i), m = /^tmpl\.(?:(inp|sec)\.|(calls)-)(.+)$/.exec(k || ""); if (!m) continue;
+        const t = m[3], o = (out[t] = out[t] || {}), key = m[1] === "inp" ? "inputs" : m[1] || m[2];
         if (!o[key]) { try { o[key] = JSON.parse(localStorage.getItem(k)); } catch (e) {} }
       }
     } catch (e) {}
@@ -1980,6 +1981,10 @@ Rules:
       if (o.sec) {
         const json = JSON.stringify(o.sec); store.set("tmpl.sec." + t, json);
         try { if (db && uid) await db.collection("data/users/" + uid).doc(secDoc(t)).set({ json, ticker: t, updatedAt: Date.now() }); } catch (e) {}
+      }
+      if (o.calls && typeof o.calls === "object") {
+        const id = "calls-" + t.replace(/[^A-Za-z0-9_~:@+-]/g, "_"), json = JSON.stringify(o.calls); store.set("tmpl." + id, json);
+        try { if (db && uid) await db.collection("data/users/" + uid).doc(id).set({ json, ticker: t, updatedAt: Date.now() }); } catch (e) {}
       }
     }
     await refreshSaved();

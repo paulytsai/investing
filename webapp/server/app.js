@@ -12,6 +12,7 @@ import { sampleRoutes } from "./claude/index.js";
 import { usageFor, limitsFor, consumeCounter, recordEvent, billingEnabled } from "./meter.js";
 import { adminRoutes } from "./admin/index.js";
 import { billingRoutes, stripeWebhook } from "./billing/index.js";
+import { dqRoutes } from "./dq/index.js";
 
 const PUBLIC = path.join(ROOT, "public");
 const WEB = path.join(ROOT, "web");
@@ -74,6 +75,7 @@ export function createApp(db) {
   app.route("/api/docs", docsRoutes(db));
   app.route("/api/tools", toolsRoutes(db));
   app.route("/api/sample", sampleRoutes(db));
+  app.route("/api/admin/dq", dqRoutes(db));
   app.route("/api/admin", adminRoutes(db));
   app.route("/api/billing", billingRoutes(db));
 

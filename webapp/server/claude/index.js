@@ -89,7 +89,7 @@ function consumeRun(db, user, site, ticker, counter) {
 }
 
 let client = null;
-const anthropic = () => (client = client || new Anthropic({ apiKey: config.anthropicApiKey, maxRetries: 2, timeout: 10 * 60 * 1000 }));
+const anthropic = () => (client = client || new Anthropic({ apiKey: config.anthropicApiKey, baseURL: config.claudeBaseUrl, maxRetries: 2, timeout: 10 * 60 * 1000 }));
 
 // one Claude call, streamed: onText gets each delta; returns {text, stopReason, usage, model}
 async function runClaude(settings, content, onText, signal) {
@@ -179,17 +179,19 @@ export function sampleRoutes(db) {
         if (cost) addClaudeSpend(db, user, cost);
         const refused = result.stopReason === "refusal";
         const truncated = result.stopReason === "max_tokens";
-        recordEvent(db, { userId: user.id, feature: "claude", site, provider: result.model === "stub" ? "stub" : "anthropic", ticker, model: result.model,
-          inputTokens: result.usage?.input_tokens, outputTokens: result.usage?.output_tokens, cacheRead: result.usage?.cache_read_input_tokens, cacheWrite: result.usage?.cache_creation_input_tokens,
-          promptVersionId: versionIds.at(-1), costUsd: cost, status: refused ? "refused" : truncated ? "truncated" : "ok", ms: Date.now() - t0 });
-        if (refused) { await send({ type: "error", code: "refused", message: "Claude declined this request." }); return; }
-        const json = S.json || wantJson ? parseJsonReply(result.text) : undefined;
-        if (wantJson && json === undefined && !truncated) { await send({ type: "error", code: "bad_json", message: "Claude's answer wasn't valid JSON." }); return; }
-        // count the use once the answer is in hand
-        if (!truncated) {
+        const json = !refused && (S.json || wantJson) ? parseJsonReply(result.text) : undefined;
+        const badJson = wantJson && json === undefined && !truncated && !refused;
+        const status = refused ? "refused" : truncated ? "truncated" : badJson ? "bad_json" : "ok";
+        // count the use once a usable answer is in hand (before this event is recorded, so a run's first call counts)
+        if (status === "ok") {
           if (S.consume === true) consumeCounter(db, user, S.counter);
           else if (S.consume === "run") consumeRun(db, user, site, ticker, S.counter);
         }
+        recordEvent(db, { userId: user.id, feature: "claude", site, provider: result.model === "stub" ? "stub" : "anthropic", ticker, model: result.model,
+          inputTokens: result.usage?.input_tokens, outputTokens: result.usage?.output_tokens, cacheRead: result.usage?.cache_read_input_tokens, cacheWrite: result.usage?.cache_creation_input_tokens,
+          promptVersionId: versionIds.at(-1), costUsd: cost, status, ms: Date.now() - t0 });
+        if (refused) { await send({ type: "error", code: "refused", message: "Claude declined this request." }); return; }
+        if (badJson) { await send({ type: "error", code: "bad_json", message: "Claude's answer wasn't valid JSON." }); return; }
         if (useCache && json !== undefined && !truncated && result.model !== "stub") {
           db.run(`INSERT INTO claude_cache (key, site, prompt_version_id, ticker, user_id, response, input_tokens, output_tokens, created_at, expires_at_ms)
                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (key) DO NOTHING`,

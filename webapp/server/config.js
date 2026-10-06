@@ -42,6 +42,8 @@ export const config = {
   secUserAgent: env.SEC_USER_AGENT || "",
   // Claude: without a key the app runs Claude features in a labelled stub mode
   anthropicApiKey: env.ANTHROPIC_API_KEY || "",
+  // set explicitly, so the app never inherits an ANTHROPIC_BASE_URL meant for another tool on the same machine
+  claudeBaseUrl: (env.CLAUDE_BASE_URL || "https://api.anthropic.com").replace(/\/$/, ""),
   claudeStub: bool(env.CLAUDE_STUB, !env.ANTHROPIC_API_KEY),
   // billing (off until a display licence and a legal check are recorded in the admin settings)
   stripeSecretKey: env.STRIPE_SECRET_KEY || "",

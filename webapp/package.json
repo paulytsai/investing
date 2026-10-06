@@ -4,12 +4,17 @@
   "private": true,
   "description": "Company model web app: the claude.ai artifact page served with accounts, an admin area and billing",
   "type": "module",
-  "engines": { "node": ">=22.5" },
+  "engines": {
+    "node": ">=22.5"
+  },
   "scripts": {
     "build": "python3 ../templates/build.py --web",
     "start": "node --disable-warning=ExperimentalWarning server/index.js",
     "dev": "node --disable-warning=ExperimentalWarning --watch server/index.js",
-    "test": "node --disable-warning=ExperimentalWarning --test test/"
+    "test": "node --disable-warning=ExperimentalWarning --test test/*.test.js",
+    "e2e": "node test/e2e/smoke.mjs",
+    "fonts": "node scripts/fetch-fonts.js",
+    "stripe:setup": "node scripts/stripe-setup.js"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.131.0",
