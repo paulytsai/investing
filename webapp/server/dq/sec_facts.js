@@ -6,11 +6,11 @@
 import crypto from "node:crypto";
 import { config } from "../config.js";
 import { nowIso } from "../db.js";
+import { secThrottle } from "../tools/sec.js";
 
 export const DEFAULT_SEC_UA = "company-model-webapp/0.1 (self-hosted; set SEC_USER_AGENT)";
 export const SEC_TTL_MS = 24 * 3600e3;
 const STALE_OK_MS = 7 * 24 * 3600e3; // a cached copy this far past expiry still beats an error
-const MIN_GAP_MS = 200;
 const TICKERS_URL = "https://www.sec.gov/files/company_tickers.json";
 const factsUrl = (cik) => `https://data.sec.gov/api/xbrl/companyfacts/CIK${cik10(cik)}.json`;
 
@@ -22,18 +22,8 @@ export class SecError extends Error {
   constructor(code, message) { super(message); this.code = code; }
 }
 
-// one request at a time, MIN_GAP_MS apart, across the whole process
-let gate = Promise.resolve();
-let lastAt = 0;
-function throttle() {
-  const turn = gate.then(async () => {
-    const wait = lastAt + MIN_GAP_MS - Date.now();
-    if (wait > 0) await new Promise((r) => setTimeout(r, wait));
-    lastAt = Date.now();
-  });
-  gate = turn;
-  return turn;
-}
+// shares the filings module's limiter, so the app as a whole stays under SEC's 10 requests a second
+const throttle = secThrottle;
 
 // GET a JSON document from SEC; null on 404
 async function secGet(url) {
@@ -84,7 +74,7 @@ export function pruneSecCache(db) {
 // ---------- ticker -> CIK ----------
 // returns {cik, name} or null when SEC doesn't list the ticker (not an SEC registrant, or an OTC/foreign line)
 export async function lookupCik(db, ticker) {
-  const map = await cached(db, "dq:company_tickers", "company_tickers", null, async () => {
+  const map = await cached(db, "dq:company_tickers", "dq:company_tickers", null, async () => {
     const j = await secGet(TICKERS_URL);
     if (!j || typeof j !== "object") throw new SecError("sec_http", "SEC's company_tickers.json is missing.");
     const m = {};
@@ -130,7 +120,7 @@ export function slimFacts(j, spec) {
 // returns the slimmed facts, or {cik, missing: true} when SEC has no XBRL facts for the company
 export async function companyFacts(db, cik, spec, ticker) {
   const hash = crypto.createHash("sha256").update(JSON.stringify({ a: [...(spec.annual || [])].sort(), i: [...(spec.interim || [])].sort() })).digest("hex").slice(0, 12);
-  return cached(db, `dq:facts:${cik10(cik)}:${hash}`, "companyfacts", ticker, async () => {
+  return cached(db, `dq:facts:${cik10(cik)}:${hash}`, "dq:companyfacts", ticker, async () => {
     const j = await secGet(factsUrl(cik));
     if (!j) return { cik: Number(cik), missing: true };
     return slimFacts(j, spec);

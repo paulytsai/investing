@@ -75,7 +75,13 @@ function applyOverrides(db, ticker, endpoint, body) {
   const kind = endpoint.includes("geographic") ? "geo_label" : "product_label";
   const map = new Map(rules.filter((r) => r.kind === kind).map((r) => { const x = JSON.parse(r.rule); return [x.from, x.to]; }));
   if (!map.size) return body;
-  return body.map((row) => (row && row.data ? { ...row, data: Object.fromEntries(Object.entries(row.data).map(([k, v]) => [map.get(k) || k, v])), _overridden: true } : row));
+  // a label mapped onto one that already exists adds to it (e.g. two FMP labels for the same region)
+  const relabel = (data) => {
+    const out = {};
+    for (const [k, v] of Object.entries(data)) { const to = map.get(k) || k; out[to] = to in out && typeof v === "number" && typeof out[to] === "number" ? out[to] + v : v; }
+    return out;
+  };
+  return body.map((row) => (row && row.data ? { ...row, data: relabel(row.data), _overridden: true } : row));
 }
 
 export async function callFmp(db, tool, input) {

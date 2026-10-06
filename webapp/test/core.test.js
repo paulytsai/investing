@@ -254,3 +254,14 @@ test("deleting an account removes its data, keeps anonymous usage, and needs the
   const owner = await signIn(app, db, OWNER);
   assert.equal((await owner.json("POST", "/api/account/delete", { confirm: OWNER })).status, 409);
 });
+
+test("segment label overrides rename FMP's labels, adding values that land on the same label", async () => {
+  const { app, db } = makeApp();
+  const owner = await signIn(app, db, OWNER);
+  db.run(`INSERT INTO ticker_overrides (ticker, kind, rule, created_at) VALUES ('NKE', 'geo_label', '{"from":"Converse NA","to":"Converse"}', 'x'), ('NKE', 'geo_label', '{"from":"Converse Intl","to":"Converse"}', 'x')`);
+  const restore = stubFmp(() => [{ symbol: "NKE", fiscalYear: 2026, data: { "North America": 100, "Converse NA": 3, "Converse Intl": 2 } }]);
+  try {
+    const r = await owner.json("POST", "/api/tools", { server: "FMP", tool: "statements", input: { endpoint: "revenue-geographic-segments", symbol: "NKE", period: "annual", structure: "flat" } });
+    assert.deepEqual(r.body.payload[0].data, { "North America": 100, Converse: 5 });
+  } finally { restore(); }
+});

@@ -34,11 +34,18 @@ const sha256 = (s) => crypto.createHash("sha256").update(s).digest("hex");
 const canon = (v) => (v == null ? "" : Number.isInteger(v) ? String(v) : String(Math.round(v * 1e6) / 1e6));
 
 // ---------- SEC line rules (each gets g(tag) -> {v, f} | null and returns {v, tag, src: [fact]} | null) ----------
-const T = (...tags) => (g) => { for (const t of tags) { const x = g(t); if (x) return { v: x.v, tag: t, src: [x.f] }; } return null; };
-const MAX = (...tags) => (g) => {
-  let best = null;
-  for (const t of tags) { const x = g(t); if (x && (!best || Math.abs(x.v) > Math.abs(best.v))) best = { v: x.v, tag: t, src: [x.f] }; }
-  return best;
+const RULE_TAGS = new Set(); // every us-gaap tag a rule can read (the SEC fetch keeps only these)
+const T = (...tags) => {
+  tags.forEach((t) => RULE_TAGS.add(t));
+  return (g) => { for (const t of tags) { const x = g(t); if (x) return { v: x.v, tag: t, src: [x.f] }; } return null; };
+};
+const MAX = (...tags) => {
+  tags.forEach((t) => RULE_TAGS.add(t));
+  return (g) => {
+    let best = null;
+    for (const t of tags) { const x = g(t); if (x && (!best || Math.abs(x.v) > Math.abs(best.v))) best = { v: x.v, tag: t, src: [x.f] }; }
+    return best;
+  };
 };
 const OR = (...rules) => (g) => { for (const r of rules) { const x = r(g); if (x) return x; } return null; };
 const DIFF = (a, b) => (g) => { const x = a(g), y = b(g); return x && y ? { v: x.v - y.v, tag: `${x.tag}-${y.tag}`, src: [...x.src, ...y.src] } : null; };
@@ -54,62 +61,68 @@ const SUM = (rules, need = 1) => (g) => {
 };
 const ZERO = (name) => () => ({ v: 0, tag: name, src: [] });
 
-// revenue: the largest of the variants (companies tag subsets such as product revenue next to the total)
-const REV = MAX("Revenues", "RevenueFromContractWithCustomerExcludingAssessedTax", "SalesRevenueNet", "SalesRevenueGoodsNet",
-  "RevenueFromContractWithCustomerIncludingAssessedTax", "SalesRevenueServicesNet", "RevenuesNetOfInterestExpense");
+// revenue: the largest of the variants (companies tag subsets such as product revenue next to the total; utilities
+// tag the total as RegulatedAndUnregulatedOperatingRevenue). FMP may also match one variant: oil companies tag
+// "total revenues and other income" as Revenues, and FMP shows the contract-revenue line (CVX).
+const REV_TAGS = ["Revenues", "RevenueFromContractWithCustomerExcludingAssessedTax", "SalesRevenueNet", "SalesRevenueGoodsNet",
+  "RevenueFromContractWithCustomerIncludingAssessedTax", "SalesRevenueServicesNet", "RevenuesNetOfInterestExpense", "RegulatedAndUnregulatedOperatingRevenue"];
+const REV = MAX(...REV_TAGS);
+// banks: SEC "Revenues" is net revenue; FMP's revenue is roughly gross (interest income + noninterest income, within
+// a few percent: FMP nets some items in some years)
+const BANK_GROSS_REV = SUM([T("InterestAndDividendIncomeOperating", "InterestIncomeOperating"), T("NoninterestIncome")], 2);
 const COGS = T("CostOfRevenue", "CostOfGoodsAndServicesSold", "CostOfGoodsSold", "CostOfServices", "CostOfGoodsAndServiceExcludingDepreciationDepletionAndAmortization");
 const GP = OR(T("GrossProfit"), DIFF(REV, COGS));
+const GP_DERIVED = DIFF(REV, COGS);
 const RND = T("ResearchAndDevelopmentExpense", "ResearchAndDevelopmentExpenseExcludingAcquiredInProcessCost", "TechnologyAndDevelopmentExpense");
 const SGA = OR(T("SellingGeneralAndAdministrativeExpense"),
   SUM([T("GeneralAndAdministrativeExpense"), T("SellingAndMarketingExpense", "MarketingExpense", "MarketingAndAdvertisingExpense", "SellingExpense")], 2));
 // Nike tags no operating income: gross profit - SG&A (- R&D)
-const OPINC = OR(T("OperatingIncomeLoss"), DIFF(DIFF(GP, SGA), OR(RND, ZERO("noRnD"))));
+const OPINC_DERIVED = DIFF(DIFF(GP, SGA), OR(RND, ZERO("noRnD")));
 const NI = T("NetIncomeLoss", "NetIncomeLossAvailableToCommonStockholdersBasic", "ProfitLoss");
 const EPSD = T("EarningsPerShareDiluted", "EarningsPerShareBasicAndDiluted");
 const SHD = T("WeightedAverageNumberOfDilutedSharesOutstanding", "WeightedAverageNumberOfShareOutstandingBasicAndDiluted");
 const ASSETS = T("Assets");
-const LIAB = T("Liabilities"); // not every company tags a total (Nike doesn't); equity is checked as well
+const LIAB = T("Liabilities"); // not every company tags a total (Nike, Coca-Cola don't); equity is checked as well
 const EQUITY = T("StockholdersEquity", "StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest");
-const CASH = T("CashAndCashEquivalentsAtCarryingValue", "Cash", "CashAndDueFromBanks", "CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalents");
+const CASH = T("CashAndCashEquivalentsAtCarryingValue", "Cash");
+// the cash-flow statement's total: what FMP shows as cash for banks (cash and due from banks + deposits with banks),
+// and the only untagged-by-segment cash figure for Berkshire; it includes restricted cash, hence the looser match.
+// Less the restricted cash it is the balance-sheet line for companies that stopped tagging that (Chevron from 2024).
+const CASH_RESTRICTED = T("CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalents");
+const CASH_EX_RESTRICTED = DIFF(CASH_RESTRICTED, SUM([T("RestrictedCashCurrent", "RestrictedCashAndCashEquivalentsAtCarryingValue"),
+  T("RestrictedCashNoncurrent", "RestrictedCashAndCashEquivalentsNoncurrent")], 1));
+const BANK_CASH = OR(SUM([T("CashAndDueFromBanks"), T("InterestBearingDepositsInBanks")], 2), T("CashAndDueFromBanks"));
 const CFO = T("NetCashProvidedByUsedInOperatingActivities", "NetCashProvidedByUsedInOperatingActivitiesContinuingOperations");
 const CAPEX = T("PaymentsToAcquirePropertyPlantAndEquipment", "PaymentsToAcquireProductiveAssets", "PaymentsForCapitalImprovements", "PaymentsToAcquireOtherPropertyPlantAndEquipment");
 
 const neg = (v) => (isNum(v) ? -v : v);
-// field, label, D(uration) | I(nstant), SEC rule, FMP value from {i, b, c} rows, per-share kind, absolute floor
+// field, label, D(uration) | I(nstant), SEC definitions, FMP value from {i, b, c} rows, per-share kind.
+// sec: FMP passes when it matches any definition that has a value (within REL_TOL, or the definition's own tol), so a
+// company-type convention (bank revenue, cash with restricted cash) isn't reported as an FMP error; otherwise the
+// first definition with a value is the reference the flag reports. passOnly definitions (gross profit and operating
+// income derived from other lines, for companies that report neither) can confirm FMP but never raise a flag: FMP's
+// own construction of a line the company doesn't report is a definition, not an error.
 export const LINES = [
-  { field: "revenue", label: "Revenue", kind: "D", rule: REV, fmp: (r) => r.i?.revenue },
-  { field: "gross_profit", label: "Gross profit", kind: "D", rule: GP, fmp: (r) => r.i?.grossProfit },
-  { field: "operating_income", label: "Operating income", kind: "D", rule: OPINC, fmp: (r) => r.i?.operatingIncome },
-  { field: "net_income", label: "Net income", kind: "D", rule: NI, fmp: (r) => r.i?.netIncome },
-  { field: "eps_diluted", label: "Diluted EPS", kind: "D", rule: EPSD, fmp: (r) => r.i?.epsDiluted ?? r.i?.epsdiluted, ps: "eps" },
-  { field: "shares_diluted", label: "Diluted shares", kind: "D", rule: SHD, fmp: (r) => r.i?.weightedAverageShsOutDil, ps: "shares" },
-  { field: "total_assets", label: "Total assets", kind: "I", rule: ASSETS, fmp: (r) => r.b?.totalAssets },
-  { field: "total_liabilities", label: "Total liabilities", kind: "I", rule: LIAB, fmp: (r) => r.b?.totalLiabilities },
-  { field: "total_equity", label: "Stockholders' equity", kind: "I", rule: EQUITY, fmp: (r) => r.b?.totalStockholdersEquity },
-  { field: "cash", label: "Cash and equivalents", kind: "I", rule: CASH, fmp: (r) => r.b?.cashAndCashEquivalents },
-  { field: "operating_cash_flow", label: "Operating cash flow", kind: "D", rule: CFO, fmp: (r) => r.c?.operatingCashFlow ?? r.c?.netCashProvidedByOperatingActivities },
-  { field: "capex", label: "Capital expenditure", kind: "D", rule: CAPEX, fmp: (r) => neg(r.c?.capitalExpenditure ?? r.c?.investmentsInPropertyPlantAndEquipment) },
-];
+  { field: "revenue", label: "Revenue", kind: "D", sec: [REV, ...REV_TAGS.map((t) => T(t)), { rule: BANK_GROSS_REV, tol: 0.03 }], fmp: (r) => r.i?.revenue },
+  { field: "gross_profit", label: "Gross profit", kind: "D", sec: [T("GrossProfit"), { rule: GP_DERIVED, passOnly: true }], fmp: (r) => r.i?.grossProfit },
+  { field: "operating_income", label: "Operating income", kind: "D", sec: [T("OperatingIncomeLoss"), { rule: OPINC_DERIVED, passOnly: true }], fmp: (r) => r.i?.operatingIncome },
+  { field: "net_income", label: "Net income", kind: "D", sec: [NI], fmp: (r) => r.i?.netIncome },
+  { field: "eps_diluted", label: "Diluted EPS", kind: "D", sec: [EPSD], fmp: (r) => r.i?.epsDiluted ?? r.i?.epsdiluted, ps: "eps" },
+  { field: "shares_diluted", label: "Diluted shares", kind: "D", sec: [SHD], fmp: (r) => r.i?.weightedAverageShsOutDil, ps: "shares" },
+  { field: "total_assets", label: "Total assets", kind: "I", sec: [ASSETS], fmp: (r) => r.b?.totalAssets },
+  { field: "total_liabilities", label: "Total liabilities", kind: "I", sec: [LIAB], fmp: (r) => r.b?.totalLiabilities },
+  { field: "total_equity", label: "Stockholders' equity", kind: "I", sec: [EQUITY], fmp: (r) => r.b?.totalStockholdersEquity },
+  { field: "cash", label: "Cash and equivalents", kind: "I", sec: [CASH, { rule: CASH_EX_RESTRICTED, tol: 0.03 }, { rule: CASH_RESTRICTED, tol: 0.03 }, BANK_CASH], fmp: (r) => r.b?.cashAndCashEquivalents },
+  { field: "operating_cash_flow", label: "Operating cash flow", kind: "D", sec: [CFO], fmp: (r) => r.c?.operatingCashFlow ?? r.c?.netCashProvidedByOperatingActivities },
+  { field: "capex", label: "Capital expenditure", kind: "D", sec: [CAPEX], fmp: (r) => neg(r.c?.capitalExpenditure ?? r.c?.investmentsInPropertyPlantAndEquipment) },
+].map((l) => ({ ...l, sec: l.sec.map((d) => (typeof d === "function" ? { rule: d } : d)) }));
 const STATEMENT_OF = { revenue: "i", gross_profit: "i", operating_income: "i", net_income: "i", eps_diluted: "i", shares_diluted: "i",
   total_assets: "b", total_liabilities: "b", total_equity: "b", cash: "b", operating_cash_flow: "c", capex: "c" };
 
-// every us-gaap tag the rules can read (the SEC fetch keeps only these)
 const ANCHORS = ["Revenues", "RevenueFromContractWithCustomerExcludingAssessedTax", "SalesRevenueNet", "SalesRevenueGoodsNet", "NetIncomeLoss"];
 const SPLIT_TAGS = ["EarningsPerShareDiluted", "EarningsPerShareBasic"];
-function rulesTags() {
-  const seen = new Set();
-  const probe = (tag) => { seen.add(tag); return null; };
-  for (const l of LINES) l.rule(probe);
-  // DIFF/SUM/OR stop early on a miss, so walk the alternatives too
-  for (const r of [REV, COGS, GP, RND, SGA, OPINC]) r(probe);
-  for (const t of ["GrossProfit", "SellingGeneralAndAdministrativeExpense", "GeneralAndAdministrativeExpense", "SellingAndMarketingExpense",
-    "MarketingExpense", "MarketingAndAdvertisingExpense", "SellingExpense", "CostOfRevenue", "CostOfGoodsAndServicesSold", "CostOfGoodsSold",
-    "CostOfServices", "CostOfGoodsAndServiceExcludingDepreciationDepletionAndAmortization", "ResearchAndDevelopmentExpense",
-    "ResearchAndDevelopmentExpenseExcludingAcquiredInProcessCost", "TechnologyAndDevelopmentExpense", ...ANCHORS]) seen.add(t);
-  return seen;
-}
 export const SEC_SPEC = {
-  annual: [...rulesTags()].filter((t) => !SPLIT_TAGS.includes(t)).map((t) => "us-gaap:" + t),
+  annual: [...new Set([...RULE_TAGS, ...ANCHORS])].filter((t) => !SPLIT_TAGS.includes(t)).map((t) => "us-gaap:" + t),
   interim: [...SPLIT_TAGS.map((t) => "us-gaap:" + t), "dei:EntityCommonStockSharesOutstanding"],
 };
 
@@ -187,8 +200,8 @@ export function detectSplits(facts) {
 }
 const splitFactor = (splits, filed) => splits.reduce((f, [r, lo]) => (filed <= lo ? f * r : f), 1);
 
-// the SEC value of one line for one fiscal year
-function secValue(store, splits, start, end, line) {
+// the SEC value of one definition of a line for one fiscal year
+function secValue(store, splits, start, end, line, rule) {
   let factor = 1;
   const g = (tag) => {
     const m = store.get(tag);
@@ -209,13 +222,13 @@ function secValue(store, splits, start, end, line) {
     if (k !== 1) factor = k;
     return { v, f };
   };
-  const res = line.rule(g);
+  const res = rule(g);
   return res ? { ...res, splitFactor: factor } : null;
 }
 
-function differs(fmpV, secV, floor) {
+function differs(fmpV, secV, floor, tol = REL_TOL) {
   const d = Math.abs(fmpV - secV);
-  return d > REL_TOL * Math.abs(secV) + 1e-9 && d > floor + 1e-9;
+  return d > tol * Math.abs(secV) + 1e-9 && d > floor + 1e-9;
 }
 const floorOf = (line) => (line.ps === "eps" ? FLOORS.eps : line.ps === "shares" ? FLOORS.shares : FLOORS.money);
 const pct = (a, b) => (b ? Math.round(((a - b) / Math.abs(b)) * 10000) / 100 : null);
@@ -238,8 +251,8 @@ export async function runDqCheck(db, rawTicker, opts = {}) {
   running.add(ticker);
   const t0 = Date.now();
   try {
-    const summary = { ticker, cik: null, entity: null, years: [], checked: 0, flagged: 0, created: 0, resolved: 0, skipped: [], no_sec_value: {}, flags: [] };
-    const results = []; // {kind, field, period, mismatch: null | {fmp, sec, detail}}
+    const summary = { ticker, cik: null, entity: null, years: [], checked: 0, flagged: 0, created: 0, resolved: 0, skipped: [], no_sec_value: {}, unverified: {}, flags: [] };
+    const results = []; // {kind, field, period, fmp, sec, source, unverified?, mismatch: null | {fmp, sec, detail}}
     const skip = (why) => { if (!summary.skipped.includes(why)) summary.skipped.push(why); };
 
     // FMP statements (the latest annual rows)
@@ -261,7 +274,7 @@ export async function runDqCheck(db, rawTicker, opts = {}) {
     let sec = null;
     if (currency !== "USD") skip(`FMP reports ${ticker} in ${currency}; the SEC comparison needs USD.`);
     else {
-      try { sec = await loadSec(db, ticker, summary); }
+      try { sec = await loadSec(db, ticker, years[0].i.cik, years[0].date, summary); }
       catch (e) { skip(`SEC company facts unavailable: ${e.message}`); db.logError("dq", e.code || "sec_fetch", e.message, { ticker }); }
     }
 
@@ -273,16 +286,21 @@ export async function runDqCheck(db, rawTicker, opts = {}) {
         for (const [end, start] of sec.fys) { const d = Math.abs(days(end, y.date)); if (d <= 7 && (!best || d < best.d)) best = { end, start, d }; }
         if (!best) { skip(`${y.period}: no SEC 10-K fiscal year ending near ${y.date}.`); continue; }
         for (const line of LINES) {
-          const s = secValue(sec.store, sec.splits, best.start, best.end, line);
-          if (!s) { (summary.no_sec_value[line.field] ||= []).push(y.period); continue; }
-          if (line.field === "revenue") secRevenue.set(y.date, s.v);
+          const defs = line.sec.map((d) => ({ tol: d.tol, passOnly: !!d.passOnly, res: secValue(sec.store, sec.splits, best.start, best.end, line, d.rule) }))
+            .filter((d, i, all) => d.res && all.findIndex((x) => x.res && x.res.tag === d.res.tag) === i);
+          if (!defs.length) { (summary.no_sec_value[line.field] ||= []).push(y.period); continue; }
+          if (line.field === "revenue") secRevenue.set(y.date, defs[0].res.v);
           const stmt = STATEMENT_OF[line.field];
           if (!y[stmt]) { skip(`${y.period}: FMP has no ${stmt === "b" ? "balance sheet" : "cash-flow statement"}.`); continue; }
           const fv = line.fmp(y);
           if (!isNum(fv)) { skip(`${y.period}: FMP has no ${line.label.toLowerCase()}.`); continue; }
           summary.checked++;
+          const hit = defs.find((d) => !differs(fv, d.res.v, floorOf(line), d.tol));
+          const ref = defs.find((d) => !d.passOnly);
+          const s = (hit || ref || defs[0]).res;
           const r = { kind: "sec_mismatch", field: line.field, period: y.period, fmp: fv, sec: s.v, source: s.tag, mismatch: null };
-          if (differs(fv, s.v, floorOf(line))) {
+          if (!hit && !ref) { r.unverified = true; (summary.unverified[line.field] ||= []).push(y.period); }
+          else if (!hit) {
             const f0 = s.src[0] || {};
             r.mismatch = {
               fmp: fv, sec: s.v,
@@ -292,6 +310,7 @@ export async function runDqCheck(db, rawTicker, opts = {}) {
                 diff: Math.round((fv - s.v) * 1e6) / 1e6, diff_pct: pct(fv, s.v),
                 ...(s.splitFactor !== 1 ? { split_factor: s.splitFactor } : {}),
                 ...(s.src.length > 1 ? { sources: s.src.map((f) => ({ val: f.val, accession: f.accn, form: f.form, filed: f.filed, start: f.start, end: f.end })) } : {}),
+                ...(defs.length > 1 ? { also_compared: defs.filter((d) => d.res !== s).map((d) => ({ tag: d.res.tag, value: d.res.v })) } : {}),
               },
             };
           }
@@ -311,16 +330,19 @@ export async function runDqCheck(db, rawTicker, opts = {}) {
         const vals = seg && seg.data && typeof seg.data === "object" ? Object.entries(seg.data).filter(([, v]) => isNum(v)) : [];
         if (!vals.length) continue;
         const sum = vals.reduce((s, [, v]) => s + v, 0);
-        const total = secRevenue.get(y.date) ?? (isNum(y.i.revenue) ? y.i.revenue : null);
-        if (!total) continue;
+        // the members should add up to total revenue: SEC's figure, or FMP's own (banks: FMP's is gross revenue)
+        const totals = [["sec_revenue", secRevenue.get(y.date)], ["fmp_revenue", y.i.revenue]].filter(([, v]) => isNum(v) && v);
+        if (!totals.length) continue;
         summary.checked++;
-        const r = { kind: "segment_sum", field, period: y.period, fmp: sum, sec: total, source: secRevenue.has(y.date) ? "sec_revenue" : "fmp_revenue", mismatch: null };
-        if (Math.abs(sum - total) > SEGMENT_TOL * Math.abs(total)) {
+        const hit = totals.find(([, v]) => Math.abs(sum - v) <= SEGMENT_TOL * Math.abs(v));
+        const [source, total] = hit || totals[0];
+        const r = { kind: "segment_sum", field, period: y.period, fmp: sum, sec: total, source, mismatch: null };
+        if (!hit) {
           r.mismatch = {
             fmp: sum, sec: total,
             detail: {
               label: `Sum of ${label} segments vs total revenue`, endpoint, members: Object.fromEntries(vals), member_count: vals.length,
-              total_source: secRevenue.has(y.date) ? "sec" : "fmp", fmp_revenue: y.i.revenue ?? null, fmp_date: y.date,
+              total_source: source === "sec_revenue" ? "sec" : "fmp", sec_revenue: secRevenue.get(y.date) ?? null, fmp_revenue: y.i.revenue ?? null, fmp_date: y.date,
               diff: sum - total, diff_pct: pct(sum, total), ...(seg._overridden ? { overridden_labels: true } : {}),
             },
           };
@@ -334,23 +356,34 @@ export async function runDqCheck(db, rawTicker, opts = {}) {
   }
 }
 
-// SEC facts for a ticker, or null with the reason in summary.skipped
-async function loadSec(db, ticker, summary) {
+// SEC facts for a ticker, or null with the reason in summary.skipped. Candidates: the CIK on FMP's statements (the
+// filer FMP read) and the CIK in SEC's ticker map; they differ after a holding-company reorganisation (XOM in 2026:
+// the map names the new holding company, which has no 10-K yet). The first candidate whose 10-K fiscal years include
+// FMP's latest year wins, else the first with any 10-K years.
+async function loadSec(db, ticker, fmpCik, latestDate, summary) {
+  const cands = [];
+  if (/^\d{1,10}$/.test(String(fmpCik || "").trim()) && Number(fmpCik) > 0) cands.push({ cik: Number(fmpCik), source: "fmp" });
   const hit = await lookupCik(db, ticker);
-  if (!hit) { summary.skipped.push(`No SEC CIK for ${ticker} (not an SEC registrant, or listed under another symbol).`); return null; }
-  summary.cik = hit.cik;
-  summary.entity = hit.name;
-  const facts = await companyFacts(db, hit.cik, SEC_SPEC, ticker);
-  if (facts.missing) { summary.skipped.push(`SEC has no XBRL company facts for CIK ${hit.cik}.`); return null; }
-  summary.entity = facts.entityName || hit.name;
-  const store = factStore(facts.facts);
-  const fys = fiscalYears(store);
-  if (!fys.size) {
-    const foreign = (facts.forms?.["20-F"] || 0) + (facts.forms?.["40-F"] || 0) > 0 || facts.namespaces?.includes("ifrs-full");
-    summary.skipped.push(foreign ? `${ticker} files 20-F/40-F (foreign private issuer): no 10-K facts to compare.` : `No 10-K annual facts for ${ticker} in SEC company facts.`);
-    return null;
+  if (hit && !cands.some((c) => c.cik === hit.cik)) cands.push({ cik: hit.cik, name: hit.name, source: "sec_ticker_map" });
+  if (!cands.length) { summary.skipped.push(`No SEC CIK for ${ticker} (not an SEC registrant, or listed under another symbol).`); return null; }
+  let why = null, fallback = null;
+  for (const c of cands) {
+    const facts = await companyFacts(db, c.cik, SEC_SPEC, ticker);
+    if (facts.missing) { why ||= `SEC has no XBRL company facts for CIK ${c.cik}.`; continue; }
+    const store = factStore(facts.facts);
+    const fys = fiscalYears(store);
+    if (!fys.size) {
+      const foreign = (facts.forms?.["20-F"] || 0) + (facts.forms?.["40-F"] || 0) > 0 || facts.namespaces?.includes("ifrs-full");
+      why ||= foreign ? `${ticker} files 20-F/40-F (foreign private issuer): no 10-K facts to compare.` : `No 10-K annual facts for ${ticker} (CIK ${c.cik}) in SEC company facts.`;
+      continue;
+    }
+    const found = { c, entity: facts.entityName || c.name || null, sec: { store, fys, splits: detectSplits(facts.facts) } };
+    if ([...fys.keys()].some((end) => Math.abs(days(end, latestDate)) <= 7)) { fallback = found; break; }
+    fallback ||= found;
   }
-  return { store, fys, splits: detectSplits(facts.facts) };
+  if (!fallback) { summary.skipped.push(why); return null; }
+  Object.assign(summary, { cik: fallback.c.cik, cik_source: fallback.c.source, entity: fallback.entity });
+  return fallback.sec;
 }
 
 // write the flags, close stale ones, and fill in the summary
@@ -358,6 +391,7 @@ function finish(db, summary, results, t0, opts = {}) {
   const now = nowIso(), day = now.slice(0, 10), t = summary.ticker;
   db.tx(() => {
     for (const r of results) {
+      if (r.unverified) continue; // FMP differs only from a derived figure: neither a flag nor a confirmation
       let keepFp = null;
       if (r.mismatch) {
         summary.flagged++;
@@ -380,7 +414,7 @@ function finish(db, summary, results, t0, opts = {}) {
     }
     db.setConfig("dq_last_check", { at: now, ticker: t, checked: summary.checked, flagged: summary.flagged, created: summary.created });
   });
-  if (opts.details) summary.comparisons = results.map((r) => ({ kind: r.kind, field: r.field, period: r.period, fmp: r.fmp, sec: r.sec, source: r.source, ok: !r.mismatch }));
+  if (opts.details) summary.comparisons = results.map((r) => ({ kind: r.kind, field: r.field, period: r.period, fmp: r.fmp, sec: r.sec, source: r.source, ok: !r.mismatch && !r.unverified, ...(r.unverified ? { unverified: true } : {}) }));
   summary.ms = Date.now() - t0;
   return summary;
 }
