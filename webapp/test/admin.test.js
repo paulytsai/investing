@@ -53,7 +53,10 @@ test("overview: counts users, Claude cost, upstream calls, dq flags, errors, rev
   db.run("INSERT INTO dq_flags (fingerprint, at, ticker, kind) VALUES ('f1', ?, 'NKE', 'sec_mismatch')", new Date().toISOString());
   db.logError("fmp", "fetch", "boom", { ticker: "NKE" });
   db.run("INSERT INTO invoices (id, user_id, status, currency, amount_due, amount_paid, created_at) VALUES ('in_1', ?, 'paid', 'usd', 2400, 2400, ?)", userId, new Date().toISOString());
-  db.run("INSERT INTO subscriptions (id, user_id, status, plan_id, currency, interval, unit_amount, livemode, synced_at) VALUES ('sub_1', ?, 'active', 'plus', 'usd', 'year', 24000, 0, ?)", userId, new Date().toISOString());
+  const sub = (id, status, livemode, amount) => db.run("INSERT INTO subscriptions (id, user_id, status, plan_id, currency, interval, unit_amount, livemode, synced_at) VALUES (?, ?, ?, 'plus', 'usd', 'year', ?, ?, ?)", id, userId, status, amount, livemode, new Date().toISOString());
+  sub("sub_1", "active", 0, 24000);
+  sub("sub_trial", "trialing", 0, 99000); // a trial isn't revenue yet
+  sub("sub_live", "active", 1, 48000); // live rows don't count while billing runs in test mode
   const o = await owner.json("GET", A + "/overview");
   assert.equal(o.status, 200);
   assert.equal(o.body.users.total, 2);
@@ -66,6 +69,7 @@ test("overview: counts users, Claude cost, upstream calls, dq flags, errors, rev
   assert.equal(o.body.errors_24h, 1);
   assert.deepEqual(o.body.revenue_month, [{ currency: "usd", amount: 2400, invoices: 1 }]);
   assert.equal(o.body.mrr.by_currency.usd, 2000);
+  assert.deepEqual([o.body.mrr.paying, o.body.mrr.trialing, o.body.mrr.livemode], [1, 1, false]);
   assert.equal(o.body.state.licensed_for_others, true);
   assert.equal(o.body.state.billing.enabled, false);
 });

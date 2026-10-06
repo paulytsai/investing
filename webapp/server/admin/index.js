@@ -121,8 +121,10 @@ export function adminRoutes(db) {
     const billing = db.getConfig("billing") || {};
     const budgets = db.getConfig("budgets") || {};
     const licences = db.getConfig("licences") || {};
-    // MRR from the subscriptions that grant a plan, in the mode billing runs in; yearly prices count a twelfth
-    const subs = db.all("SELECT plan_id, status, LOWER(COALESCE(currency, 'usd')) AS currency, interval, unit_amount FROM subscriptions WHERE status IN ('active', 'trialing', 'past_due') AND livemode = ?", billing.live ? 1 : 0);
+    // MRR from paying subscriptions in the mode billing runs in (test rows don't count once live). Trials are counted
+    // apart: their unit_amount is the price after the trial, not money coming in. Yearly prices count a twelfth.
+    const liveMode = !!(billing.enabled && billing.live);
+    const subs = db.all("SELECT plan_id, status, LOWER(COALESCE(currency, 'usd')) AS currency, interval, unit_amount FROM subscriptions WHERE status IN ('active', 'trialing', 'past_due') AND livemode = ?", liveMode ? 1 : 0);
     const mrr = {}, byPlan = {};
     let paying = 0, trialing = 0;
     for (const s of subs) {
@@ -146,7 +148,7 @@ export function adminRoutes(db) {
       errors_24h: db.get("SELECT COUNT(*) AS n FROM error_log WHERE at >= ?", iso(now - DAY)).n,
       errors_by_source: db.all("SELECT source, COUNT(*) AS n FROM error_log WHERE at >= ? GROUP BY source ORDER BY n DESC", iso(now - DAY)),
       revenue_month: db.all("SELECT LOWER(COALESCE(currency, 'usd')) AS currency, SUM(amount_paid) AS amount, COUNT(*) AS invoices FROM invoices WHERE created_at >= ? AND amount_paid > 0 GROUP BY 1 ORDER BY 2 DESC", month),
-      mrr: { by_currency: mrr, by_plan: Object.values(byPlan).map((x) => ({ ...x, mrr: Math.round(x.mrr) })), paying, trialing, livemode: !!billing.live },
+      mrr: { by_currency: mrr, by_plan: Object.values(byPlan).map((x) => ({ ...x, mrr: Math.round(x.mrr) })), paying, trialing, livemode: liveMode },
       state: {
         licensed_for_others: licencedForOthers(db),
         licences: Object.fromEntries(LICENCES.map((k) => [k, licences[k]?.signed_at || null])),

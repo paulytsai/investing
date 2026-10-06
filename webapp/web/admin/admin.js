@@ -932,7 +932,7 @@
           <ul class="small" style="list-style:none;padding:0;margin:0 0 10px">${tick(L.fmp_display, "FMP display licence")}${tick(L.legal, "Legal review")}${tick(E.stripe.configured, "STRIPE_SECRET_KEY on the server" + (E.stripe.mode ? ` (${E.stripe.mode} key)` : ""))}${tick(E.stripe.webhook, "STRIPE_WEBHOOK_SECRET on the server")}</ul>
           <label class="check"><input type="checkbox" name="enabled"${raw(B.enabled ? " checked" : "")}${dis}> Billing on (plans, checkout, free tier for new users)</label>
           <label class="check"><input type="checkbox" name="live"${raw(B.live ? " checked" : "")}${dis}> Live mode (real charges)</label>
-          <p class="hint">Billing can't be turned on until both records above exist; live mode also needs the Stripe key. Turning billing off turns live mode off.</p>
+          <p class="hint">Billing can't be turned on until both records above exist; live mode also needs the Stripe key. Turning billing off turns live mode off. Prices come from Stripe: sync them on the <a href="#plans">Plans</a> page.</p>
           <div class="row"><button class="btn primary" type="submit"${dis}>Save billing</button></div>${updated("billing")}
         </form>
         <div class="stack">
@@ -972,8 +972,20 @@
       await api("POST", A + "/plans/" + encodeURIComponent(f.dataset.id), { name: v.name, active: f.active.checked, limits });
       S.plans = null; toast("Plan saved."); rerender();
     };
+    // prices live in Stripe; the billing module copies them into plan_prices by lookup key
+    on.click.syncPrices = async () => {
+      try { S.priceSync = { at: new Date().toISOString(), ...(await api("POST", "/api/billing/admin/sync-prices", {})) }; }
+      catch (e) { S.priceSync = { at: new Date().toISOString(), error: e.message }; }
+      S.plans = null; rerender();
+    };
     const priceText = (p) => Object.entries(p.currency_options || {}).map(([c, v]) => money(typeof v === "object" && v ? v.unit_amount : v, c)).join(" · ");
-    return html`<div class="head"><div><h1>Plans</h1><p class="muted small">Limits apply per billing period (calendar month without a subscription). Empty means no limit. ${isOwner() ? "" : "Only the owner can change plans."}</p></div></div>
+    const ps = S.priceSync;
+    const syncResult = !ps ? "" : ps.error ? html`<div class="banner bad">Sync failed: ${ps.error}</div>`
+      : html`<div class="banner ${ps.missing && ps.missing.length ? "warn" : "ok"}">Synced ${int((ps.prices || []).length)} price${(ps.prices || []).length === 1 ? "" : "s"} from Stripe at ${when(ps.at)}.${ps.missing && ps.missing.length
+        ? html` <b>Missing in Stripe:</b> ${ps.missing.map((k, i) => html`${i ? ", " : ""}<code>${k}</code>`)}. Create them with <code>npm run stripe:setup</code>, then sync again.` : " All lookup keys found."}</div>`;
+    return html`<div class="head"><div><h1>Plans</h1><p class="muted small">Limits apply per billing period (calendar month without a subscription). Empty means no limit. ${isOwner() ? "" : "Only the owner can change plans."}</p></div>
+        <button class="btn" type="button" data-act="syncPrices"${dis}>Sync prices from Stripe</button></div>
+      ${syncResult}
       ${r.plans.map((p) => html`<form class="card" data-form="plan" data-id="${p.id}">
         <div class="head"><div><h2>${p.name} <span class="muted mono small">${p.id}</span> ${p.active ? "" : html`<span class="badge">inactive</span>`}</h2>
           <p class="small muted">${int(p.subscribers)} subscription${p.subscribers === 1 ? "" : "s"} · ${int(p.comps)} comp${p.comps === 1 ? "" : "s"}</p></div></div>

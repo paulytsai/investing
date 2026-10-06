@@ -444,7 +444,9 @@ export async function runNightlyDq(db, { max = NIGHTLY_MAX, sinceDays = 7 } = {}
 }
 
 // ---------- routes (/api/admin/dq) ----------
-const flagOut = (f) => ({ ...f, detail: f.detail ? JSON.parse(f.detail) : null });
+// detail is JSON when this module wrote it; anything else is passed through as text rather than failing the list
+const parseDetail = (d) => { if (!d) return null; try { return JSON.parse(d); } catch (e) { return d; } };
+const flagOut = (f) => ({ ...f, detail: parseDetail(f.detail) });
 const overrideOut = (o) => ({ ...o, active: !!o.active, rule: JSON.parse(o.rule) });
 const intParam = (v, min, max, d) => { const n = Number.parseInt(v, 10); return Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : d; };
 const idParam = (c) => { const id = Number(c.req.param("id")); if (!Number.isSafeInteger(id) || id < 1) fail(400, "bad_id", "Bad id."); return id; };

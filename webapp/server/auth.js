@@ -80,6 +80,7 @@ function newSession(c, db, userId) {
   const expires = Date.now() + config.sessionDays * 864e5;
   db.run("INSERT INTO sessions (id, user_id, created_at, expires_at_ms, last_seen_at, ip, user_agent) VALUES (?, ?, ?, ?, ?, ?, ?)",
     sha256(token), userId, nowIso(), expires, nowIso(), clientIp(c), (c.req.header("user-agent") || "").slice(0, 200));
+  db.run("UPDATE profiles SET last_seen_at = ? WHERE id = ?", nowIso(), userId);
   setCookie(c, COOKIE, token, { httpOnly: true, sameSite: "Lax", secure: config.cookieSecure, path: "/", maxAge: config.sessionDays * 86400 });
 }
 
