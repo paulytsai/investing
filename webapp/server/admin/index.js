@@ -124,11 +124,12 @@ export function adminRoutes(db) {
     // MRR from paying subscriptions in the mode billing runs in (test rows don't count once live). Trials are counted
     // apart: their unit_amount is the price after the trial, not money coming in. Yearly prices count a twelfth.
     const liveMode = !!(billing.enabled && billing.live);
-    const subs = db.all("SELECT plan_id, status, LOWER(COALESCE(currency, 'usd')) AS currency, interval, unit_amount FROM subscriptions WHERE status IN ('active', 'trialing', 'past_due') AND livemode = ?", liveMode ? 1 : 0);
+    const subs = db.all("SELECT plan_id, status, grace_until, LOWER(COALESCE(currency, 'usd')) AS currency, interval, unit_amount FROM subscriptions WHERE status IN ('active', 'trialing', 'past_due') AND livemode = ?", liveMode ? 1 : 0);
     const mrr = {}, byPlan = {};
     let paying = 0, trialing = 0;
     for (const s of subs) {
       if (s.status === "trialing") { trialing++; continue; }
+      if (s.status === "past_due" && (!s.grace_until || Date.parse(s.grace_until) < Date.now())) continue; // lapsed
       paying++;
       const m = (s.unit_amount || 0) / (s.interval === "year" ? 12 : 1);
       mrr[s.currency] = (mrr[s.currency] || 0) + m;
@@ -242,7 +243,10 @@ export function adminRoutes(db) {
         db.audit(me.id, next.status === "disabled" ? "user.suspended" : "user.reactivated", p.email, { status: p.status }, { status: next.status, sessions_ended: signedOut });
       }
     });
-    return c.json({ ok: true, user: userSummary(profileOr404(p.id)), sessions_ended: signedOut });
+    // a suspended subscriber is still billed by Stripe and can no longer sign in to cancel: say so
+    const paying = next.status === "disabled" && db.get("SELECT 1 FROM subscriptions WHERE user_id = ? AND status IN ('active', 'trialing', 'past_due')", p.id);
+    return c.json({ ok: true, user: userSummary(profileOr404(p.id)), sessions_ended: signedOut,
+      warning: paying ? "This user has an open subscription that Stripe keeps charging. Cancel it in the Stripe dashboard." : undefined });
   });
 
   r.post("/users/:id/comp", async (c) => {

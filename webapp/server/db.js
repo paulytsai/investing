@@ -129,6 +129,8 @@ function seed(db) {
     if (!has("SELECT 1 FROM prompts WHERE site = ?", site)) db.prepare("INSERT INTO prompts (site, description, json_site) VALUES (?, ?, ?)").run(site, description, json);
     const body = constant ? defaults[constant] : "";
     if (constant && !body) continue;
+    // version 1 is the page's text: after a rebuild that changed it, bring the stored copy up to date
+    db.prepare("UPDATE prompt_versions SET body = ? WHERE site = ? AND version = 1 AND created_by = 'build' AND body != ?").run(body || "", site, body || "");
     if (!has("SELECT 1 FROM prompt_versions WHERE site = ?", site)) {
       const r = db.prepare("INSERT INTO prompt_versions (site, version, body, model, effort, max_tokens, note, created_by, created_at) VALUES (?, 1, ?, ?, ?, ?, ?, ?, ?)")
         .run(site, body || "", DEFAULT_MODEL, effort, maxTokens, "Version 1: the prompt as written in page.html", "build", now);

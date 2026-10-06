@@ -49,6 +49,10 @@ export const mockMode = () => !config.production && !config.stripeSecretKey;
 // Which Stripe mode's events and subscriptions count: live only once billing is on and switched to live. While
 // billing is off, live events are ignored and test events still run, so the test flow can be tried end to end.
 const acceptLive = (db) => { const b = billingCfg(db); return !!(b.enabled && b.live); };
+// Stripe's events are applied for the mode of the configured key whether or not billing is switched on, so nothing a
+// customer does in Stripe (a cancellation, a failed renewal) is lost while billing is off; whether a subscription
+// grants a plan is decided separately (meter.planFor).
+const eventsLive = () => (config.stripeSecretKey ? keyIsLive() : false);
 
 // ---------- prices ----------
 const parsePrice = (r) => ({ ...r, currency_options: safeJson(r.currency_options) || {} });
@@ -299,8 +303,8 @@ export async function processEvent(db, event, raw = JSON.stringify(event)) {
     // received (an earlier attempt died) or failed: run it again
   }
   const finish = (status, error = null) => db.run("UPDATE stripe_events SET status = ?, processed_at = ?, error = ? WHERE id = ?", status, nowIso(), error, event.id);
-  if (!!event.livemode !== acceptLive(db)) {
-    finish("ignored", event.livemode ? "live event while billing runs in test mode" : "test event while billing is live");
+  if (!!event.livemode !== eventsLive()) {
+    finish("ignored", event.livemode ? "live event, but the Stripe key is a test key" : "test event, but the Stripe key is a live key");
     return { status: 200, body: { received: true, ignored: true } };
   }
   try {
@@ -351,7 +355,7 @@ function mockSubscription(user, price, t) {
 
 // ---------- routes ----------
 const openSubscription = (db, userId) =>
-  db.get(`SELECT * FROM subscriptions WHERE user_id = ? AND status IN (${OPEN_SQL}) AND livemode = ? ORDER BY synced_at DESC LIMIT 1`, userId, acceptLive(db) ? 1 : 0);
+  db.get(`SELECT * FROM subscriptions WHERE user_id = ? AND status IN (${OPEN_SQL}) AND livemode = ? ORDER BY synced_at DESC LIMIT 1`, userId, eventsLive() ? 1 : 0);
 const checkoutLocale = (l) => ({ ja: "ja", zh: "zh-TW", en: "en" }[l] || "auto");
 
 // Stripe's own messages can name account settings: users get a plain message, the error log gets the detail

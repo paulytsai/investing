@@ -3,7 +3,7 @@
 import { Hono } from "hono";
 import { fail, rateLimit } from "../http.js";
 import { requireUser, licencedForOthers } from "../auth.js";
-import { registerCompany, checkDailyCalls, recordEvent } from "../meter.js";
+import { checkCompany, registerCompany, checkDailyCalls, recordEvent } from "../meter.js";
 import { callFmp, resolveFmp } from "./fmp.js";
 import { callEdgar, EDGAR_TOOLS } from "./edgar.js";
 
@@ -25,9 +25,14 @@ export function toolsRoutes(db) {
       if (user.role !== "owner" && !licencedForOthers(db)) fail(403, "not_licensed", "Market data isn't available to other accounts yet.");
       const { ticker } = resolveFmp(tool, input);
       checkDailyCalls(db, user, "fmp");
-      if (ticker) registerCompany(db, user, ticker);
+      checkCompany(db, user, ticker);
       try {
         const out = await callFmp(db, tool, input);
+        // the company counts once it returns data (an unknown ticker answers with an empty list)
+        const p = out.payload;
+        if (ticker && (Array.isArray(p) ? p.length : p && typeof p === "object" && Object.keys(p).length)) {
+          try { registerCompany(db, user, ticker); } catch (e) { /* went over in a race with another company: the data is already fetched */ }
+        }
         recordEvent(db, { userId: user.id, feature: "fmp", provider: "fmp", ticker, endpoint: tool + "/" + input.endpoint, cacheHit: out.cacheHit, ms: Date.now() - t0, status: out.stale ? "stale" : "ok" });
         return c.json({ payload: out.payload });
       } catch (e) {
@@ -39,10 +44,17 @@ export function toolsRoutes(db) {
     if (server === "Edgar Tools") {
       if (!EDGAR_TOOLS.includes(tool)) fail(400, "unknown_tool", `Edgar Tools ${tool} isn't available here.`);
       const ticker = typeof input.company === "string" ? input.company.toUpperCase() : null;
-      checkDailyCalls(db, user, "sec");
-      const out = await callEdgar(db, tool, input, { user });
-      recordEvent(db, { userId: user.id, feature: "sec", provider: out.provider, ticker, endpoint: tool, cacheHit: out.cacheHit, ms: Date.now() - t0, status: out.stale ? "stale" : "ok" });
-      return c.json({ payload: out.payload });
+      checkDailyCalls(db, user, ["sec", "edgar_tools"]);
+      // Edgar Tools' own data goes to other accounts only once its display licence is recorded; until then, sec.gov
+      const allowEdgarTools = user.role === "owner" || !!db.getConfig("licences")?.edgar_tools_display?.signed_at;
+      try {
+        const out = await callEdgar(db, tool, input, { user, allowEdgarTools });
+        recordEvent(db, { userId: user.id, feature: "sec", provider: out.provider, ticker, endpoint: tool, cacheHit: out.cacheHit, ms: Date.now() - t0, status: out.stale ? "stale" : "ok" });
+        return c.json({ payload: out.payload });
+      } catch (e) {
+        recordEvent(db, { userId: user.id, feature: "sec", provider: "sec", ticker, endpoint: tool, ms: Date.now() - t0, status: "error" });
+        throw e;
+      }
     }
 
     fail(400, "unknown_server", `No connector named ${server}.`);

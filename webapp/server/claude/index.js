@@ -15,7 +15,7 @@ import { config } from "../config.js";
 import { nowIso } from "../db.js";
 import { ApiError, fail, rateLimit, errorBody } from "../http.js";
 import { requireUser, licencedForOthers } from "../auth.js";
-import { checkCounter, consumeCounter, refundCounter, checkClaudeBudget, addClaudeSpend, costOf, recordEvent, usageWarning, limitsFor, periodFor } from "../meter.js";
+import { checkCounter, consumeCounter, refundCounter, checkClaudeBudget, addClaudeSpend, costOf, recordEvent, usageWarning, limitsFor, periodFor, DEMO_TICKER } from "../meter.js";
 import { stubAnswer } from "./stub.js";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -108,7 +108,8 @@ function consumeRun(db, user, site, ticker, counter) {
   const since = new Date(Date.now() - RUN_WINDOW_MS).toISOString();
   const recent = db.get(`SELECT 1 FROM usage_events WHERE user_id = ? AND feature = 'claude' AND ticker IS ? AND site IN (${group.map(() => "?").join(",")}) AND status = 'ok' AND at >= ? LIMIT 1`,
     user.id, ticker, ...group, since);
-  if (recent) return false;
+  // nor does the opening company's automatic guidance read
+  if (recent || ticker === DEMO_TICKER) return false;
   consumeCounter(db, user, counter);
   return true;
 }
@@ -124,6 +125,7 @@ function checkCallSummaries(db, user) {
 
 // requests in flight: at most MAX_INFLIGHT per user, with their estimated cost held against the budgets
 const MAX_INFLIGHT = 2;
+const SLOT_WAIT_MS = 3 * 60 * 1000;
 const inflight = new Map();
 let pendingUsd = 0;
 // what a request may cost: its input, and output up to a typical long answer (adaptive thinking included)
@@ -182,9 +184,6 @@ export function sampleRoutes(db) {
     if (raw.length > S.maxChars) fail(413, "too_large", "This request is too long for Claude here.");
     // feature off: a code the page doesn't read as "Claude is unavailable in this view"
     if (!db.get("SELECT enabled FROM feature_flags WHERE key = ?", S.flag)?.enabled) fail(403, "feature_disabled", "This feature is turned off for now.");
-    // a notes draft is up to 12 call summaries and the draft; a segment fill reads up to 9 releases. Cost is held in
-    // check by the in-flight cap and the reserved budget; this only stops runaway loops.
-    rateLimit("claude:" + user.id, 40, 0.5, "Claude requests");
     checkCounter(db, user, S.counter);
     const { content, settings, versionIds } = applyVersions(db, site, raw);
     const json = !!S.json;
@@ -200,9 +199,16 @@ export function sampleRoutes(db) {
       return streamSSE(c, (sse) => sse.writeSSE({ data: JSON.stringify({ type: "done", text: hit.response, json: parseJsonReply(hit.response), truncated: false, cached: true }) }));
     }
 
-    // reserve: a slot, the estimated cost against the budgets, and the plan's unit (refunded if the call fails)
+    // a notes draft is up to 12 call summaries and the draft; a segment fill reads up to 9 releases. Cost is held in
+    // check by the in-flight cap and the reserved budget; this only stops runaway loops.
+    rateLimit("claude:" + user.id, 40, 0.5, "Claude requests");
+    // reserve: a slot (waiting for one, since the page doesn't retry), the estimated cost against the budgets, and the
+    // plan's unit (refunded if the call fails)
+    for (const until = Date.now() + SLOT_WAIT_MS; (inflight.get(user.id)?.n || 0) >= MAX_INFLIGHT; ) {
+      if (Date.now() > until) fail(429, "rate_limited", "Claude is still working on your earlier requests. Try again when they finish.", { retryable: true, retryAfterMs: 5000 });
+      await new Promise((r) => setTimeout(r, 250));
+    }
     const mine = inflight.get(user.id) || { n: 0, usd: 0 };
-    if (mine.n >= MAX_INFLIGHT) fail(429, "rate_limited", "Claude is already working on requests for you. Try again when they finish.", { retryable: true, retryAfterMs: 5000 });
     const est = estimateUsd(db, settings, content);
     checkClaudeBudget(db, user, mine.usd + est, pendingUsd + est);
     if (site === "call.summary") checkCallSummaries(db, user);

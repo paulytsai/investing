@@ -336,3 +336,66 @@ test("the admin area's authenticator check lasts 12 hours", async () => {
     assert.equal(await run({ aal: 1, aal_at: null }), "mfa_required");
   } finally { config.requireAdminMfa = was; }
 });
+
+test("a saved company can be deleted with its segment and call documents; the opening company takes no slot", async () => {
+  const { app, db } = makeApp();
+  licenceAndInvite(db, "free@example.com");
+  db.setConfig("billing", { enabled: true, live: false });
+  const u = await signIn(app, db, "free@example.com");
+  for (const id of ["model-MSFT", "model-A", "model-B", "model-C", "sec-A", "calls-A"]) assert.equal((await u.json("PUT", "/api/docs/" + id, { data: { json: "{}", ticker: id.split("-")[1] } })).status, 200, id);
+  assert.equal((await u.json("PUT", "/api/docs/model-D", { data: { json: "{}", ticker: "D" } })).status, 402);
+  const meta = (await u.json("GET", "/api/docs?meta=1")).body.docs;
+  assert.equal(meta.length, 6);
+  assert.equal(meta[0].json, undefined);
+  assert.equal((await u.json("DELETE", "/api/docs/sec-A", {})).status, 400);
+  assert.equal((await u.json("DELETE", "/api/docs/model-A", {})).body.deleted, 3);
+  assert.equal((await u.json("PUT", "/api/docs/model-D", { data: { json: "{}", ticker: "D" } })).status, 200);
+});
+
+test("a company counts only once it returns data; Edgar Tools calls count toward the daily data cap", async () => {
+  const { app, db } = makeApp();
+  licenceAndInvite(db, "free@example.com");
+  db.setConfig("billing", { enabled: true, live: false });
+  const u = await signIn(app, db, "free@example.com");
+  const restore = stubFmp((url) => (url.searchParams.get("symbol") === "TYPO" ? [] : url.searchParams.get("symbol") === "DOWN" ? new Response("x", { status: 500 }) : [{ symbol: "X" }]));
+  try {
+    for (const t of ["TYPO", "DOWN", "AAA"]) await u.json("POST", "/api/tools", { server: "FMP", tool: "company", input: { endpoint: "profile-symbol", symbol: t } });
+    assert.equal((await u.json("GET", "/api/me")).body.usage.used.companies, 1);
+  } finally { restore(); }
+  const id = db.get("SELECT id FROM profiles WHERE email = 'free@example.com'").id;
+  for (let i = 0; i < 200; i++) db.run("INSERT INTO usage_events (at, user_id, feature, provider, cache_hit, status) VALUES (?, ?, 'sec', 'edgar_tools', 0, 'ok')", new Date().toISOString(), id);
+  const r = await u.json("POST", "/api/tools", { server: "Edgar Tools", tool: "material_events", input: { company: "NKE", item: "2.02", since: "2026-01-01", limit: 3 } });
+  assert.equal(r.status, 402);
+  assert.equal(r.body.limit, "fmp_calls_day");
+});
+
+test("plans: the better of a comp and a subscription wins; a period past its end falls back to the month", async () => {
+  const { db } = makeApp();
+  const { planFor, periodFor } = await import("../server/meter.js");
+  db.setConfig("billing", { enabled: true, live: false });
+  db.run("INSERT INTO profiles (id, email, role, created_at) VALUES ('u1', 'u1@example.com', 'user', 'x')");
+  const u = db.get("SELECT * FROM profiles WHERE id = 'u1'");
+  const past = new Date(Date.now() - 40 * 864e5).toISOString(), ended = new Date(Date.now() - 10 * 864e5).toISOString();
+  db.run("INSERT INTO subscriptions (id, user_id, status, plan_id, livemode, current_period_start, current_period_end, synced_at) VALUES ('s1', 'u1', 'active', 'pro', 0, ?, ?, 'x')", past, ended);
+  db.run("INSERT INTO comps (user_id, plan_id, created_at) VALUES ('u1', 'plus', 'x')");
+  const p = planFor(db, u);
+  assert.equal(p.planId, "pro");
+  assert.ok(Date.parse(periodFor(db, u, p).end) > Date.now(), "a period that already ended isn't used");
+});
+
+test("a rebuild refreshes version 1 of each prompt in an existing database", async () => {
+  const { db } = makeApp();
+  db.run("UPDATE prompt_versions SET body = 'OLD CALL PROMPT' WHERE site = 'call.summary' AND version = 1");
+  const { openDb } = await import("../server/db.js");
+  // seeding runs again on start; simulate with a second open of the same in-memory schema
+  const fs2 = await import("node:fs"), os = await import("node:os"), path = await import("node:path");
+  const dir = fs2.mkdtempSync(path.join(os.tmpdir(), "cm-seed-"));
+  try {
+    const a = openDb(path.join(dir, "a.db"));
+    a.run("UPDATE prompt_versions SET body = 'OLD CALL PROMPT' WHERE site = 'call.summary' AND version = 1");
+    a.raw.close();
+    const b = openDb(path.join(dir, "a.db"));
+    assert.equal(b.get("SELECT body FROM prompt_versions WHERE site = 'call.summary' AND version = 1").body, D.CALL_PROMPT);
+    b.raw.close();
+  } finally { fs2.rmSync(dir, { recursive: true, force: true }); }
+});

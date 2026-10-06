@@ -15,16 +15,22 @@ function activeSubscription(db, userId) {
   const b = db.getConfig("billing") || {};
   const s = db.get("SELECT * FROM subscriptions WHERE user_id = ? AND livemode = ? AND status IN ('active', 'trialing', 'past_due') ORDER BY synced_at DESC LIMIT 1", userId, b.enabled && b.live ? 1 : 0);
   if (!s) return null;
-  if (s.status === "past_due" && (!s.grace_until || Date.parse(s.grace_until) < Date.now())) return null;
+  if (s.status === "past_due") {
+    if (!s.grace_until || Date.parse(s.grace_until) < Date.now()) return null;
+    // grace is for customers who have paid before; a trial whose first charge failed gets none
+    if (!db.get("SELECT 1 FROM invoices WHERE subscription_id = ? AND status = 'paid' AND amount_paid > 0", s.id)) return null;
+  }
   return s;
 }
+// for choosing between a complimentary plan and a subscription: the better one wins
+const RANK = { free: 0, trial: 1, comp: 2, plus: 2, pro: 3 };
 
 export function planFor(db, user) {
   if (user.role === "owner") return { planId: "owner", source: "owner" };
   const comp = db.get("SELECT plan_id FROM comps WHERE user_id = ? AND (until IS NULL OR until > ?) ORDER BY id DESC LIMIT 1", user.id, nowIso());
-  if (comp) return { planId: comp.plan_id, source: "comp" };
   const sub = billingEnabled(db) ? activeSubscription(db, user.id) : null;
-  if (sub && sub.plan_id) return { planId: sub.plan_id, source: "subscription", subscription: sub };
+  if (sub && sub.plan_id && (!comp || (RANK[sub.plan_id] ?? 0) >= (RANK[comp.plan_id] ?? 0))) return { planId: sub.plan_id, source: "subscription", subscription: sub };
+  if (comp) return { planId: comp.plan_id, source: "comp" };
   // with billing off, invited users are complimentary; with billing on, they start on the free plan
   return { planId: billingEnabled(db) ? "free" : "comp", source: "default" };
 }
@@ -38,7 +44,8 @@ export function limitsFor(db, user) {
 // billing period: the subscription's, otherwise the calendar month (UTC)
 export function periodFor(db, user, plan = planFor(db, user)) {
   const s = plan.subscription;
-  if (s && s.current_period_start && s.current_period_end) return { start: s.current_period_start, end: s.current_period_end };
+  // the subscription's period while it's current; past its end (a renewal event missed), the calendar month
+  if (s && s.current_period_start && s.current_period_end && Date.parse(s.current_period_end) > Date.now()) return { start: s.current_period_start, end: s.current_period_end };
   const d = new Date();
   const start = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1)).toISOString();
   const end = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1)).toISOString();
@@ -64,7 +71,16 @@ const quota = (what, lim) => fail(402, "quota_exceeded", `Your plan includes ${l
 // the page opens on MSFT for a first-time visitor, so that one is free: it mustn't use up a free plan's companies
 export const DEMO_TICKER = "MSFT";
 
-// a company counts once per period; reloading it is free
+// before fetching: refuse a company that would go over the plan's limit (one already counted is fine)
+export function checkCompany(db, user, ticker) {
+  if (!ticker || ticker === DEMO_TICKER) return;
+  const L = limitsFor(db, user), period = periodFor(db, user, L);
+  if (db.get("SELECT 1 FROM period_tickers WHERE user_id = ? AND period_start = ? AND ticker = ?", user.id, period.start, ticker)) return;
+  const u = usageRow(db, user, period);
+  if (over(u.company_loads, L.limits.companies)) quota("companies", L.limits.companies);
+}
+
+// a company counts once per period, once it has loaded (a typo or a failed fetch doesn't count); reloading is free
 export function registerCompany(db, user, ticker) {
   if (!ticker || ticker === DEMO_TICKER) return;
   return db.tx(() => {
@@ -135,12 +151,13 @@ export function usageWarning(db, user) {
 }
 
 // upstream data calls per user per day (scraping guard)
-export function checkDailyCalls(db, user, provider) {
+export function checkDailyCalls(db, user, providers) {
   const L = limitsFor(db, user), lim = L.limits.fmp_calls_day;
   if (lim === null || lim === undefined) return;
+  const list = [].concat(providers);
   const since = new Date(); since.setUTCHours(0, 0, 0, 0);
-  const n = db.get("SELECT COUNT(*) AS n FROM usage_events WHERE user_id = ? AND provider = ? AND cache_hit = 0 AND at >= ?", user.id, provider, since.toISOString()).n;
-  if (n >= lim) fail(429, "rate_limited", "You've reached today's data limit. It resets at midnight UTC.", { retryable: false });
+  const n = db.get(`SELECT COUNT(*) AS n FROM usage_events WHERE user_id = ? AND provider IN (${list.map(() => "?").join(",")}) AND cache_hit = 0 AND at >= ?`, user.id, ...list, since.toISOString()).n;
+  if (n >= lim) fail(402, "quota_exceeded", "You've reached today's data limit for your plan. It resets at midnight UTC.", { limit: "fmp_calls_day" });
 }
 
 export function costOf(db, model, usage) {

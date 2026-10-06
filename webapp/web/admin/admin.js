@@ -455,7 +455,7 @@
     on.submit.role = async (f, v) => { await api("POST", path, { role: v.role }); toast("Role changed to " + v.role + "."); rerender(); };
     on.click.suspend = async () => {
       if (!confirmed(`Suspend ${u.email}? They'll be signed out everywhere and can't sign in until reactivated.`)) return;
-      const r = await api("POST", path, { status: "disabled" }); toast(`Suspended. ${r.sessions_ended} session${r.sessions_ended === 1 ? "" : "s"} ended.`); rerender();
+      const r = await api("POST", path, { status: "disabled" }); toast(`Suspended. ${r.sessions_ended} session${r.sessions_ended === 1 ? "" : "s"} ended.${r.warning ? " " + r.warning : ""}`, r.warning ? "bad" : ""); rerender();
     };
     on.click.reactivate = async () => { await api("POST", path, { status: "active" }); toast("Reactivated."); rerender(); };
     on.click.signout = async () => {

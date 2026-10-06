@@ -5,7 +5,7 @@ import { Hono } from "hono";
 import { nowIso } from "./db.js";
 import { fail, rateLimit } from "./http.js";
 import { requireUser } from "./auth.js";
-import { limitsFor } from "./meter.js";
+import { limitsFor, DEMO_TICKER } from "./meter.js";
 
 // the page's ids only: model-<T>, sec-<T>, calls-<T> (T sanitised the way the page does it)
 const ID = /^(model|sec|calls)-[A-Za-z0-9_~:@+-]{1,40}$/;
@@ -21,6 +21,11 @@ export function docsRoutes(db) {
   r.use("*", requireUser);
 
   r.get("/", (c) => {
+    // ?meta=1: the list without contents, for the account menu
+    if (c.req.query("meta")) {
+      const docs = db.all("SELECT doc_id AS id, kind, ticker, bytes, updated_at_ms AS updatedAt FROM user_docs WHERE user_id = ? ORDER BY doc_id", c.get("user").id);
+      return c.json({ docs });
+    }
     const rows = db.all("SELECT doc_id, json, ticker, updated_at_ms FROM user_docs WHERE user_id = ? ORDER BY doc_id", c.get("user").id);
     return c.json({ docs: rows.map((x) => ({ id: x.doc_id, data: { json: x.json, ticker: x.ticker, updatedAt: x.updated_at_ms } })) });
   });
@@ -49,8 +54,9 @@ export function docsRoutes(db) {
       const tot = db.get("SELECT COUNT(*) AS n, COALESCE(SUM(bytes), 0) AS b FROM user_docs WHERE user_id = ?", user.id);
       if (!prev && tot.n >= docCap(lim)) fail(402, "quota_exceeded", "You've reached the storage limit for your plan.", { limit: "storage" });
       if (tot.b - (prev?.bytes || 0) + bytes > bytesCap(lim)) fail(402, "quota_exceeded", "You've reached the storage limit for your plan.", { limit: "storage" });
-      if (!prev && kind === "model") {
-        const n = db.get("SELECT COUNT(*) AS n FROM user_docs WHERE user_id = ? AND kind = 'model'", user.id).n;
+      if (!prev && kind === "model" && id !== "model-" + DEMO_TICKER) {
+        // the opening company (MSFT) is saved for everyone on their first visit, so it doesn't take a slot
+        const n = db.get("SELECT COUNT(*) AS n FROM user_docs WHERE user_id = ? AND kind = 'model' AND doc_id != ?", user.id, "model-" + DEMO_TICKER).n;
         if (lim !== null && lim !== undefined && n >= lim) fail(402, "quota_exceeded", `Your plan saves up to ${lim} models.`, { limit: "saved_models" });
       }
       if (prev && prev.json !== data.json && kind === "model") {
@@ -64,6 +70,19 @@ export function docsRoutes(db) {
         user.id, id, kind, typeof data.ticker === "string" ? data.ticker.slice(0, 16) : null, data.json, bytes, Number(data.updatedAt) || Date.now(), now, now);
     });
     return c.json({ ok: true });
+  });
+
+  // delete a saved company: its model, segment and call-summary documents and the model's history
+  r.delete("/:id", (c) => {
+    const user = c.get("user"), id = c.req.param("id");
+    const m = /^model-(.+)$/.exec(id);
+    if (!m || !ID.test(id)) fail(400, "bad_id", "Only saved models can be deleted.");
+    const ids = ["model-", "sec-", "calls-"].map((p) => p + m[1]);
+    const n = db.tx(() => {
+      db.run(`DELETE FROM user_docs_history WHERE user_id = ? AND doc_id IN (?, ?, ?)`, user.id, ...ids);
+      return Number(db.run(`DELETE FROM user_docs WHERE user_id = ? AND doc_id IN (?, ?, ?)`, user.id, ...ids).changes);
+    });
+    return c.json({ ok: true, deleted: n });
   });
 
   // version history of a saved model (the last 20 saves), for recovery

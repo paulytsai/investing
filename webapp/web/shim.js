@@ -11,9 +11,9 @@
   var LS = { get: function (k) { try { return localStorage.getItem(k); } catch (e) { return null; } }, set: function (k, v) { try { localStorage.setItem(k, v); } catch (e) {} }, del: function (k) { try { localStorage.removeItem(k); } catch (e) {} } };
   var lang = function () { var v = LS.get("tmpl.lang"); return v === "ja" || v === "zh" ? v : "en"; };
   var S = {
-    en: { title: "Sign in", lead: "Enter your email and we'll send you a six-digit code.", email: "Email", send: "Send code", code: "Code", verify: "Sign in", sent: "If this email has access, a code is on its way. It expires in 10 minutes.", back: "Use a different email", wait: "Working…", signout: "Sign out", admin: "Admin", plan: "Plan", usage: "This period", resets: "Resets", companies: "Companies", saved: "Saved models", drafts: "Notes drafts", translations: "Translations", guidance: "Guidance reads", segment_fills: "Segment fills", exports: "Downloads", claude: "Claude budget used", unlimited: "no limit", billing: "Plans and billing", stub: "Claude stub mode", devmail: "Development: codes appear in the server log and at /dev/mail.", expired: "Your session has ended. Sign in again.", del: "Delete account", delq: "Type your email address to delete this account and its saved models. This can't be undone.", deleted: "Your account has been deleted.", soft: "You've used most of this period's Claude budget." },
-    ja: { title: "サインイン", lead: "メールアドレスを入力してください。6桁のコードをお送りします。", email: "メールアドレス", send: "コードを送信", code: "コード", verify: "サインイン", sent: "このメールアドレスにアクセス権があれば、コードを送信しました。有効期限は10分です。", back: "別のメールアドレスを使う", wait: "処理中…", signout: "サインアウト", admin: "管理", plan: "プラン", usage: "今期の利用", resets: "リセット日", companies: "企業数", saved: "保存したモデル", drafts: "ノートの下書き", translations: "翻訳", guidance: "ガイダンスの読み取り", segment_fills: "セグメントの取り込み", exports: "ダウンロード", claude: "Claude 予算の使用", unlimited: "上限なし", billing: "プランとお支払い", stub: "Claude スタブモード", devmail: "開発環境：コードはサーバーログと /dev/mail に表示されます。", expired: "セッションが終了しました。もう一度サインインしてください。", del: "アカウントを削除", delq: "このアカウントと保存したモデルを削除するには、メールアドレスを入力してください。元に戻せません。", deleted: "アカウントを削除しました。", soft: "今期の Claude 予算の大半を使用しました。" },
-    zh: { title: "登入", lead: "輸入電子郵件，我們會寄送六位數驗證碼給您。", email: "電子郵件", send: "寄送驗證碼", code: "驗證碼", verify: "登入", sent: "如果此電子郵件有存取權限，驗證碼已寄出，10 分鐘內有效。", back: "改用其他電子郵件", wait: "處理中…", signout: "登出", admin: "管理", plan: "方案", usage: "本期用量", resets: "重設日", companies: "公司數", saved: "已儲存的模型", drafts: "筆記草稿", translations: "翻譯", guidance: "財測讀取", segment_fills: "分部資料讀取", exports: "下載", claude: "Claude 預算使用", unlimited: "無上限", billing: "方案與付款", stub: "Claude 模擬模式", devmail: "開發環境：驗證碼會顯示在伺服器記錄與 /dev/mail。", expired: "您的工作階段已結束，請重新登入。", del: "刪除帳戶", delq: "輸入您的電子郵件以刪除此帳戶及已儲存的模型。此動作無法復原。", deleted: "您的帳戶已刪除。", soft: "您已用掉本期大部分的 Claude 預算。" },
+    en: { title: "Sign in", lead: "Enter your email and we'll send you a six-digit code.", email: "Email", send: "Send code", code: "Code", verify: "Sign in", sent: "If this email has access, a code is on its way. It expires in 10 minutes.", back: "Use a different email", wait: "Working…", signout: "Sign out", admin: "Admin", plan: "Plan", usage: "This period", resets: "Resets", companies: "Companies", savedList: "Saved models", delModel: "Delete", delModelQ: "Delete the saved model for {t}, with its segment data and call summaries? This can't be undone.", none: "None yet.", retrying: "Couldn't reach the server. Trying again…", saved: "Saved models", drafts: "Notes drafts", translations: "Translations", guidance: "Guidance reads", segment_fills: "Segment fills", exports: "Downloads", claude: "Claude budget used", unlimited: "no limit", billing: "Plans and billing", stub: "Claude stub mode", devmail: "Development: codes appear in the server log and at /dev/mail.", expired: "Your session has ended. Sign in again.", del: "Delete account", delq: "Type your email address to delete this account and its saved models. This can't be undone.", deleted: "Your account has been deleted.", soft: "You've used most of this period's Claude budget." },
+    ja: { title: "サインイン", lead: "メールアドレスを入力してください。6桁のコードをお送りします。", email: "メールアドレス", send: "コードを送信", code: "コード", verify: "サインイン", sent: "このメールアドレスにアクセス権があれば、コードを送信しました。有効期限は10分です。", back: "別のメールアドレスを使う", wait: "処理中…", signout: "サインアウト", admin: "管理", plan: "プラン", usage: "今期の利用", resets: "リセット日", companies: "企業数", savedList: "保存したモデル", delModel: "削除", delModelQ: "{t} の保存したモデルを、セグメントデータと決算説明会の要約とともに削除しますか？元に戻せません。", none: "まだありません。", retrying: "サーバーに接続できません。再試行しています…", saved: "保存したモデル", drafts: "ノートの下書き", translations: "翻訳", guidance: "ガイダンスの読み取り", segment_fills: "セグメントの取り込み", exports: "ダウンロード", claude: "Claude 予算の使用", unlimited: "上限なし", billing: "プランとお支払い", stub: "Claude スタブモード", devmail: "開発環境：コードはサーバーログと /dev/mail に表示されます。", expired: "セッションが終了しました。もう一度サインインしてください。", del: "アカウントを削除", delq: "このアカウントと保存したモデルを削除するには、メールアドレスを入力してください。元に戻せません。", deleted: "アカウントを削除しました。", soft: "今期の Claude 予算の大半を使用しました。" },
+    zh: { title: "登入", lead: "輸入電子郵件，我們會寄送六位數驗證碼給您。", email: "電子郵件", send: "寄送驗證碼", code: "驗證碼", verify: "登入", sent: "如果此電子郵件有存取權限，驗證碼已寄出，10 分鐘內有效。", back: "改用其他電子郵件", wait: "處理中…", signout: "登出", admin: "管理", plan: "方案", usage: "本期用量", resets: "重設日", companies: "公司數", savedList: "已儲存的模型", delModel: "刪除", delModelQ: "要刪除 {t} 已儲存的模型，以及其分部資料與法說會摘要嗎？此動作無法復原。", none: "尚無資料。", retrying: "無法連線到伺服器，正在重試…", saved: "已儲存的模型", drafts: "筆記草稿", translations: "翻譯", guidance: "財測讀取", segment_fills: "分部資料讀取", exports: "下載", claude: "Claude 預算使用", unlimited: "無上限", billing: "方案與付款", stub: "Claude 模擬模式", devmail: "開發環境：驗證碼會顯示在伺服器記錄與 /dev/mail。", expired: "您的工作階段已結束，請重新登入。", del: "刪除帳戶", delq: "輸入您的電子郵件以刪除此帳戶及已儲存的模型。此動作無法復原。", deleted: "您的帳戶已刪除。", soft: "您已用掉本期大部分的 Claude 預算。" },
   };
   var L = function (k) { return (S[lang()] || S.en)[k] || S.en[k]; };
   var esc = function (s) { return String(s == null ? "" : s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); };
@@ -42,13 +42,13 @@
   var ready = new Promise(function (r) { resolveReady = r; });
   // saved models live per user in this browser too (the page's own cache): drop them when a different user signs in
   function clearLocalModels() {
-    var drop = [];
+    var drop = ["tmpl.ticker"]; // the last company opened, so the next user doesn't start on (and pay for) it
     try { for (var i = 0; i < localStorage.length; i++) { var k = localStorage.key(i); if (/^tmpl\.(inp\.|sec\.|calls-)/.test(k || "")) drop.push(k); } } catch (e) {}
     drop.forEach(LS.del);
   }
   async function boot() {
     try { me = await api("GET", "/api/me"); }
-    catch (e) { if (e.status === 401) { showSignIn(); return; } toast(e.message); return; }
+    catch (e) { if (e.status === 401) { showSignIn(); return; } toast(L("retrying")); setTimeout(boot, 5000); return; }
     if (LS.get("cm.uid") !== me.uid) { clearLocalModels(); LS.set("cm.uid", me.uid); }
     drawChip();
     resolveReady(me);
@@ -56,6 +56,7 @@
 
   // ---------- capabilities ----------
   var mcpCache = new Map();
+  var pendingSaves = {};
   var mcp = {
     callTool: async function (server, tool, input, opts) {
       var key = JSON.stringify([server, tool, input]), stale = (opts && opts.cache && opts.cache.staleTime) || 0;
@@ -116,7 +117,17 @@
           var url = "/api/docs/" + encodeURIComponent(id);
           return {
             get: async function () { own(); var r = await api("GET", url); return { exists: !!r.exists, id: id, data: function () { return r.data; } }; },
-            set: async function (data) { own(); await api("PUT", url, { data: data }); },
+            set: async function (data) {
+              own();
+              for (var i = 0; ; i++) {
+                try { await api("PUT", url, { data: data }); delete pendingSaves[url]; return; }
+                catch (e) {
+                  if (e.status === 401) pendingSaves[url] = data; // sent again once the user signs back in
+                  if (e.status === 429 && e.retryAfterMs && i < 4) { await new Promise(function (r) { setTimeout(r, e.retryAfterMs + 200); }); continue; }
+                  throw e;
+                }
+              }
+            },
           };
         },
         get: async function () { own(); var r = await api("GET", "/api/docs"); return { docs: r.docs.map(function (d) { return { id: d.id, data: function () { return d.data; } }; }) }; },
@@ -171,6 +182,7 @@
     ".cm-panel{position:fixed;right:12px;bottom:56px;z-index:2147482001;width:320px;max-width:calc(100vw - 24px);background:var(--cm-card);color:var(--cm-fg);border:1px solid var(--cm-line);border-radius:12px;padding:16px;font:13px/1.45 system-ui,-apple-system,sans-serif;box-shadow:0 8px 30px rgba(0,0,0,.12)}" +
     ".cm-panel table{width:100%;border-collapse:collapse;margin:6px 0 12px}.cm-panel td{padding:3px 0;text-align:left;border:0;font:inherit;color:inherit;background:none}.cm-panel td:last-child{text-align:right;font-variant-numeric:tabular-nums}.cm-panel h3{font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:var(--cm-mut);margin:10px 0 2px}" +
     ".cm-panel .cm-row{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}.cm-panel a,.cm-panel button.cm-act{flex:1;text-align:center;text-decoration:none;font:inherit;font-weight:600;border:1px solid var(--cm-line);border-radius:8px;padding:8px;background:none;color:var(--cm-fg);cursor:pointer}" +
+    ".cm-mlist{max-height:180px;overflow:auto;border:1px solid var(--cm-line);border-radius:8px;padding:4px 10px;margin:6px 0}.cm-mrow{display:flex;justify-content:space-between;align-items:center}.cm-mrow .cm-link{padding:4px 0}" +
     ".cm-toast{position:fixed;left:50%;transform:translateX(-50%);bottom:64px;z-index:2147483001;background:#222;color:#fff;border-radius:8px;padding:10px 14px;font:14px system-ui,sans-serif;max-width:min(560px,calc(100vw - 32px));box-shadow:0 4px 20px rgba(0,0,0,.2)}" +
     ":root{--cm-bg:#f7f7f5;--cm-card:#fff;--cm-fg:#1d1d1b;--cm-mut:#6b6b66;--cm-line:#dcdcd6;--cm-acc:#1f5fbf;--cm-tag:#ecece6}" +
     "@media (prefers-color-scheme:dark){:root:not([data-theme=light]){--cm-bg:#161615;--cm-card:#1f1f1d;--cm-fg:#ecebe6;--cm-mut:#a3a29b;--cm-line:#3a3a36;--cm-acc:#5b9bff;--cm-tag:#2c2c29}}" +
@@ -212,12 +224,27 @@
           var btn = f.querySelector(".cm-btn"); btn.disabled = true; btn.textContent = L("wait");
           try {
             if (step === "email") { email = inp.value.trim(); await api("POST", "/auth/start", { email: email, locale: lang() }); step = "code"; draw(); }
-            else { await api("POST", "/auth/verify", { email: email, code: inp.value.trim() }); location.reload(); }
+            else { await api("POST", "/auth/verify", { email: email, code: inp.value.trim() }); await resumeAfterSignIn(ov); }
           } catch (e) { draw(e.message); }
         };
       };
       draw();
     });
+  }
+
+  // the session ended while the page was open: if the same user signs back in, keep the page as it is (unsaved edits
+  // included) and send the saves that failed; anyone else starts afresh
+  async function resumeAfterSignIn(ov) {
+    var prev = me;
+    if (!prev) { location.reload(); return; }
+    var next;
+    try { next = await api("GET", "/api/me"); } catch (e) { location.reload(); return; }
+    if (next.uid !== prev.uid) { clearLocalModels(); LS.set("cm.uid", next.uid); location.reload(); return; }
+    me = next; ov.remove(); drawChip();
+    var urls = Object.keys(pendingSaves);
+    for (var i = 0; i < urls.length; i++) {
+      try { await api("PUT", urls[i], { data: pendingSaves[urls[i]] }); delete pendingSaves[urls[i]]; } catch (e) {}
+    }
   }
 
   function drawChip() {
@@ -239,11 +266,36 @@
     p.innerHTML = "<div><b>" + esc(me.email) + "</b></div><div>" + esc(L("plan")) + ": " + esc(me.plan.name) + "</div>" +
       "<h3>" + esc(L("usage")) + "</h3><table>" + row("companies", used.companies, lim.companies) + row("saved", me.savedModels, lim.saved_models) +
       (me.caps.sample ? row("drafts", used.drafts, lim.drafts) + row("translations", used.translations, lim.translations) + row("guidance", used.guidance, lim.guidance) + row("segment_fills", used.segment_fills, lim.segment_fills) : "") +
-      row("exports", used.exports, lim.exports) + claudeRow + "</table><div class=\"cm-fine\">" + esc(L("resets")) + ": " + esc(new Date(u.period.end).toLocaleDateString()) + "</div>" +
+      row("exports", used.exports, lim.exports) + claudeRow + "</table>" +
+      '<button type="button" class="cm-link" data-models>' + esc(L("savedList")) + ' ▾</button><div data-model-list hidden class="cm-mlist"></div>' + "<div class=\"cm-fine\">" + esc(L("resets")) + ": " + esc(new Date(u.period.end).toLocaleDateString()) + "</div>" +
       '<div class="cm-row">' + (me.billing && me.billing.enabled ? '<a href="/account">' + esc(L("billing")) + "</a>" : "") + (me.role === "owner" || me.role === "admin" ? '<a href="/admin">' + esc(L("admin")) + "</a>" : "") +
       '<button type="button" class="cm-act" data-out>' + esc(L("signout")) + "</button></div>" +
       (me.role === "owner" ? "" : '<button type="button" class="cm-link" data-del>' + esc(L("del")) + "</button>");
     p.hidden = false;
+    var list = p.querySelector("[data-models]");
+    if (list) {
+      list.onclick = async function () {
+        var box = p.querySelector("[data-model-list]");
+        if (!box.hidden) { box.hidden = true; return; }
+        var r; try { r = await api("GET", "/api/docs?meta=1"); } catch (e) { return; }
+        var models = r.docs.filter(function (d) { return d.kind === "model"; });
+        box.innerHTML = models.length ? models.map(function (d) {
+          var t = d.id.slice(6);
+          return '<div class="cm-mrow"><span>' + esc(d.ticker || t) + '</span><button type="button" class="cm-link" data-delm="' + esc(t) + '">' + esc(L("delModel")) + "</button></div>";
+        }).join("") : '<div class="cm-fine">' + esc(L("none")) + "</div>";
+        box.hidden = false;
+        box.querySelectorAll("[data-delm]").forEach(function (b) {
+          b.onclick = async function () {
+            var t = b.dataset.delm;
+            if (!window.confirm(L("delModelQ").replace("{t}", t))) return;
+            try { await api("DELETE", "/api/docs/" + encodeURIComponent("model-" + t), {}); } catch (e) { toast(e.message); return; }
+            ["tmpl.inp." + t, "tmpl.sec." + t, "tmpl.calls-" + t].forEach(LS.del);
+            if ((LS.get("tmpl.ticker") || "") === t) { LS.del("tmpl.ticker"); location.reload(); return; }
+            b.parentNode.remove();
+          };
+        });
+      };
+    }
     var del = p.querySelector("[data-del]");
     if (del) del.onclick = async function () {
       var typed = window.prompt(L("delq"));

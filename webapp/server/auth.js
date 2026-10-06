@@ -212,5 +212,11 @@ export function authRoutes(db) {
 // bootstrap: the owner's allowlist row
 export function ensureOwner(db) {
   if (!config.ownerEmail) return;
+  // OWNER_EMAIL changed: the previous owner becomes an admin
+  for (const p of db.all("SELECT id, email FROM profiles WHERE role = 'owner' AND email != ?", config.ownerEmail)) {
+    db.run("UPDATE profiles SET role = 'admin' WHERE id = ?", p.id);
+    db.run("UPDATE allowlist SET role = 'admin' WHERE email = ?", p.email);
+    db.audit(null, "user.role", p.email, { role: "owner" }, { role: "admin", reason: "OWNER_EMAIL changed" });
+  }
   db.run("INSERT INTO allowlist (email, role, invited_at, note) VALUES (?, 'owner', ?, 'OWNER_EMAIL') ON CONFLICT (email) DO UPDATE SET role = 'owner'", config.ownerEmail, nowIso());
 }

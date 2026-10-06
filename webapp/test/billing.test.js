@@ -225,7 +225,7 @@ describe("event handling", () => {
 
 // ---------- test vs live ----------
 describe("livemode rules", () => {
-  test("live events are ignored while billing is in test mode (or off)", async () => {
+  test("with a test key, live events are ignored whatever the billing settings", async () => {
     const { user } = await H.signIn("live1@example.com");
     H.linkCustomer(user, "cus_live1");
     stripe.subs.set("sub_live1", stripeSub("sub_live1", { customer: "cus_live1", livemode: true }));
@@ -233,16 +233,17 @@ describe("livemode rules", () => {
     const e = makeEvent("customer.subscription.created", stripe.subs.get("sub_live1"), { livemode: true });
     assert.equal((await H.webhook(e)).status, 200);
     assert.equal(H.eventRow(e.id).status, "ignored");
-    H.billing(false, true); // live chosen but billing still off: still ignored
+    H.billing(true, true);
     const e2 = makeEvent("customer.subscription.created", stripe.subs.get("sub_live1"), { livemode: true });
     await H.webhook(e2);
     assert.equal(H.eventRow(e2.id).status, "ignored");
     assert.equal(callsTo("/v1/subscriptions/sub_live1"), calls);
     assert.equal(H.sub("sub_live1"), undefined);
   });
-  test("once live, test events are ignored and live ones applied", async () => {
+  test("with a live key, test events are ignored and live ones applied", async () => {
     const { user } = await H.signIn("live2@example.com");
     H.linkCustomer(user, "cus_live2");
+    config.stripeSecretKey = "sk_live_dummy";
     H.billing(true, true);
     stripe.subs.set("sub_test2", stripeSub("sub_test2", { customer: "cus_live2" }));
     const t = makeEvent("customer.subscription.created", stripe.subs.get("sub_test2"));
@@ -254,6 +255,22 @@ describe("livemode rules", () => {
     assert.equal(H.eventRow(l.id).status, "processed");
     assert.equal(H.sub("sub_live2").livemode, 1);
     assert.equal(planFor(H.db, user).planId, "plus");
+  });
+  test("events are applied while billing is off, so a cancellation then isn't lost", async () => {
+    const { user } = await H.signIn("offcancel@example.com");
+    H.linkCustomer(user, "cus_offc");
+    H.billing(true, false);
+    stripe.subs.set("sub_offc", stripeSub("sub_offc", { customer: "cus_offc" }));
+    await H.webhook(makeEvent("customer.subscription.created", stripe.subs.get("sub_offc")));
+    assert.equal(planFor(H.db, user).planId, "plus");
+    H.billing(false, false);
+    stripe.subs.set("sub_offc", stripeSub("sub_offc", { customer: "cus_offc", status: "canceled" }));
+    const d = makeEvent("customer.subscription.deleted", stripe.subs.get("sub_offc"));
+    await H.webhook(d);
+    assert.equal(H.eventRow(d.id).status, "processed");
+    H.billing(true, false);
+    assert.equal(H.sub("sub_offc").status, "canceled");
+    assert.equal(planFor(H.db, user).planId, "free");
   });
 });
 
@@ -386,6 +403,8 @@ describe("subscriptions and plans", () => {
     const { user } = await H.signIn("pastdue@example.com");
     H.linkCustomer(user, "cus_pastdue");
     const t = now();
+    // a customer who has paid before
+    H.db.run("INSERT INTO invoices (id, user_id, subscription_id, status, currency, amount_due, amount_paid, created_at) VALUES ('in_pd0', ?, 'sub_pd', 'paid', 'usd', 1900, 1900, ?)", user.id, nowIso());
     stripe.subs.set("sub_pd", stripeSub("sub_pd", { customer: "cus_pastdue", status: "past_due" }));
     await H.webhook(makeEvent("customer.subscription.updated", stripe.subs.get("sub_pd"), { created: t }));
     const g = Date.parse(H.sub("sub_pd").grace_until);
@@ -401,6 +420,16 @@ describe("subscriptions and plans", () => {
     await H.webhook(makeEvent("customer.subscription.updated", stripe.subs.get("sub_pd"), { created: t + 10 }));
     assert.equal(H.sub("sub_pd").grace_until, null);
     assert.equal(planFor(H.db, user).planId, "plus");
+  });
+
+  test("a trial whose first charge fails gets no grace on the paid plan", async () => {
+    H.billing(true, false);
+    const { user } = await H.signIn("trialfail@example.com");
+    H.linkCustomer(user, "cus_tf");
+    stripe.subs.set("sub_tf", stripeSub("sub_tf", { customer: "cus_tf", status: "past_due", lookup: "pro_month" }));
+    await H.webhook(makeEvent("customer.subscription.updated", stripe.subs.get("sub_tf")));
+    assert.ok(H.sub("sub_tf").grace_until);
+    assert.equal(planFor(H.db, user).planId, "free");
   });
 
   test("deletion is churn, then a new subscription is a reactivation", async () => {

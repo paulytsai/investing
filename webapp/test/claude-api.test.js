@@ -6,7 +6,10 @@ import http from "node:http";
 import fs from "node:fs";
 
 const seen = [];
+let active = 0, maxActive = 0;
 const mock = http.createServer((req, res) => {
+  active++; maxActive = Math.max(maxActive, active);
+  res.on("close", () => { active--; });
   let body = "";
   req.on("data", (d) => (body += d));
   req.on("end", () => {
@@ -93,14 +96,14 @@ test("refusals and cut-short answers are reported, not counted as uses", async (
   assert.equal((await owner.json("GET", "/api/me")).body.usage.used.translations, 0);
 });
 
-test("at most two Claude requests in flight per user; the estimate is held against the budget", async () => {
+test("at most two Claude requests in flight per user (a third waits its turn); the estimate is held against the budget", async () => {
   const { app, db } = makeApp();
   const owner = await signIn(app, db, "owner@example.com");
-  const go = () => owner.req("POST", "/api/sample", { input: R.tr("SLOW"), ticker: "NKE", cache: false });
-  const [a, b, c3] = await Promise.all([go(), go(), go()]);
-  const statuses = [a.status, b.status, c3.status].sort();
-  assert.deepEqual(statuses, [200, 200, 429]);
-  for (const r of [a, b, c3]) if (r.status === 200) assert.equal((await sseEvents(r)).at(-1).type, "done");
+  const go = () => owner.req("POST", "/api/sample", { input: R.tr("SLOW"), ticker: "NKE", cache: false }).then(sseEvents);
+  maxActive = 0;
+  const done = await Promise.all([go(), go(), go()]);
+  assert.deepEqual(done.map((ev) => ev.at(-1).type), ["done", "done", "done"]);
+  assert.equal(maxActive, 2);
   // with $0.30 of an $80 cap left, a request whose estimate exceeds it is refused before it reaches Claude
   db.run("UPDATE usage_period SET claude_usd = 79.70 WHERE user_id = (SELECT id FROM profiles WHERE email = 'owner@example.com')");
   const n0 = seen.length;

@@ -210,7 +210,10 @@ const SEC_TOOLS = {
 // ---------- the route's entry point ----------
 // -> {payload, provider: 'edgar_tools' | 'sec', cacheHit, stale?}
 export async function callEdgar(db, tool, input, ctx = {}) {
-  const { args, key, ticker } = resolveEdgar(tool, input);
+  const { args, key: baseKey, ticker } = resolveEdgar(tool, input);
+  // without the Edgar Tools display licence, other accounts get sec.gov data, cached apart from Edgar Tools results
+  const useEdgarTools = !!config.edgarToolsApiKey && ctx.allowEdgarTools !== false;
+  const key = useEdgarTools || !config.edgarToolsApiKey ? baseKey : baseKey + ":sec";
   const ttl = TOOL_TTL[tool], now = Date.now();
   const row = cacheRow(db, key);
   if (row && row.expires_at_ms > now) { const b = JSON.parse(row.body); return { payload: b.payload, provider: b.provider, cacheHit: true }; }
@@ -225,7 +228,7 @@ export async function callEdgar(db, tool, input, ctx = {}) {
   };
 
   let primary = null;
-  if (config.edgarToolsApiKey) {
+  if (useEdgarTools) {
     try {
       const payload = await edgarToolsCall(tool, args);
       cachePut(db, key, "edgar:" + tool, ticker, { provider: "edgar_tools", payload }, ttl);
@@ -241,7 +244,7 @@ export async function callEdgar(db, tool, input, ctx = {}) {
   try {
     const payload = await SEC_TOOLS[tool](db, args, stats);
     // with a key configured, keep the fallback briefly so Edgar Tools is asked again soon
-    if (!stats.stale) cachePut(db, key, "edgar:" + tool, ticker, { provider: "sec", payload }, config.edgarToolsApiKey ? Math.min(ttl, H) : ttl);
+    if (!stats.stale) cachePut(db, key, "edgar:" + tool, ticker, { provider: "sec", payload }, useEdgarTools ? Math.min(ttl, H) : ttl);
     return { payload, provider: "sec", cacheHit: !stats.fetches, ...(stats.stale ? { stale: true } : {}) };
   } catch (e) {
     if (!(e instanceof ApiError)) throw e;
