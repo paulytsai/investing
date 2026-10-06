@@ -28,8 +28,9 @@ npm start                     # http://localhost:8787
 
 Sign in with `OWNER_EMAIL`. Without `RESEND_API_KEY` the six-digit code goes to the dev outbox: the server log and
 <http://localhost:8787/dev/mail>. Without `ANTHROPIC_API_KEY`, Claude features answer from a labelled stub; without
-`EDGAR_TOOLS_API_KEY`, filings come straight from sec.gov (set `SEC_USER_AGENT` to your app name and contact email,
-as the SEC asks).
+`EDGAR_TOOLS_API_KEY`, filings come straight from sec.gov, which requires `SEC_USER_AGENT` (your app name and a contact
+email; www.sec.gov refuses anonymous clients). The sec.gov fallback can't produce the geographic revenue breakdown,
+which only Edgar Tools provides; the page loads without it.
 
 Tests: `npm test` (server, no network) and `npm run e2e` (a browser smoke test; needs Playwright with Chromium and
 either `FMP_FIXTURES` or an FMP key).

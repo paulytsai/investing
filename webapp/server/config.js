@@ -50,6 +50,10 @@ export const config = {
   stripeWebhookSecret: env.STRIPE_WEBHOOK_SECRET || "",
 };
 
+// www.sec.gov refuses requests that don't identify the app and a contact; only matters without an Edgar Tools key
+if (!config.secUserAgent && !config.edgarToolsApiKey && !process.env.NODE_TEST_CONTEXT) {
+  console.warn("[config] SEC_USER_AGENT is not set: filings from sec.gov will be refused. Set it to \"<app name> <contact email>\".");
+}
 if (!config.ownerEmail && !process.env.NODE_TEST_CONTEXT) {
   console.warn("[config] OWNER_EMAIL is not set: nobody can sign in until it is.");
 }

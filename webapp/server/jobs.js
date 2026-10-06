@@ -4,6 +4,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { config } from "./config.js";
 import { runNightlyDq } from "./dq/index.js";
+import { pruneSecCache } from "./tools/sec.js";
 
 const KEEP_BACKUPS = 14;
 // a consistent copy of the live database (VACUUM INTO works while the app is running), one per day
@@ -24,6 +25,7 @@ export function startJobs(db) {
       db.run("DELETE FROM login_codes WHERE expires_at_ms < ?", now - 864e5);
       db.run("DELETE FROM fmp_cache WHERE expires_at_ms < ?", now - 7 * 864e5);
       db.run("DELETE FROM claude_cache WHERE expires_at_ms < ?", now);
+      pruneSecCache(db);
     } catch (e) { console.error("[jobs]", e); }
     try { backupDb(db); } catch (e) { console.error("[backup]", e); db.logError("backup", "failed", e?.message || String(e)); }
   };

@@ -41,7 +41,7 @@ export function toolsRoutes(db) {
       const ticker = typeof input.company === "string" ? input.company.toUpperCase() : null;
       checkDailyCalls(db, user, "sec");
       const out = await callEdgar(db, tool, input, { user });
-      recordEvent(db, { userId: user.id, feature: "sec", provider: out.provider, ticker, endpoint: tool, cacheHit: out.cacheHit, ms: Date.now() - t0 });
+      recordEvent(db, { userId: user.id, feature: "sec", provider: out.provider, ticker, endpoint: tool, cacheHit: out.cacheHit, ms: Date.now() - t0, status: out.stale ? "stale" : "ok" });
       return c.json({ payload: out.payload });
     }
 

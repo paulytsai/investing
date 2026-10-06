@@ -37,7 +37,7 @@ export async function secThrottle() {
 }
 
 // ---------- GET from sec.gov (null on 404) ----------
-function secError(status, code, message, extra) { const e = new ApiError(status, code, message, extra); e.sec = true; return e; }
+const secError = (status, code, message, extra) => new ApiError(status, code, message, extra);
 export async function secGet(url, { json = false, stats } = {}) {
   for (let attempt = 0; ; attempt++) {
     await secThrottle();
@@ -61,7 +61,8 @@ export async function secGet(url, { json = false, stats } = {}) {
     if (res.status === 403) {
       const t = await res.text().catch(() => "");
       if (/Undeclared Automated Tool/i.test(t)) throw secError(502, "tool_error", "SEC EDGAR refused the request: set SEC_USER_AGENT on the server to the app's name and a contact email (sec.gov requires one).");
-      if (/Rate Threshold/i.test(t)) throw secError(503, "rate_limited", "SEC EDGAR is limiting requests from this server. Try again in about 10 minutes.");
+      // SEC also answers an undeclared User-Agent this way
+      if (/Rate Threshold/i.test(t)) throw secError(503, "rate_limited", "SEC EDGAR is limiting requests from this server. Try again in about 10 minutes" + (config.secUserAgent ? "." : ", and set SEC_USER_AGENT on the server to the app's name and a contact email."));
       throw secError(502, "tool_error", "SEC EDGAR refused the request (403).");
     }
     if (!res.ok) { await res.body?.cancel().catch(() => {}); throw secError(502, "tool_error", `SEC EDGAR returned ${res.status}.`); }
@@ -325,8 +326,8 @@ function readTable(toks, start) {
   return { end: i, rows };
 }
 const cellHtml = (c) => `<${c.tag}${c.colspan > 1 ? ` colspan="${c.colspan}"` : ""}${c.rowspan > 1 ? ` rowspan="${c.rowspan}"` : ""}>${escHtml(c.text)}</${c.tag}>`;
-// a figure cell: has a digit, is short and mostly not words; footnote and list markers ("(1)", "2.") don't count
-const isFigure = (t) => /\d/.test(t) && t.length <= 40 && (t.match(/[A-Za-z]/g) || []).length <= 12 && !/^[([]?\d{1,2}[)\].]?$/.test(t);
+// a figure cell: has a digit, is short and mostly not words; footnote and list markers ("(1)", "2.", "3") don't count
+const isFigure = (t) => /\d/.test(t) && t.length <= 40 && (t.match(/[A-Za-z]/g) || []).length <= 12 && !/^[([]?\d[)\].]?$/.test(t);
 
 class TextBuf {
   constructor() { this.parts = []; }
@@ -364,7 +365,7 @@ export function parseHtmlDoc(html, { keepTablesInProse = false } = {}) {
       tables.push({
         html: "<table>" + kept.map((r) => "<tr>" + r.cells.map(cellHtml).join("") + "</tr>").join("") + "</table>",
         head: lines.slice(0, 4).join(" | ").slice(0, 400),
-        context: prose.tail(400),
+        context: prose.tail(400).split("[table]").pop().trim(), // the text between the previous table and this one
         label: (kept.flatMap((r) => r.cells).find((c) => c.text)?.text || "").slice(0, 80),
         text: lines.join("\n"),
       });
@@ -378,14 +379,21 @@ export function parseHtmlDoc(html, { keepTablesInProse = false } = {}) {
 }
 
 const OUTLOOK = /\b(outlook|guidance|forecast)\b/i;
+// the connector's table classes: the table's own title rows first, then the text just before it, then its lines
+const CLASS_RULES = [
+  ["outlook", OUTLOOK],
+  ["cashflow", /cash flows?\b/],
+  ["balance", /balance sheets?|financial (position|condition)/],
+  ["recon", /non-gaap|reconciliation|as adjusted|constant currency/],
+  ["segment", /segment|geograph|divisional|by region|by category|by product|channel/],
+  ["income", /statements? of (comprehensive )?(income|operations|earnings)|income statements?|earnings before interest/],
+];
 export function classifyTable(t) {
-  const body = t.text.toLowerCase(), head = (t.context.slice(-250) + " " + t.head).toLowerCase();
+  for (const s of [t.head.toLowerCase(), t.context.slice(-200).toLowerCase()]) for (const [cls, re] of CLASS_RULES) if (re.test(s)) return cls;
+  const body = t.text.toLowerCase();
   if (/operating activities/.test(body) && /(investing|financing) activities/.test(body)) return "cashflow";
   if (/total assets/.test(body) && /total liabilities/.test(body)) return "balance";
-  if (OUTLOOK.test(head)) return "outlook";
-  if (/non-gaap|reconciliation|as adjusted/.test(head)) return "recon";
-  if (/segment|geograph|divisional|by region|by category|by product/.test(head)) return "segment";
-  if (/statements? of (income|operations|earnings)|income statements?/.test(head) || (/revenue|net sales/.test(body) && /net (income|earnings|loss)/.test(body))) return "income";
+  if (/revenue|net sales/.test(body) && /net (income|earnings|loss)/.test(body)) return "income";
   return "other";
 }
 const CORE = new Set(["income", "balance", "cashflow"]);
@@ -462,7 +470,7 @@ export async function secFilingSection(db, input, stats = {}) {
     const content = proseScope === "none" ? "" : d.prose;
     return {
       section, title: d.type, exhibit_type: d.type, exhibit_filename: d.filename, form: d.form, accession_number: acc, filing_date: ymd(d.filing_date),
-      content, word_count: words(content), char_count: content.length, prose_scope: proseScope, tables_scope: tablesScope, tables_omitted: 0,
+      content, word_count: words(content), char_count: content.length, prose_scope: proseScope, tables_scope: tablesScope, tables_omitted: tablesScope === "none" ? d.tables.length : 0,
       tables_available: d.tables.map((t) => ({ class: t.cls, label: t.label, full: false })),
       tables_html: picked.map((t) => t.html),
       data_quality: { ...dq(d), caveats: [`Read directly from SEC EDGAR: ${picked.length} of the exhibit's ${d.tables.length} financial table(s) are in tables_html as stripped HTML (text cells with colspan/rowspan); "[table]" marks where each sat in the prose.`] },
