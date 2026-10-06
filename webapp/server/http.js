@@ -33,6 +33,8 @@ export function originGuard() {
 const buckets = new Map();
 export function takeToken(key, capacity, refillPerSec) {
   const now = Date.now();
+  // keep the map bounded: drop buckets idle for an hour (they'd be full again anyway)
+  if (buckets.size > 20000) for (const [k, v] of buckets) if (now - v.at > 3600e3) buckets.delete(k);
   let b = buckets.get(key);
   if (!b) { b = { tokens: capacity, at: now }; buckets.set(key, b); }
   b.tokens = Math.min(capacity, b.tokens + ((now - b.at) / 1000) * refillPerSec);
@@ -48,4 +50,13 @@ export function rateLimit(key, capacity, refillPerSec, what = "requests") {
 // for tests
 export function resetRateLimits() { buckets.clear(); }
 
-export const clientIp = (c) => (c.req.header("x-forwarded-for") || "").split(",")[0].trim() || c.env?.incoming?.socket?.remoteAddress || "local";
+// the client's address: the connection's, or with TRUST_PROXY=n the address n hops from the right of X-Forwarded-For
+// (each trusted proxy appends the address it saw; anything further left is whatever the client sent)
+export const socketIp = (c) => c.env?.incoming?.socket?.remoteAddress || "local";
+export function clientIp(c) {
+  if (config.trustProxy > 0) {
+    const xff = (c.req.header("x-forwarded-for") || "").split(",").map((s) => s.trim()).filter(Boolean);
+    if (xff.length >= config.trustProxy) return xff[xff.length - config.trustProxy];
+  }
+  return socketIp(c);
+}

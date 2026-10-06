@@ -10,6 +10,8 @@ import { sendMail } from "./mailer.js";
 
 const COOKIE = "cm_sid";
 const CODE_TTL_MS = 10 * 60 * 1000;
+const LIVE_CODES = 3;                    // codes stay valid when another is requested, so nobody can cancel yours
+const STEP_UP_MS = 12 * 3600e3;          // an authenticator check opens the admin area for 12 hours
 const sha256 = (s) => crypto.createHash("sha256").update(s).digest("hex");
 const emailOk = (e) => typeof e === "string" && e.length <= 254 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
 
@@ -111,7 +113,9 @@ export const requireAdmin = async (c, next) => {
   const u = c.get("user");
   if (!u) fail(401, "not_signed_in", "Sign in to continue.");
   if (u.role !== "owner" && u.role !== "admin") fail(403, "forbidden", "Admins only.");
-  if (config.requireAdminMfa && (!u.totp_enrolled || c.get("session").aal < 2)) fail(403, "mfa_required", u.totp_enrolled ? "Enter your authenticator code to open the admin area." : "Set up an authenticator app to open the admin area.");
+  const s = c.get("session");
+  const stepped = s.aal >= 2 && s.aal_at && Date.now() - s.aal_at < STEP_UP_MS;
+  if (config.requireAdminMfa && (!u.totp_enrolled || !stepped)) fail(403, "mfa_required", u.totp_enrolled ? "Enter your authenticator code to open the admin area." : "Set up an authenticator app to open the admin area.");
   return next();
 };
 export const requireOwner = async (c, next) => {
@@ -129,11 +133,10 @@ export function authRoutes(db) {
     const email = String(raw || "").trim().toLowerCase();
     if (!emailOk(email)) fail(400, "bad_email", "Enter a valid email address.");
     rateLimit("start:ip:" + clientIp(c), 5, 5 / 60, "sign-in attempts");
-    rateLimit("start:email:" + email, 3, 3 / 600, "codes for this email");
+    rateLimit("start:email:" + email, 5, 5 / 600, "codes for this email");
     const role = signInRole(db, email);
     if (role) {
       const code = String(crypto.randomInt(0, 1e6)).padStart(6, "0");
-      db.run("UPDATE login_codes SET used_at = ? WHERE email = ? AND used_at IS NULL", nowIso(), email); // one live code at a time
       db.run("INSERT INTO login_codes (email, code_hash, expires_at_ms, created_at) VALUES (?, ?, ?, ?)", email, sha256(email + ":" + code), Date.now() + CODE_TTL_MS, nowIso());
       const ja = locale === "ja", zh = locale === "zh";
       const subject = ja ? "サインインコード: " + code : zh ? "登入驗證碼：" + code : "Your sign-in code: " + code;
@@ -148,13 +151,17 @@ export function authRoutes(db) {
     const { email: raw, code } = await c.req.json().catch(() => ({}));
     const email = String(raw || "").trim().toLowerCase();
     rateLimit("verify:ip:" + clientIp(c), 10, 10 / 60, "attempts");
-    const row = db.get("SELECT * FROM login_codes WHERE email = ? AND used_at IS NULL ORDER BY id DESC LIMIT 1", email);
-    if (!row || row.expires_at_ms < Date.now() || row.attempts >= 5) fail(400, "code_expired", "That code has expired. Ask for a new one.");
-    const ok = /^\d{6}$/.test(String(code || "")) && crypto.timingSafeEqual(Buffer.from(row.code_hash), Buffer.from(sha256(email + ":" + code)));
-    if (!ok) { db.run("UPDATE login_codes SET attempts = attempts + 1 WHERE id = ?", row.id); fail(400, "code_wrong", "That code isn't right."); }
-    const role = signInRole(db, email);
-    if (!role) fail(403, "no_access", "This email doesn't have access.");
-    db.run("UPDATE login_codes SET used_at = ? WHERE id = ?", nowIso(), row.id);
+    rateLimit("verify:email:" + email, 10, 10 / 600, "attempts for this email");
+    // the newest few unexpired codes; one answer for "no code", "expired" and "wrong", so it doesn't reveal who has access
+    const live = db.all("SELECT * FROM login_codes WHERE email = ? AND used_at IS NULL AND expires_at_ms > ? AND attempts < 5 ORDER BY id DESC LIMIT ?", email, Date.now(), LIVE_CODES);
+    const given = /^\d{6}$/.test(String(code || "")) ? Buffer.from(sha256(email + ":" + code)) : null;
+    const row = given && live.find((x) => crypto.timingSafeEqual(Buffer.from(x.code_hash), given));
+    const role = row ? signInRole(db, email) : null;
+    if (!row || !role) {
+      for (const x of live) db.run("UPDATE login_codes SET attempts = attempts + 1 WHERE id = ?", x.id);
+      fail(400, "code_invalid", "That code isn't right, or it has expired. Ask for a new one.");
+    }
+    db.run("UPDATE login_codes SET used_at = ? WHERE email = ? AND used_at IS NULL", nowIso(), email);
     const p = ensureProfile(db, email, role);
     newSession(c, db, p.id);
     db.audit(p.id, "auth.signed_in", email);
@@ -184,7 +191,7 @@ export function authRoutes(db) {
     const step = checkTotp(u, code);
     if (!step) fail(400, "code_wrong", "That code isn't right. Check the time on your phone.");
     db.run("UPDATE profiles SET totp_enrolled = 1, totp_last_step = ? WHERE id = ?", step, u.id);
-    db.run("UPDATE sessions SET aal = 2 WHERE id = ?", c.get("session").id);
+    db.run("UPDATE sessions SET aal = 2, aal_at = ? WHERE id = ?", Date.now(), c.get("session").id);
     db.audit(u.id, "auth.totp_enrolled", u.email);
     return c.json({ ok: true });
   });
@@ -196,7 +203,7 @@ export function authRoutes(db) {
     const step = checkTotp(u, code);
     if (!step) fail(400, "code_wrong", "That code isn't right.");
     db.run("UPDATE profiles SET totp_last_step = ? WHERE id = ?", step, u.id);
-    db.run("UPDATE sessions SET aal = 2 WHERE id = ?", c.get("session").id);
+    db.run("UPDATE sessions SET aal = 2, aal_at = ? WHERE id = ?", Date.now(), c.get("session").id);
     return c.json({ ok: true });
   });
   return r;

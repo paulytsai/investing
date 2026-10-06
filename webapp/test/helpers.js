@@ -73,3 +73,15 @@ export function stubFmp(handler) {
   };
   return () => { globalThis.fetch = real; };
 }
+
+// the page's Claude requests, built exactly as page.html builds them
+import fs from "node:fs";
+export const PROMPTS = JSON.parse(fs.readFileSync(new URL("../server/claude/prompts.default.json", import.meta.url), "utf8"));
+export const req = {
+  call: (text = "hello", key = "2026Q1") => PROMPTS.CALL_PROMPT + "\n\nTranscript (" + key + "):\n" + text,
+  notes: (docs = "MODEL DATA", lang = "en") => PROMPTS.NOTES_SYSTEM + "\n\nDOCUMENTS FOR Nike (NKE):\n\n" + docs + "\n\nINSTRUCTIONS:\n" + PROMPTS.NOTES_PROMPT + (lang === "en" ? "" : PROMPTS.NOTES_LANG[lang]),
+  tr: (text = "hello", from = "en", to = "ja", name = "Nike (NKE)") => PROMPTS.NOTES_TR_TEMPLATE.replace("\u0001NAME\u0001", name).replace("\u0001FROM\u0001", PROMPTS.LANG_NAME[from]).replace("\u0001TO\u0001", PROMPTS.LANG_NAME[to]).replace("\u0001TEXT\u0001", text),
+  sec: (text = "T") => PROMPTS.SEC_PROMPT + "\n\nTables:\n" + text,
+  guide: (text = "x") => PROMPTS.GUIDE_PROMPT + "\n\nRelease:\n" + text,
+  guideCall: (text = "y") => PROMPTS.GUIDE_CALL_PROMPT + "\n\nCONTEXT: this is the Q1 FY2027 earnings call\n\nTranscript:\n" + text,
+};

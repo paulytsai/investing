@@ -3,8 +3,9 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { Hono } from "hono";
+import { bodyLimit } from "hono/body-limit";
 import { config, ROOT } from "./config.js";
-import { errorBody, originGuard, fail, ApiError } from "./http.js";
+import { errorBody, originGuard, fail, ApiError, socketIp } from "./http.js";
 import { authRoutes, sessionMiddleware, requireUser, ensureOwner, licencedForOthers } from "./auth.js";
 import { docsRoutes } from "./docs.js";
 import { toolsRoutes } from "./tools/index.js";
@@ -64,6 +65,13 @@ export function createApp(db) {
     c.header("referrer-policy", "same-origin");
     if (config.cookieSecure) c.header("strict-transport-security", "max-age=31536000; includeSubDomains");
   });
+
+  // request bodies: saved models and Claude requests can be large, everything else is small
+  const BODY_MAX = [["/api/docs/", 3e6], ["/api/sample", 3e6], ["/webhooks/", 512e3]];
+  app.use("*", (c, next) => bodyLimit({
+    maxSize: BODY_MAX.find(([p]) => c.req.path.startsWith(p))?.[1] || 64e3,
+    onError: (c) => c.json({ code: "too_large", message: "This request is too large." }, 413),
+  })(c, next));
 
   // Stripe posts here with its own signature, so it sits before the origin check and the session
   app.post("/webhooks/stripe", stripeWebhook(db));
@@ -148,8 +156,9 @@ export function createApp(db) {
   // development outbox: sign-in codes when no email service is configured (local requests only)
   if (config.devMail) {
     app.get("/dev/mail", (c) => {
-      const host = new URL(c.req.url).hostname;
-      if (!["localhost", "127.0.0.1", "::1"].includes(host)) return c.notFound();
+      // by the connection's own address (the Host header is the client's to set), and never through a proxy
+      const local = /^(127\.|::1$|::ffff:127\.)/.test(socketIp(c));
+      if (!local || c.req.header("x-forwarded-for") || c.req.header("forwarded") || c.req.header("x-real-ip")) return c.notFound();
       const rows = db.all("SELECT at, to_email, subject, body FROM dev_mail ORDER BY id DESC LIMIT 20");
       const esc = (s) => String(s).replace(/[&<>"]/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[ch]));
       c.header("content-security-policy", STRICT_CSP);

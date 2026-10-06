@@ -7,10 +7,14 @@ import { fail, rateLimit } from "./http.js";
 import { requireUser } from "./auth.js";
 import { limitsFor } from "./meter.js";
 
-const ID = /^[A-Za-z0-9_~:@+.-]{1,200}$/;
+// the page's ids only: model-<T>, sec-<T>, calls-<T> (T sanitised the way the page does it)
+const ID = /^(model|sec|calls)-[A-Za-z0-9_~:@+-]{1,40}$/;
+// per user, whatever the kind: a plan's saved models bring their segment and call documents with them
+const docCap = (lim) => (lim === null || lim === undefined ? 5000 : lim * 3 + 10);
+const bytesCap = (lim) => (lim === null || lim === undefined ? 500e6 : 50e6);
 const MAX_BYTES = 1_000_000;
 const HISTORY = 20;
-const kindOf = (id) => (/^(model|sec|calls)-/.exec(id)?.[1]) || "other";
+const kindOf = (id) => /^(model|sec|calls)-/.exec(id)[1];
 
 export function docsRoutes(db) {
   const r = new Hono();
@@ -40,9 +44,12 @@ export function docsRoutes(db) {
     if (bytes > MAX_BYTES) fail(413, "too_large", "This document is too large to save.");
     const kind = kindOf(id), now = nowIso();
     db.tx(() => {
-      const prev = db.get("SELECT json FROM user_docs WHERE user_id = ? AND doc_id = ?", user.id, id);
+      const prev = db.get("SELECT json, bytes FROM user_docs WHERE user_id = ? AND doc_id = ?", user.id, id);
+      const lim = limitsFor(db, user).limits.saved_models;
+      const tot = db.get("SELECT COUNT(*) AS n, COALESCE(SUM(bytes), 0) AS b FROM user_docs WHERE user_id = ?", user.id);
+      if (!prev && tot.n >= docCap(lim)) fail(402, "quota_exceeded", "You've reached the storage limit for your plan.", { limit: "storage" });
+      if (tot.b - (prev?.bytes || 0) + bytes > bytesCap(lim)) fail(402, "quota_exceeded", "You've reached the storage limit for your plan.", { limit: "storage" });
       if (!prev && kind === "model") {
-        const lim = limitsFor(db, user).limits.saved_models;
         const n = db.get("SELECT COUNT(*) AS n FROM user_docs WHERE user_id = ? AND kind = 'model'", user.id).n;
         if (lim !== null && lim !== undefined && n >= lim) fail(402, "quota_exceeded", `Your plan saves up to ${lim} models.`, { limit: "saved_models" });
       }

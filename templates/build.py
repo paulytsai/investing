@@ -54,6 +54,18 @@ else:
         body = page[start:end]
         assert "\\" not in body and "${" not in body, name + " needs template-literal unescaping"
         prompts[name] = body
+    # the language suffix of the notes prompt and the translation template, evaluated from the page's own code, so
+    # the server can check that a Claude request has exactly the page's shape
+    import subprocess
+    lines = page.split("\n")
+    pick = lambda start: next(l for l in lines if l.strip().startswith(start)).strip()
+    a = page.index("const NOTES_TR_PROMPT = ")
+    tr_src = page[a:page.index("`;", a) + 2]
+    js = (pick("const LANG_NAME = ") + "\n" + pick("const notesLang = ") + "\n" + tr_src + "\n"
+          'const P = (k) => "\\u0001" + k + "\\u0001";\n'
+          'console.log(JSON.stringify({ LANG_NAME, NOTES_LANG: { ja: notesLang("ja"), zh: notesLang("zh") },'
+          ' NOTES_TR_TEMPLATE: NOTES_TR_PROMPT(P("FROM"), P("TO"), P("NAME"), P("TEXT")) }));')
+    prompts.update(json.loads(subprocess.run(["node", "-e", js], capture_output=True, text=True, check=True).stdout))
     (web / "server" / "claude").mkdir(parents=True, exist_ok=True)
     (web / "server" / "claude" / "prompts.default.json").write_text(json.dumps(prompts, ensure_ascii=False, indent=1))
     print("wrote", web / "public" / "app.html", "and", web / "server" / "claude" / "prompts.default.json")

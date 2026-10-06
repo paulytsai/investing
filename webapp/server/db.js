@@ -16,10 +16,17 @@ export function openDb(file = path.join(config.dataDir, "app.db")) {
   const db = new DatabaseSync(file);
   db.exec("PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;");
   db.exec(fs.readFileSync(path.join(here, "schema.sql"), "utf8"));
+  migrate(db);
   const v = db.prepare("SELECT version FROM schema_version").get();
   if (!v) db.prepare("INSERT INTO schema_version (version) VALUES (?)").run(SCHEMA_VERSION);
   seed(db);
   return wrap(db);
+}
+
+// columns added after a database was created (CREATE TABLE IF NOT EXISTS doesn't add them)
+function migrate(db) {
+  const has = (table, col) => db.prepare(`PRAGMA table_info(${table})`).all().some((c) => c.name === col);
+  if (!has("sessions", "aal_at")) db.exec("ALTER TABLE sessions ADD COLUMN aal_at INTEGER");
 }
 
 // small helpers over the raw connection

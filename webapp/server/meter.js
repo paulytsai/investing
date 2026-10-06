@@ -94,12 +94,20 @@ export function consumeCounter(db, user, counter, n = 1) {
   });
 }
 
+// give back a unit taken before a call that then failed
+export function refundCounter(db, user, counter) {
+  if (!COUNTERS.has(counter)) throw new Error("unknown counter " + counter);
+  const period = periodFor(db, user);
+  db.run(`UPDATE usage_period SET ${counter} = MAX(${counter} - 1, 0) WHERE user_id = ? AND period_start = ?`, user.id, period.start);
+}
+
 // Claude spend: a per-user hard cap per period, a soft cap that warns, and a global daily cap (owner exempt)
 export function claudeBudget(db, user) {
   const L = limitsFor(db, user), u = usageRow(db, user, periodFor(db, user, L));
   return { used: u.claude_usd, soft: L.limits.claude_soft_usd, hard: L.limits.claude_hard_usd };
 }
-export function checkClaudeBudget(db, user, estimateUsd = 0) {
+// estimateUsd: this request's estimate plus the user's other requests in flight; pendingGlobalUsd: everyone's in flight
+export function checkClaudeBudget(db, user, estimateUsd = 0, pendingGlobalUsd = 0) {
   const b = claudeBudget(db, user);
   if (b.hard !== null && b.hard !== undefined && b.used + estimateUsd > b.hard) {
     fail(402, "quota_exceeded", b.hard === 0 ? "Claude features aren't included in your plan." : `You've reached this period's Claude budget ($${b.hard}).`, { limit: "claude_usd" });
@@ -109,7 +117,7 @@ export function checkClaudeBudget(db, user, estimateUsd = 0) {
     if (day) {
       const since = new Date(); since.setUTCHours(0, 0, 0, 0);
       const spent = db.get("SELECT COALESCE(SUM(cost_usd), 0) AS s FROM usage_events WHERE provider = 'anthropic' AND at >= ?", since.toISOString()).s;
-      if (spent >= day) fail(503, "busy", "Claude features are paused for today. Try again tomorrow.", { retryable: false });
+      if (spent + pendingGlobalUsd >= day) fail(503, "busy", "Claude features are paused for today. Try again tomorrow.", { retryable: false });
     }
   }
   return b;

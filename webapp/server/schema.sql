@@ -42,6 +42,7 @@ CREATE TABLE IF NOT EXISTS sessions (
   id TEXT PRIMARY KEY,               -- sha256 of the cookie token; the token itself is never stored
   user_id TEXT NOT NULL REFERENCES profiles (id) ON DELETE CASCADE,
   aal INTEGER NOT NULL DEFAULT 1,    -- 2 after a TOTP check in this session
+  aal_at INTEGER,                    -- when that check happened (ms); the step-up lasts ADMIN_STEP_UP_HOURS
   created_at TEXT NOT NULL,
   expires_at_ms INTEGER NOT NULL,
   last_seen_at TEXT,

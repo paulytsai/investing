@@ -61,9 +61,13 @@ per user. There's also a global daily Claude budget (Admin → Settings) that pa
 
 ## Claude
 
-`/api/sample` accepts only the page's own prompts: it recognises each request by the prompt it starts with (call
-summary, notes draft, translation, segment tables, guidance from a release or a call), so the endpoint can't be used
-as a general Claude proxy. Each prompt site has a model, effort and token limit in the prompt registry
+`/api/sample` accepts only requests with exactly the shape the page builds: the prompt, the page's separators, and
+for a notes draft nothing after its instructions; a translation must match the page's translation template. The
+data-extraction sites (call summaries, segment tables, guidance) return only JSON of the expected shape. Documents
+inside a request (a transcript, a filing) are still the user's to supply, so a determined user could steer Claude
+within those limits, but only within their own plan's quotas and Claude budget. Budget and quota are reserved
+before each call (at most two in flight per user) and settled after it, and every call that reached Claude is
+recorded with its cost, even if the connection dropped. Each prompt site has a model, effort and token limit in the prompt registry
 (Admin → Prompts); version 1 is the text in `page.html`, and an activated newer version replaces it on the server.
 Requests use `claude-opus-5-5` with the server-side refusal fallback (`fallbacks: "default"`). JSON answers (call
 summaries, segment tables, guidance) are cached for 90 days. The notes prompt is the neutral one: no buy/sell calls,
@@ -75,8 +79,14 @@ can't pick up another tool's settings on the same machine.
 ## Security notes
 
 - Sessions are random tokens in an HttpOnly, SameSite=Lax cookie; only their SHA-256 is stored.
-- Writes must come from the app's own origin as JSON, which blocks cross-site form posts.
-- The admin area needs an authenticator code (TOTP) in the session (`REQUIRE_ADMIN_MFA`, on by default).
+- Writes must come from the app's own origin as JSON, which blocks cross-site form posts. Request bodies are capped.
+- Rate limits use the connection's address. Behind a reverse proxy, set `TRUST_PROXY` to the number of proxies so the
+  client's address is read from `X-Forwarded-For`; otherwise that header is ignored (clients can forge it).
+- Sign-in codes: a new code doesn't cancel earlier ones (so nobody can cancel yours by requesting more), and every
+  failure gets the same answer, so the form doesn't reveal who has access.
+- The dev outbox (`/dev/mail`) answers only connections from the machine itself, not through a proxy, and is off in
+  production. Don't expose a development server to a network.
+- The admin area needs an authenticator code (TOTP), asked again every 12 hours (`REQUIRE_ADMIN_MFA`, on by default).
 - The page is served with a Content-Security-Policy that allows its two inline scripts by hash, the export
   libraries from cdnjs and Google Fonts, and nothing else.
 - API keys stay on the server. The FMP and Edgar routes accept only the endpoints and parameters the page uses.

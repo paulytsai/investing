@@ -28,6 +28,8 @@ export const config = {
   ownerEmail: (env.OWNER_EMAIL || "").trim().toLowerCase(),
   sessionDays: +(env.SESSION_DAYS || 30),
   cookieSecure: bool(env.COOKIE_SECURE, production),
+  // reverse proxies in front of the app that append X-Forwarded-For (0: use the connection's address)
+  trustProxy: Math.max(0, parseInt(env.TRUST_PROXY || "0", 10) || 0),
   requireAdminMfa: bool(env.REQUIRE_ADMIN_MFA, true),
   // email: Resend when a key is set, otherwise the dev outbox (codes are logged and shown at /dev/mail)
   resendApiKey: env.RESEND_API_KEY || "",
