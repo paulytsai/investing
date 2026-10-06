@@ -237,3 +237,20 @@ test("downloads are counted; the page is served with a hash-based CSP", async ()
   const shim = await app.request("/shim.js");
   assert.match(await shim.text(), /window\.claude = \{/);
 });
+
+test("deleting an account removes its data, keeps anonymous usage, and needs the email typed", async () => {
+  const { app, db } = makeApp();
+  licenceAndInvite(db, "leaver@example.com");
+  const u = await signIn(app, db, "leaver@example.com");
+  await u.json("PUT", "/api/docs/model-NKE", { data: { json: "{}", ticker: "NKE" } });
+  await u.json("POST", "/api/meter/export", { filename: "NKE.xlsx" });
+  const id = db.get("SELECT id FROM profiles WHERE email = 'leaver@example.com'").id;
+  assert.equal((await u.json("POST", "/api/account/delete", { confirm: "someone@example.com" })).status, 400);
+  assert.equal((await u.json("POST", "/api/account/delete", { confirm: "Leaver@Example.com" })).status, 200);
+  assert.equal(db.get("SELECT COUNT(*) AS n FROM user_docs WHERE user_id = ?", id).n, 0);
+  assert.equal(db.get("SELECT COUNT(*) AS n FROM sessions WHERE user_id = ?", id).n, 0);
+  assert.equal(db.get("SELECT COUNT(*) AS n FROM usage_events WHERE user_id IS NULL AND feature = 'export'").n, 1);
+  assert.equal((await u.get("/api/me")).status, 401);
+  const owner = await signIn(app, db, OWNER);
+  assert.equal((await owner.json("POST", "/api/account/delete", { confirm: OWNER })).status, 409);
+});

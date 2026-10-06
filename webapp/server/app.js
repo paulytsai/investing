@@ -106,6 +106,24 @@ export function createApp(db) {
     return c.json({ ok: true });
   });
 
+  // delete my account: saved models, sessions and sign-in data go; usage stays for cost accounting, without the user
+  app.post("/api/account/delete", requireUser, async (c) => {
+    const u = c.get("user");
+    const { confirm } = (await c.req.json().catch(() => ({}))) || {};
+    if (String(confirm || "").trim().toLowerCase() !== u.email.toLowerCase()) fail(400, "confirm_email", "Type your email address to confirm.");
+    if (u.role === "owner") fail(409, "owner", "The owner's account can't be deleted here.");
+    if (db.get("SELECT 1 FROM subscriptions WHERE user_id = ? AND status IN ('active', 'trialing', 'past_due')", u.id)) fail(409, "cancel_first", "Cancel your subscription first (Plans and billing), then delete the account.");
+    db.tx(() => {
+      for (const t of ["user_docs_history", "usage_period", "period_tickers"]) db.run(`DELETE FROM ${t} WHERE user_id = ?`, u.id);
+      db.run("UPDATE usage_events SET user_id = NULL WHERE user_id = ?", u.id);
+      db.run("DELETE FROM login_codes WHERE email = ?", u.email);
+      db.run("DELETE FROM allowlist WHERE email = ?", u.email);
+      db.run("DELETE FROM profiles WHERE id = ?", u.id); // cascades: sessions, saved models, flags, customer link, comps
+      db.audit(null, "account.deleted", u.id);
+    });
+    return c.json({ ok: true });
+  });
+
   app.get("/healthz", (c) => c.json({ ok: true }));
 
   // ---------- pages ----------
