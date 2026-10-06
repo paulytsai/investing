@@ -990,16 +990,19 @@ footer.foot .fine { font-size: 11px; max-width: 110ch; }
     if (!state.act || !state.inp) { el.hidden = true; return; }
     el.hidden = false;
     // rebuild only when the ticker changes, so typing is never interrupted by a re-render
-    if (state.notesFor === state.ticker && $("notesText")) { const b = $("notesDraft"); if (b) { b.hidden = !state.sampleOk; b.disabled = !!state.notesBusy; b.textContent = state.notesBusy ? (state.notesBusy === state.ticker ? TR("Drafting from filings…") : TR("Drafting ") + state.notesBusy + TR(" notes…")) : state.inp.notesDraft ? TR("Redraft with Claude") : TR("Draft notes with Claude"); } return; }
+    const syncDraftBtn = () => { const b = $("notesDraft"); if (b) { b.hidden = !state.sampleOk; b.disabled = !!state.notesBusy; b.textContent = state.notesBusy ? (state.notesTr ? TR("Translating the draft…") : state.notesBusy === state.ticker ? TR("Drafting from filings…") : TR("Drafting ") + state.notesBusy + TR(" notes…")) : state.inp.notesDraft ? TR("Redraft with Claude") : TR("Draft notes with Claude"); } };
+    if (state.notesFor === state.ticker && $("notesText")) { syncDraftBtn(); return; }
     state.notesFor = state.ticker;
     const nCalls = state.inp.notesCalls || 8;
     el.innerHTML = TR('<header><h2>Notes on the fundamentals · ') + esc(state.ticker) + TR('</h2><span class="btnrow"><span class="save">Earnings calls to read</span>') + [4, 8, 12].map((k) => '<button type="button" class="mini" data-act="ncalls" data-v="' + k + '" aria-pressed="' + (nCalls === k) + '">' + k + (k === 4 ? TR(" (1 year)") : k === 8 ? TR(" (2 years)") : TR(" (3 years)")) + "</button>").join("") + '<button type="button" class="btn" id="notesDraft" data-act="notesdraft"' + (state.sampleOk ? "" : " hidden") + ">" + (state.inp.notesDraft ? TR("Redraft with Claude") : TR("Draft notes with Claude")) + "</button></span></header>" +
-      TR('<details class="about"><summary>How Claude\'s draft is made</summary>') + TR("<p>Your notes for this company, saved with the model. “Draft notes with Claude” writes in your investment engine's pitch format: a story told as a portfolio manager would present the idea, built around the engine's three questions (the story, the evidence, when it breaks), with the four lenses (Buffett, Danoff, Tillinghast, Lynch), checkpoints and the one tension that decides it. It reads the chosen number of earnings call transcripts (FMP), the latest earnings release and the past year's 8-K events (EDGAR Tools), together with this model's own analysis (scale slopes, cost structure, trend breaks, segments). It drafts the latest call's major topics, what the Q&amp;A focused on and how that shifted over the calls, how the story changed, big swings to future earnings against consensus, and framework insights (structural vs operational drivers, scale, pricing headroom, demand levers, profit concentration). Each call's summary is saved as soon as it is done, so later runs only read new calls, and a run that stops part-way continues from there. Drafting runs in this page, so keep it open until it finishes; switching tabs or companies inside the model is fine, and the draft is saved to the company it was written for. Claude writes only to its own section; your notes are never changed. A redraft replaces Claude's section, and the one before it can be restored.</p></details>") +
-      TR('<div class="notes2"><div><div class="nh"><h3>Claude\'s draft</h3><span class="btnrow">') + (state.inp.notesDraftPrev ? TR('<button type="button" class="mini" data-act="notesprev">Restore previous draft</button>') : "") + "</span></div>" +
+      TR('<details class="about"><summary>How Claude\'s draft is made</summary>') + TR("<p>Your notes for this company, saved with the model. “Draft notes with Claude” writes in your investment engine's pitch format: a story told as a portfolio manager would present the idea, built around the engine's three questions (the story, the evidence, when it breaks), with the four lenses (Buffett, Danoff, Tillinghast, Lynch), checkpoints and the one tension that decides it. It reads the chosen number of earnings call transcripts (FMP), the latest earnings release and the past year's 8-K events (EDGAR Tools), together with this model's own analysis (scale slopes, cost structure, trend breaks, segments). It drafts the latest call's major topics, what the Q&amp;A focused on and how that shifted over the calls, how the story changed, big swings to future earnings against consensus, and framework insights (structural vs operational drivers, scale, pricing headroom, demand levers, profit concentration). Each call's summary is saved as soon as it is done, so later runs only read new calls, and a run that stops part-way continues from there. Drafting runs in this page, so keep it open until it finishes; switching tabs or companies inside the model is fine, and the draft is saved to the company it was written for. Claude writes only to its own section; your notes are never changed. A redraft replaces Claude's section, and the one before it can be restored.</p>") + TR("<p>Claude writes the draft in the language the page is set to when you press “Draft notes with Claude”. If you switch language later, a button next to Claude's draft translates the existing draft instead of redrafting from the filings, and “Restore previous draft” brings back the original.</p>") + "</details>" +
+      TR('<div class="notes2"><div><div class="nh"><h3>Claude\'s draft</h3><span class="btnrow">') + (state.inp.notesDraftPrev && !state.notesBusy ? TR('<button type="button" class="mini" data-act="notesprev">Restore previous draft</button>') : "") + (state.sampleOk && !state.notesBusy && String(state.inp.notesDraft || "").trim() && draftLang(state.inp.notesDraft) !== LANG ? '<button type="button" class="mini" data-act="notestr">' + TR_BTN[LANG] + "</button>" : "") + "</span></div>" +
       TR('<textarea id="notesDraftText" spellcheck="true" aria-label="Claude\'s draft notes" placeholder="') + (state.sampleOk ? TR("“Draft notes with Claude” fills this section from the earnings calls and filings.") : TR("Drafting needs Claude, available when this page is opened in claude.ai.")) + '"></textarea></div>' +
       TR('<div><div class="nh"><h3>My notes</h3></div><textarea id="notesText" spellcheck="true" aria-label="My notes" placeholder="Your own view: business, drivers, one-off items, guidance vs consensus, risks, questions to follow up…"></textarea></div></div>');
     $("notesText").value = state.inp.notes || "";
     $("notesDraftText").value = state.inp.notesDraft || "";
+    if (state.notesTr === state.ticker) $("notesDraftText").readOnly = true; // the translation streams in here
+    syncDraftBtn();
     fitNotes();
   }
   // the note boxes grow with their text, so the whole draft reads without an inner scroll bar
@@ -1042,6 +1045,48 @@ Never use the words "pass", "passes" or "passes the test" anywhere: to an invest
 Keep the whole draft under 1,300 words.`;
   // the documents stay in English; Claude writes the draft in the reader's language
   const notesLang = (lang) => (lang === "en" ? "" : "\n\nLANGUAGE: write the whole draft in " + LANG_NAME[lang] + ", including the section headings, which you translate (keep them in capitals only if the language has capitals). Keep tickers, numbers, currency codes, fiscal labels (FY2026, Q3) and financial acronyms (EPS, EBIT, DCF, ROIC, FCF, P/E) as they are. Quote management in the original English, followed by a translation in brackets. The words for the four lenses' verdicts are " + (lang === "ja" ? "適合 / まちまち / 適合しない" : "符合 / 好壞參半 / 不符合") + ".");
+  // the language a draft is written in, from its script: kana means Japanese, Han characters without kana Chinese
+  function draftLang(text) {
+    const t = String(text || ""), kana = (t.match(/[\u3040-\u30ff]/g) || []).length, han = (t.match(/[\u3400-\u9fff]/g) || []).length;
+    return kana >= 20 ? "ja" : han >= 40 ? "zh" : "en";
+  }
+  // each label is shown only in its own language
+  const TR_BTN = { en: "Translate draft into English", ja: "下書きを日本語に翻訳", zh: "將草稿翻譯成繁體中文" };
+  const NOTES_TR_PROMPT = (from, to, name, text) => `Translate these working notes on ${name} from ${from} into ${to}. They are an investment pitch written for a portfolio manager.
+Rules:
+- Translate everything, including the first line (the draft's header) and the section headings. Write headings in capitals only if the target language has capitals.
+- Keep the structure exactly: the same paragraphs, line breaks, headings and list markers, in the same order. Add nothing and drop nothing: no summary, no comments, no translator's notes.
+- Keep tickers, company names, numbers, percentages, currency codes, dates, fiscal labels (FY2026, Q3) and financial acronyms (EPS, EBIT, EBITDA, DCF, ROIC, FCF, P/E, SBC) exactly as written.
+- Use standard financial terms: Japanese as Japanese sell-side analysts write it; Traditional Chinese in Taiwan usage (營收, 毛利率, 營業利益, 每股盈餘, 本益比, 自由現金流量).
+- Quotes from management: into Japanese or Chinese, keep the original English quote and add the translation in brackets after it; into English, give the original English quote alone and drop any bracketed translation.
+- The four lenses' verdicts: fits / mixed / does not fit = 適合 / まちまち / 適合しない = 符合 / 好壞參半 / 不符合. Never use pass, passes, パス or 通過.
+- Plain text only, no markdown symbols (# * **).
+Reply with only the translated notes.
+
+NOTES:
+${text}`;
+  async function translateNotes() {
+    const t = state.ticker, sample = await sampleP, lang = LANG, src = String(state.inp?.notesDraft || "");
+    const from = draftLang(src);
+    if (!sample || state.notesBusy || !src.trim() || from === lang) return;
+    const name = (state.prof?.companyName || t) + " (" + t + ")";
+    state.notesBusy = t; state.notesTr = t; state.notesFor = null; renderNotes();
+    try {
+      const show = ({ text }) => { if (state.ticker !== t) return; const el = $("notesDraftText"); if (el) { el.value = text; fitNotes(); } };
+      const out = await sample(NOTES_TR_PROMPT(LANG_NAME[from], LANG_NAME[lang], name, src), { modelTier: "default", onText: show });
+      if (out?.truncated) throw { code: "truncated" };
+      const text = String(out?.text || "").trim();
+      if (!text) throw { code: "empty_completion" };
+      // save to the company it was translated for, and only over the draft it was translated from
+      const inp = state.ticker === t && state.inp ? state.inp : await loadInputs(t);
+      if (inp.notesDraft !== src) { setNotice(TR("The draft changed while it was being translated, so the translation was not saved.")); return; }
+      inp.notesDraftPrev = src; inp.notesDraft = text;
+      if (inp === state.inp) { scheduleSave(); setNotice(""); }
+      else { await saveInputsFor(t, inp); setNotice(esc(t) + TR(" draft translated and saved with its model.")); }
+    } catch (e) {
+      setNotice(e && e.code === "truncated" ? TR("The translation was cut short, so the draft is unchanged. Try again, or shorten the draft first.") : TR("Couldn't translate the draft (") + esc(e?.code || e?.message || TR("error")) + TR("). The draft is unchanged."));
+    } finally { state.notesBusy = false; state.notesTr = null; state.notesFor = null; renderNotes(); }
+  }
   async function draftNotes() {
     const t = state.ticker, mcp = await mcpP, sample = await sampleP;
     const lang = LANG;
@@ -2112,6 +2157,7 @@ Rules:
     if (act === "tab") { state.tab = v; store.set("tmpl.tab", v); render(); if (v === "notes") fitNotes(); if (TABLE_TABS.has(v)) { scrollToForecast(); const sh = document.querySelector(".sheet"); if (sh) sh.scrollTop = 0; } return; }
     if (act === "backup") { backupAll(); return; }
     if (act === "notesdraft") { draftNotes(); return; }
+    if (act === "notestr") { translateNotes(); return; }
     if (act === "notesprev") { const cur = state.inp.notesDraft; state.inp.notesDraft = state.inp.notesDraftPrev || ""; state.inp.notesDraftPrev = cur || null; scheduleSave(); state.notesFor = null; renderNotes(); return; }
     if (act === "ncalls") { state.inp.notesCalls = +v; scheduleSave(); state.notesFor = null; renderNotes(); return; }
     if (act === "restore") { $("restoreFile").click(); return; }
