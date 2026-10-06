@@ -990,18 +990,22 @@ footer.foot .fine { font-size: 11px; max-width: 110ch; }
     if (!state.act || !state.inp) { el.hidden = true; return; }
     el.hidden = false;
     // rebuild only when the ticker changes, so typing is never interrupted by a re-render
-    const syncDraftBtn = () => { const b = $("notesDraft"); if (b) { b.hidden = !state.sampleOk; b.disabled = !!state.notesBusy; b.textContent = state.notesBusy ? (state.notesTr ? TR("Translating the draft…") : state.notesBusy === state.ticker ? TR("Drafting from filings…") : TR("Drafting ") + state.notesBusy + TR(" notes…")) : state.inp.notesDraft ? TR("Redraft with Claude") : TR("Draft notes with Claude"); } };
+    const syncDraftBtn = () => { const b = $("notesDraft"); if (b) { b.hidden = !state.sampleOk; b.disabled = !!state.notesBusy; b.textContent = state.notesBusy ? (state.notesTr ? TR("Translating the draft…") : state.notesBusy === state.ticker ? TR("Drafting from filings…") : TR("Drafting ") + state.notesBusy + TR(" notes…")) : state.inp.notesDraft ? TR("Redraft with Claude") : TR("Draft notes with Claude"); }
+      const d = String(state.inp.notesDraft || ""), busy = !!state.notesBusy;
+      const r = $("notesPrevBtn"); if (r) r.hidden = busy || !state.inp.notesDraftPrev;
+      const x = $("notesTrBtn"); if (x) { x.hidden = busy || !state.sampleOk || !d.trim() || draftLang(d) === LANG; x.textContent = TR_BTN[LANG]; }
+      const ta = $("notesDraftText"); if (ta) ta.readOnly = state.notesTr === state.ticker; // a translation streams in here
+    };
     if (state.notesFor === state.ticker && $("notesText")) { syncDraftBtn(); return; }
     state.notesFor = state.ticker;
     const nCalls = state.inp.notesCalls || 8;
     el.innerHTML = TR('<header><h2>Notes on the fundamentals · ') + esc(state.ticker) + TR('</h2><span class="btnrow"><span class="save">Earnings calls to read</span>') + [4, 8, 12].map((k) => '<button type="button" class="mini" data-act="ncalls" data-v="' + k + '" aria-pressed="' + (nCalls === k) + '">' + k + (k === 4 ? TR(" (1 year)") : k === 8 ? TR(" (2 years)") : TR(" (3 years)")) + "</button>").join("") + '<button type="button" class="btn" id="notesDraft" data-act="notesdraft"' + (state.sampleOk ? "" : " hidden") + ">" + (state.inp.notesDraft ? TR("Redraft with Claude") : TR("Draft notes with Claude")) + "</button></span></header>" +
       TR('<details class="about"><summary>How Claude\'s draft is made</summary>') + TR("<p>Your notes for this company, saved with the model. “Draft notes with Claude” writes a neutral briefing in your investment engine's format: the story and the debate around it, the engine's three questions (the story, the evidence for and against, what would settle it), the case for and the case against with equal weight, the four lenses (Buffett, Danoff, Tillinghast, Lynch), checkpoints and the one tension that decides it. It makes no buy or sell call. It reads the chosen number of earnings call transcripts (FMP), the latest earnings release and the past year's 8-K events (EDGAR Tools), together with this model's own analysis (scale slopes, cost structure, trend breaks, segments). It drafts the latest call's major topics, what the Q&amp;A focused on and how that shifted over the calls, how the story changed, big swings to future earnings against consensus, and framework insights (structural vs operational drivers, scale, pricing headroom, demand levers, profit concentration). Each call's summary is saved as soon as it is done, so later runs only read new calls, and a run that stops part-way continues from there. Drafting runs in this page, so keep it open until it finishes; switching tabs or companies inside the model is fine, and the draft is saved to the company it was written for. Claude writes only to its own section; your notes are never changed. A redraft replaces Claude's section, and the one before it can be restored.</p>") + TR("<p>Claude writes the draft in the language the page is set to when you press “Draft notes with Claude”. If you switch language later, a button next to Claude's draft translates the existing draft instead of redrafting from the filings, and “Restore previous draft” brings back the original.</p>") + "</details>" +
-      TR('<div class="notes2"><div><div class="nh"><h3>Claude\'s draft</h3><span class="btnrow">') + (state.inp.notesDraftPrev && !state.notesBusy ? TR('<button type="button" class="mini" data-act="notesprev">Restore previous draft</button>') : "") + (state.sampleOk && !state.notesBusy && String(state.inp.notesDraft || "").trim() && draftLang(state.inp.notesDraft) !== LANG ? '<button type="button" class="mini" data-act="notestr">' + TR_BTN[LANG] + "</button>" : "") + "</span></div>" +
+      TR('<div class="notes2"><div><div class="nh"><h3>Claude\'s draft</h3><span class="btnrow">') + TR('<button type="button" class="mini" id="notesPrevBtn" data-act="notesprev" hidden>Restore previous draft</button>') + '<button type="button" class="mini" id="notesTrBtn" data-act="notestr" hidden></button>' + "</span></div>" +
       TR('<textarea id="notesDraftText" spellcheck="true" aria-label="Claude\'s draft notes" placeholder="') + (state.sampleOk ? TR("“Draft notes with Claude” fills this section from the earnings calls and filings.") : TR("Drafting needs Claude, available when this page is opened in claude.ai.")) + '"></textarea></div>' +
       TR('<div><div class="nh"><h3>My notes</h3></div><textarea id="notesText" spellcheck="true" aria-label="My notes" placeholder="Your own view: business, drivers, one-off items, guidance vs consensus, risks, questions to follow up…"></textarea></div></div>');
     $("notesText").value = state.inp.notes || "";
     $("notesDraftText").value = state.inp.notesDraft || "";
-    if (state.notesTr === state.ticker) $("notesDraftText").readOnly = true; // the translation streams in here
     syncDraftBtn();
     fitNotes();
   }
@@ -1050,10 +1054,14 @@ Never use the words "pass", "passes" or "passes the test" anywhere: to an invest
 Keep the whole draft under 1,300 words.`;
   // the documents stay in English; Claude writes the draft in the reader's language
   const notesLang = (lang) => (lang === "en" ? "" : "\n\nLANGUAGE: write the whole draft in " + LANG_NAME[lang] + ", including the section headings, which you translate (keep them in capitals only if the language has capitals). Keep tickers, numbers, currency codes, fiscal labels (FY2026, Q3) and financial acronyms (EPS, EBIT, DCF, ROIC, FCF, P/E) as they are. Quote management in the original English, followed by a translation in brackets. The words for the four lenses' verdicts are " + (lang === "ja" ? "適合 / まちまち / 適合しない" : "符合 / 好壞參半 / 不符合") + ".");
-  // the language a draft is written in, from its script: kana means Japanese, Han characters without kana Chinese
+  // the language a draft is written in, from its script: mostly CJK with kana is Japanese, mostly CJK without kana
+  // Chinese, otherwise English. Claude's header line is skipped, and English quotes inside a Japanese or Chinese draft
+  // (or a few CJK words inside an English one) don't tip it.
   function draftLang(text) {
-    const t = String(text || ""), kana = (t.match(/[\u3040-\u30ff]/g) || []).length, han = (t.match(/[\u3400-\u9fff]/g) || []).length;
-    return kana >= 20 ? "ja" : han >= 40 ? "zh" : "en";
+    const t = String(text || "").replace(/^(Draft by Claude|Claudeによる下書き|Claude 撰寫的草稿|Claude 依)[^\n]*\n/, "");
+    const kana = (t.match(/[぀-ヿ]/g) || []).length, cjk = kana + (t.match(/[㐀-鿿]/g) || []).length, latin = (t.match(/[A-Za-z]/g) || []).length;
+    if (cjk < 20 || cjk * 4 < latin) return "en";
+    return kana >= cjk * 0.08 ? "ja" : "zh";
   }
   // each label is shown only in its own language
   const TR_BTN = { en: "Translate draft into English", ja: "下書きを日本語に翻訳", zh: "將草稿翻譯成繁體中文" };
@@ -1070,32 +1078,58 @@ Reply with only the translated notes.
 
 NOTES:
 ${text}`;
+  // the inputs in memory, once any load in progress is done, if they belong to company t; otherwise null
+  async function liveInputs(t) {
+    while (state.busy && state.loadP) await state.loadP;
+    return state.inpFor === t && state.ticker === t && state.inp ? state.inp : null;
+  }
+  // put company t's draft into its panel without rebuilding it (which would interrupt typing in My notes)
+  function showDraft(t) {
+    const ta = $("notesDraftText");
+    if (ta && state.notesFor === t && state.ticker === t && state.inp) { ta.value = state.inp.notesDraft || ""; fitNotes(); }
+    renderNotes();
+  }
+  // Claude errors that mean it isn't available in this view: turn the Claude buttons off instead of repeating the error
+  function sampleFailed(e) {
+    const c = e && e.code;
+    if (["not_granted", "sampling_disabled", "not_declared", "capability_disabled", "capability_removed"].includes(c)) { state.sampleOk = false; renderNotes(); return TR("Claude isn't available to this page in this view, so drafting and translating are turned off. Allow it in the page's Permissions menu, or open the page in claude.ai."); }
+    if (c === "rate_limited") return TR("Claude is busy or your usage limit has been reached. Try again later.");
+    if (c === "session_expired") return TR("Your claude.ai session has expired. Sign in again, then try again.");
+    return null;
+  }
   async function translateNotes() {
-    const t = state.ticker, sample = await sampleP, lang = LANG, src = String(state.inp?.notesDraft || "");
-    const from = draftLang(src);
-    if (!sample || state.notesBusy || !src.trim() || from === lang) return;
+    const t = state.ticker, sample = await sampleP, lang = LANG, I = state.inp;
+    if (!sample || state.busy || state.notesBusy || !I || state.inpFor !== t) return;
+    const cur = String(I.notesDraft || "");
+    if (!cur.trim() || draftLang(cur) === lang) return;
+    // translate Claude's original, not an earlier translation of it; if the original is in this language, bring it back
+    const isTr = !!I.notesDraftOrig && cur === I.notesDraftTr;
+    const base = isTr ? String(I.notesDraftOrig) : cur, from = draftLang(base);
+    if (from === lang) { I.notesDraftPrev = cur; I.notesDraft = base; I.notesDraftOrig = null; I.notesDraftTr = null; scheduleSave(); showDraft(t); return; }
     const name = (state.prof?.companyName || t) + " (" + t + ")";
-    state.notesBusy = t; state.notesTr = t; state.notesFor = null; renderNotes();
+    state.notesBusy = t; state.notesTr = t; renderNotes();
     try {
-      const show = ({ text }) => { if (state.ticker !== t) return; const el = $("notesDraftText"); if (el) { el.value = text; fitNotes(); } };
-      const out = await sample(NOTES_TR_PROMPT(LANG_NAME[from], LANG_NAME[lang], name, src), { modelTier: "default", onText: show });
+      const show = ({ text }) => { if (state.ticker !== t || state.notesFor !== t || !state.act) return; const el = $("notesDraftText"); if (el) { el.value = text; fitNotes(); } };
+      // not cached: a retry after a cut-short answer must ask Claude again
+      const out = await sample(NOTES_TR_PROMPT(LANG_NAME[from], LANG_NAME[lang], name, base), { modelTier: "default", cache: false, onText: show });
       if (out?.truncated) throw { code: "truncated" };
       const text = String(out?.text || "").trim();
       if (!text) throw { code: "empty_completion" };
       // save to the company it was translated for, and only over the draft it was translated from
-      const inp = state.ticker === t && state.inp ? state.inp : await loadInputs(t);
-      if (inp.notesDraft !== src) { setNotice(TR("The draft changed while it was being translated, so the translation was not saved.")); return; }
-      inp.notesDraftPrev = src; inp.notesDraft = text;
-      if (inp === state.inp) { scheduleSave(); setNotice(""); }
+      const live = await liveInputs(t), inp = live || (await loadInputs(t));
+      if (String(inp.notesDraft || "") !== cur) { setNotice(TR("The draft changed while it was being translated, so the translation was not saved.")); return; }
+      if (!isTr) inp.notesDraftPrev = cur; // "Restore previous draft" brings back the draft as it was before translating
+      inp.notesDraftOrig = base; inp.notesDraftTr = text; inp.notesDraft = text;
+      if (live) { scheduleSave(); setNotice(""); }
       else { await saveInputsFor(t, inp); setNotice(esc(t) + TR(" draft translated and saved with its model.")); }
     } catch (e) {
-      setNotice(e && e.code === "truncated" ? TR("The translation was cut short, so the draft is unchanged. Try again, or shorten the draft first.") : TR("Couldn't translate the draft (") + esc(e?.code || e?.message || TR("error")) + TR("). The draft is unchanged."));
-    } finally { state.notesBusy = false; state.notesTr = null; state.notesFor = null; renderNotes(); }
+      setNotice(sampleFailed(e) || (e && e.code === "truncated" ? TR("The translation was cut short, so the draft is unchanged. Try again, or shorten the draft first.") : TR("Couldn't translate the draft (") + esc(e?.code || e?.message || TR("error")) + TR("). The draft is unchanged.")));
+    } finally { state.notesBusy = false; state.notesTr = null; showDraft(t); }
   }
   async function draftNotes() {
     const t = state.ticker, mcp = await mcpP, sample = await sampleP;
-    const lang = LANG;
-    if (!mcp || !sample || state.notesBusy) return;
+    const lang = LANG, TRL = (x) => (lang === "en" ? x : I18N[lang]?.[x] ?? x); // labels in the draft's own language
+    if (!mcp || !sample || state.notesBusy || state.busy || state.inpFor !== t) return;
     // everything about the company is read from this snapshot, so switching ticker mid-run can't mix data
     const S = { act: state.act, mdl: state.mdl, mkt: state.mkt, prof: state.prof, inp: state.inp, dcf: state.dcf, rec: state.recRes, raw: state.raw };
     const note = (msg) => setNotice(esc(t) + TR(" notes: ") + msg + TR(" Keep this page open until it finishes; each call's summary is saved as it is done, so if the run stops, the next one picks up from there."));
@@ -1118,7 +1152,7 @@ ${text}`;
             const tr = await call(mcp, "earningsTranscript", { endpoint: "search-transcripts", symbol: t, year: d.fiscalYear, quarter: d.quarter });
             text = (Array.isArray(tr) ? tr[0] : tr)?.content || null;
           }
-          if (i === 0 && text) { parts.push("LATEST EARNINGS CALL TRANSCRIPT, " + key + ":\n" + clip(text, 45000)); srcs.push(TR("call transcripts ") + list[list.length - 1].date + TR(" to ") + d.date); }
+          if (i === 0 && text) { parts.push("LATEST EARNINGS CALL TRANSCRIPT, " + key + ":\n" + clip(text, 45000)); srcs.push(TRL("call transcripts ") + list[list.length - 1].date + TRL(" to ") + d.date); }
           if (!cache[key] && text) {
             try { cache[key] = await sample.json([{ role: "user", content: CALL_PROMPT + "\n\nTranscript (" + key + "):\n" + clip(text, 45000) }], { modelTier: "default" }); } catch (e) { cache[key] = null; }
             if (cache[key]) await docSet("calls-" + t, cache); // save each summary as soon as it exists
@@ -1135,7 +1169,7 @@ ${text}`;
         events = (await call(mcp, "material_events", { company: t, since, limit: 30 }, false, EDGAR))?.results || [];
         parts.push("8-K EVENTS, LAST 12 MONTHS:\n" + events.map((e) => e.filing_date + ": " + (e.item_names || e.items || []).join("; ")).join("\n"));
         const rel = events.find((e) => (e.items || []).includes("2.02"));
-        if (rel) { const r = await call(mcp, "filing_section", { accession: rel.accession_number, section: "earnings_release", tables: "none", prose: "full" }, false, EDGAR); parts.push("LATEST EARNINGS RELEASE (filed " + rel.filing_date + "):\n" + clip(r?.content, 14000)); srcs.push(TR("earnings release ") + rel.filing_date); }
+        if (rel) { const r = await call(mcp, "filing_section", { accession: rel.accession_number, section: "earnings_release", tables: "none", prose: "full" }, false, EDGAR); parts.push("LATEST EARNINGS RELEASE (filed " + rel.filing_date + "):\n" + clip(r?.content, 14000)); srcs.push(TRL("earnings release ") + rel.filing_date); }
         const big = events.filter((e) => (e.items || []).some((i) => ["1.01", "1.02", "2.01", "2.05", "2.06", "3.03", "4.02"].includes(i))).slice(0, 4);
         for (const e of big) {
           const it = (e.items || []).find((i) => ["1.02", "2.01", "2.05", "2.06", "3.03", "4.02", "1.01"].includes(i));
@@ -1171,11 +1205,12 @@ ${text}`;
       const out = await sample([{ role: "user", content: NOTES_SYSTEM + "\n\nDOCUMENTS FOR " + (S.prof?.companyName || t) + " (" + t + "):\n\n" + parts.join("\n\n") + "\n\nINSTRUCTIONS:\n" + NOTES_PROMPT + notesLang(lang) }], { modelTier: "default" });
       const text = String(out?.text || "").trim();
       if (!text) throw new Error(TR("empty draft"));
-      const head = TR("Draft by Claude, a neutral briefing in the investment engine's format, ") + new Date().toLocaleDateString(LOCALE()) + (srcs.length ? TR(" · from ") + srcs.join(", ") : "") + TR(" · review before relying on it\n");
+      const head = TRL("Draft by Claude, a neutral briefing in the investment engine's format, ") + new Date().toLocaleDateString({ en: "en-US", ja: "ja-JP", zh: "zh-TW" }[lang]) + (srcs.length ? TRL(" · from ") + srcs.join(", ") : "") + TRL(" · review before relying on it\n");
       const draft = head + text;
-      if (state.ticker === t && state.inp) {
-        if (state.inp.notesDraft) state.inp.notesDraftPrev = state.inp.notesDraft;
-        state.inp.notesDraft = draft;
+      const live = await liveInputs(t);
+      if (live) {
+        if (live.notesDraft) live.notesDraftPrev = live.notesDraft;
+        live.notesDraft = draft; live.notesDraftOrig = null; live.notesDraftTr = null;
         scheduleSave();
         state.notesFor = null; // rebuild with the new text
         setNotice("");
@@ -1183,7 +1218,7 @@ ${text}`;
         // the user moved to another company: save the draft to the one it was written for
         const inp = await loadInputs(t);
         if (inp.notesDraft) inp.notesDraftPrev = inp.notesDraft;
-        inp.notesDraft = draft;
+        inp.notesDraft = draft; inp.notesDraftOrig = null; inp.notesDraftTr = null;
         await saveInputsFor(t, inp);
         setNotice(TR("The ") + esc(t) + TR(" notes draft is ready and saved with ") + esc(t) + TR("'s model."));
       }
@@ -2059,6 +2094,9 @@ Rules:
     const mcp = await mcpP;
     if (!mcp) { setNotice(TR("This template pulls numbers live through the FMP connector, which this view can't reach. Open it in claude.ai with the FMP (Financial Modeling Prep) connector added.")); return; }
     state.busy = true; $("go").disabled = true; $("go").textContent = TR("Loading…");
+    // until this company's inputs are in, the previous company's notes panel must not be used
+    $("notesp").hidden = true; state.notesFor = null;
+    let loaded; state.loadP = new Promise((r) => (loaded = r));
     setNotice("");
     $("coName").textContent = t; $("coMeta").textContent = TR("Loading 30 years of financials, the current year's quarters, consensus and market data…");
     state.act = null; state.mdl = null; state.mkt = null; render(); $("strip").hidden = true;
@@ -2090,6 +2128,7 @@ Rules:
     const raw = {}, errs = {};
     settled.forEach((s, ix) => { if (s.status === "fulfilled") raw[keys[ix]] = s.value; else errs[keys[ix]] = s.reason; });
     state.busy = false; $("go").disabled = false; $("go").textContent = TR("Load");
+    loaded(); // waiters resume after this synchronous block, so they see the new inputs
 
     if (errs.incA) { const [msg, manage] = errorMessage(errs.incA, t); setNotice(msg, manage); $("coMeta").textContent = TR("No data loaded"); return; }
     state.raw = raw; state.sec = raw.secSeg || {}; state.secStatus = "";
@@ -2097,7 +2136,7 @@ Rules:
     if (!A) { setNotice(TR("FMP has no financial statements for “") + esc(t) + TR("”. Check the ticker; non-US listings use a suffix such as 7203.T or SAP.DE.")); $("coMeta").textContent = TR("No data loaded"); return; }
     state.act = A;
     state.prof = Array.isArray(raw.prof) ? raw.prof[0] : raw.prof;
-    state.inp = raw.inp || blank();
+    state.inp = raw.inp || blank(); state.inpFor = t;
     state.mkt = marketData(raw, A, state.prof);
     state.segErr = errs.prodA || errs.geoA ? TR("Segment data couldn't be loaded from FMP for this company.") : null;
     DP = Math.max(...A.hist.slice(-10).map((c) => Math.abs(rev(c) || 0))) < 2e9 ? 1 : 0;
@@ -2161,6 +2200,7 @@ Rules:
     if (act === "secfill") { secFill(); return; }
     if (act === "tab") { state.tab = v; store.set("tmpl.tab", v); render(); if (v === "notes") fitNotes(); if (TABLE_TABS.has(v)) { scrollToForecast(); const sh = document.querySelector(".sheet"); if (sh) sh.scrollTop = 0; } return; }
     if (act === "backup") { backupAll(); return; }
+    if (/^notes|^ncalls$/.test(act) && (state.busy || state.inpFor !== state.ticker)) return;
     if (act === "notesdraft") { draftNotes(); return; }
     if (act === "notestr") { translateNotes(); return; }
     if (act === "notesprev") { const cur = state.inp.notesDraft; state.inp.notesDraft = state.inp.notesDraftPrev || ""; state.inp.notesDraftPrev = cur || null; scheduleSave(); state.notesFor = null; renderNotes(); return; }
@@ -2184,7 +2224,7 @@ Rules:
     else if (act === "basis") state.inp.basis = v;
     else if (act === "method") state.inp.costMethod = v === "auto" ? null : v;
     else if (act === "units") state.inp.up[v] = !state.inp.up[v];
-    else if (act === "reset") { const keep = ["notes", "notesDraft", "notesDraftPrev", "notesCalls"].reduce((o, k) => (state.inp[k] != null ? { ...o, [k]: state.inp[k] } : o), {}); state.inp = Object.assign(blank(), keep); }
+    else if (act === "reset") { const keep = ["notes", "notesDraft", "notesDraftPrev", "notesDraftOrig", "notesDraftTr", "notesCalls"].reduce((o, k) => (state.inp[k] != null ? { ...o, [k]: state.inp[k] } : o), {}); state.inp = Object.assign(blank(), keep); }
     else if (act === "clr") setIn(b.dataset.s, b.dataset.k, b.dataset.fy === "" ? null : +b.dataset.fy, null);
     else if (act === "clrc") { if (v.startsWith("recYrs:")) { if (state.inp.recYrs) delete state.inp.recYrs[v.slice(7)]; } else if (v.startsWith("up:")) delete state.inp.up[v.slice(3)]; else if (v === "basis" || v === "costMethod") state.inp[v] = null; else delete state.inp[v]; }
     else return;
