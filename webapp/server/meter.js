@@ -61,9 +61,12 @@ export function usageFor(db, user) {
 const over = (used, lim, add = 1) => lim !== null && lim !== undefined && used + add > lim;
 const quota = (what, lim) => fail(402, "quota_exceeded", `Your plan includes ${lim} ${what} a month, and they're used up. They reset at the start of the next period.`, { limit: what });
 
+// the page opens on MSFT for a first-time visitor, so that one is free: it mustn't use up a free plan's companies
+export const DEMO_TICKER = "MSFT";
+
 // a company counts once per period; reloading it is free
 export function registerCompany(db, user, ticker) {
-  if (!ticker) return;
+  if (!ticker || ticker === DEMO_TICKER) return;
   return db.tx(() => {
     const L = limitsFor(db, user), period = periodFor(db, user, L);
     const seen = db.get("SELECT 1 FROM period_tickers WHERE user_id = ? AND period_start = ? AND ticker = ?", user.id, period.start, ticker);

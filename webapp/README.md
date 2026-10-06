@@ -55,7 +55,7 @@ While billing is off, invited users are on the complimentary plan.
 | Pro | 120 | 1,000 | 25 | 25 | 400 | 15 | 500 | $30 / $45 |
 
 The limits live in the `plans` table and are edited in Admin → Plans. A company counts once per period, however
-often it's reloaded. A segment fill or a guidance read counts once per run (it may read several filings). Every
+often it's reloaded; MSFT, which the page opens on for a first-time visitor, doesn't count. A segment fill or a guidance read counts once per run (it may read several filings). Every
 FMP, SEC and Claude call is written to `usage_events` with its cost, so the admin area shows cost against revenue
 per user. There's also a global daily Claude budget (Admin → Settings) that pauses Claude for everyone but the owner.
 

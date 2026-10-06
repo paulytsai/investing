@@ -89,7 +89,8 @@ test("free plan: saved-model and company limits, no Claude", async () => {
   // companies: 3 a month; reloading one already counted is free
   const restore = stubFmp(() => [{ symbol: "X" }]);
   try {
-    for (const t of ["AAA", "BBB", "CCC", "AAA"]) assert.equal((await u.json("POST", "/api/tools", { server: "FMP", tool: "company", input: { endpoint: "profile-symbol", symbol: t } })).status, 200);
+    // the page's opening company (MSFT) doesn't count
+    for (const t of ["MSFT", "AAA", "BBB", "CCC", "AAA"]) assert.equal((await u.json("POST", "/api/tools", { server: "FMP", tool: "company", input: { endpoint: "profile-symbol", symbol: t } })).status, 200);
     const over = await u.json("POST", "/api/tools", { server: "FMP", tool: "company", input: { endpoint: "profile-symbol", symbol: "DDD" } });
     assert.equal(over.status, 402);
     // Claude: not in the free plan
