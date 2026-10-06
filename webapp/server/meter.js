@@ -9,9 +9,11 @@ const LIMIT_OF = { drafts: "drafts", translations: "translations", guidance: "gu
 
 export function billingEnabled(db) { return !!db.getConfig("billing")?.enabled; }
 
-// active subscription states that grant the plan; past_due keeps access until grace_until
+// active subscription states that grant the plan; past_due keeps access until grace_until.
+// Only subscriptions from the mode billing runs in: leftover test-mode ones grant nothing once billing is live
 function activeSubscription(db, userId) {
-  const s = db.get("SELECT * FROM subscriptions WHERE user_id = ? AND status IN ('active', 'trialing', 'past_due') ORDER BY synced_at DESC LIMIT 1", userId);
+  const b = db.getConfig("billing") || {};
+  const s = db.get("SELECT * FROM subscriptions WHERE user_id = ? AND livemode = ? AND status IN ('active', 'trialing', 'past_due') ORDER BY synced_at DESC LIMIT 1", userId, b.enabled && b.live ? 1 : 0);
   if (!s) return null;
   if (s.status === "past_due" && (!s.grace_until || Date.parse(s.grace_until) < Date.now())) return null;
   return s;

@@ -265,3 +265,15 @@ test("segment label overrides rename FMP's labels, adding values that land on th
     assert.deepEqual(r.body.payload[0].data, { "North America": 100, Converse: 5 });
   } finally { restore(); }
 });
+
+test("only subscriptions from the mode billing runs in grant a plan", async () => {
+  const { app, db } = makeApp();
+  licenceAndInvite(db, "payer@example.com");
+  const u = await signIn(app, db, "payer@example.com");
+  const id = db.get("SELECT id FROM profiles WHERE email = 'payer@example.com'").id;
+  db.run("INSERT INTO subscriptions (id, user_id, status, plan_id, livemode, synced_at) VALUES ('sub_test', ?, 'active', 'pro', 0, ?)", id, new Date().toISOString());
+  db.setConfig("billing", { enabled: true, live: false });
+  assert.equal((await u.json("GET", "/api/me")).body.plan.id, "pro");
+  db.setConfig("billing", { enabled: true, live: true });
+  assert.equal((await u.json("GET", "/api/me")).body.plan.id, "free");
+});
