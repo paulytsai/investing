@@ -230,7 +230,8 @@ const fyLabel = (r) => "FY" + (r.fiscalYear != null && String(r.fiscalYear).trim
 // ---------- the check ----------
 const running = new Set();
 
-export async function runDqCheck(db, rawTicker) {
+// opts.details: also return every comparison made ({kind, field, period, fmp, sec, source, ok}), for the admin's "run now"
+export async function runDqCheck(db, rawTicker, opts = {}) {
   const ticker = String(rawTicker || "").trim().toUpperCase();
   if (!TICKER.test(ticker)) fail(400, "bad_ticker", "Enter a ticker symbol.");
   if (running.has(ticker)) fail(409, "busy", `A check for ${ticker} is already running.`);
@@ -247,7 +248,7 @@ export async function runDqCheck(db, rawTicker) {
       fmpRows(db, ticker, "income-statement", limit), fmpRows(db, ticker, "balance-sheet-statement", limit), fmpRows(db, ticker, "cashflow-statement", limit)]);
     if (!inc.length) {
       skip(`FMP has no annual income statements for ${ticker}.`);
-      return finish(db, summary, results, t0);
+      return finish(db, summary, results, t0, opts);
     }
     const byDate = (rows) => new Map(rows.map((r) => [r.date, r]));
     const B = byDate(bal), C = byDate(cf);
@@ -280,7 +281,7 @@ export async function runDqCheck(db, rawTicker) {
           const fv = line.fmp(y);
           if (!isNum(fv)) { skip(`${y.period}: FMP has no ${line.label.toLowerCase()}.`); continue; }
           summary.checked++;
-          const r = { kind: "sec_mismatch", field: line.field, period: y.period, mismatch: null };
+          const r = { kind: "sec_mismatch", field: line.field, period: y.period, fmp: fv, sec: s.v, source: s.tag, mismatch: null };
           if (differs(fv, s.v, floorOf(line))) {
             const f0 = s.src[0] || {};
             r.mismatch = {
@@ -313,7 +314,7 @@ export async function runDqCheck(db, rawTicker) {
         const total = secRevenue.get(y.date) ?? (isNum(y.i.revenue) ? y.i.revenue : null);
         if (!total) continue;
         summary.checked++;
-        const r = { kind: "segment_sum", field, period: y.period, mismatch: null };
+        const r = { kind: "segment_sum", field, period: y.period, fmp: sum, sec: total, source: secRevenue.has(y.date) ? "sec_revenue" : "fmp_revenue", mismatch: null };
         if (Math.abs(sum - total) > SEGMENT_TOL * Math.abs(total)) {
           r.mismatch = {
             fmp: sum, sec: total,
@@ -327,7 +328,7 @@ export async function runDqCheck(db, rawTicker) {
         results.push(r);
       }
     }
-    return finish(db, summary, results, t0);
+    return finish(db, summary, results, t0, opts);
   } finally {
     running.delete(ticker);
   }
@@ -353,7 +354,7 @@ async function loadSec(db, ticker, summary) {
 }
 
 // write the flags, close stale ones, and fill in the summary
-function finish(db, summary, results, t0) {
+function finish(db, summary, results, t0, opts = {}) {
   const now = nowIso(), day = now.slice(0, 10), t = summary.ticker;
   db.tx(() => {
     for (const r of results) {
@@ -379,6 +380,7 @@ function finish(db, summary, results, t0) {
     }
     db.setConfig("dq_last_check", { at: now, ticker: t, checked: summary.checked, flagged: summary.flagged, created: summary.created });
   });
+  if (opts.details) summary.comparisons = results.map((r) => ({ kind: r.kind, field: r.field, period: r.period, fmp: r.fmp, sec: r.sec, source: r.source, ok: !r.mismatch }));
   summary.ms = Date.now() - t0;
   return summary;
 }
@@ -457,12 +459,13 @@ export function dqRoutes(db) {
     return c.json({ flag: flagOut(db.get("SELECT * FROM dq_flags WHERE id = ?", id)) });
   });
 
-  // check one ticker now: {ticker}
+  // check one ticker now: {ticker, details?} (details: every comparison, not just the mismatches)
   r.post("/run", async (c) => {
     const user = c.get("user");
-    const ticker = tickerOf((await body(c)).ticker);
+    const b = await body(c);
+    const ticker = tickerOf(b.ticker);
     rateLimit("dq:run:" + user.id, 5, 5 / 300, "data-quality checks");
-    const summary = await runDqCheck(db, ticker);
+    const summary = await runDqCheck(db, ticker, { details: b.details === true });
     db.audit(user.id, "dq.run", ticker, null, { checked: summary.checked, flagged: summary.flagged, created: summary.created, resolved: summary.resolved, skipped: summary.skipped.length });
     return c.json(summary);
   });
