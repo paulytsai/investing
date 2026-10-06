@@ -182,7 +182,9 @@ export function sampleRoutes(db) {
     if (raw.length > S.maxChars) fail(413, "too_large", "This request is too long for Claude here.");
     // feature off: a code the page doesn't read as "Claude is unavailable in this view"
     if (!db.get("SELECT enabled FROM feature_flags WHERE key = ?", S.flag)?.enabled) fail(403, "feature_disabled", "This feature is turned off for now.");
-    rateLimit("claude:" + user.id, 10, 0.2, "Claude requests");
+    // a notes draft is up to 12 call summaries and the draft; a segment fill reads up to 9 releases. Cost is held in
+    // check by the in-flight cap and the reserved budget; this only stops runaway loops.
+    rateLimit("claude:" + user.id, 40, 0.5, "Claude requests");
     checkCounter(db, user, S.counter);
     const { content, settings, versionIds } = applyVersions(db, site, raw);
     const json = !!S.json;
