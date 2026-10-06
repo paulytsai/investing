@@ -1,6 +1,7 @@
 """Assemble the published page: inline src/engine.js and the translations into src/page.html.
 
-    python templates/build.py   ->  templates/stock_template.html
+    python templates/build.py         ->  templates/stock_template.html (the claude.ai artifact)
+    python templates/build.py --web   ->  webapp/public/app.html + webapp/server/claude/prompts.default.json
 
 The translations live in src/i18n/{ja,zh-Hant}.json, keyed by the English text. New user-visible text in
 page.html goes through TR("...") and gets an entry in both files; anything missing shows in English.
@@ -8,6 +9,7 @@ The PDF export in Japanese or Chinese loads Noto Sans JP/TC (400 Regular, @expo-
 next to the page as fonts/NotoSansJP_400Regular.ttf and fonts/NotoSansTC_400Regular.ttf.
 """
 import json
+import sys
 from pathlib import Path
 
 here = Path(__file__).parent
@@ -20,5 +22,26 @@ if slot in page:
     dicts = {k: json.loads((here / "src" / "i18n" / f).read_text()) for k, f in (("ja", "ja.json"), ("zh", "zh-Hant.json"))}
     page = page.replace(slot, json.dumps(dicts, ensure_ascii=False, separators=(",", ":")).replace("</", "<\\/"))
     print(f"translations: {len(dicts['ja'])} ja, {len(dicts['zh'])} zh strings")
-(here / "stock_template.html").write_text(page)
-print("wrote", here / "stock_template.html")
+if "--web" not in sys.argv:
+    (here / "stock_template.html").write_text(page)
+    print("wrote", here / "stock_template.html")
+else:
+    # Web build: the same page as a full document for the web app, with the shim that stands in for the claude.ai
+    # runtime loaded first (a classic, synchronous script, so window.claude exists before the page script runs),
+    # and the page's Claude prompts exported as version 1 of the server's prompt registry.
+    web = here.parent / "webapp"
+    doc = ('<!doctype html>\n<html lang="en">\n<head>\n<meta charset="utf-8">\n'
+           '<meta name="viewport" content="width=device-width,initial-scale=1">\n'
+           '<script src="/shim.js"></script>\n</head>\n<body>\n' + page + '\n</body>\n</html>\n')
+    (web / "public").mkdir(parents=True, exist_ok=True)
+    (web / "public" / "app.html").write_text(doc)
+    prompts = {}
+    for name in ("CALL_PROMPT", "NOTES_SYSTEM", "NOTES_PROMPT", "SEC_PROMPT", "GUIDE_PROMPT", "GUIDE_CALL_PROMPT"):
+        start = page.index("const %s = `" % name) + len("const %s = `" % name)
+        end = page.index("`", start)
+        body = page[start:end]
+        assert "\\" not in body and "${" not in body, name + " needs template-literal unescaping"
+        prompts[name] = body
+    (web / "server" / "claude").mkdir(parents=True, exist_ok=True)
+    (web / "server" / "claude" / "prompts.default.json").write_text(json.dumps(prompts, ensure_ascii=False, indent=1))
+    print("wrote", web / "public" / "app.html", "and", web / "server" / "claude" / "prompts.default.json")
