@@ -57,6 +57,7 @@ test("overview: counts users, Claude cost, upstream calls, dq flags, errors, rev
   const o = await owner.json("GET", A + "/overview");
   assert.equal(o.status, 200);
   assert.equal(o.body.users.total, 2);
+  assert.equal(o.body.users.active7, 2); // just signed in: seen through their sessions
   assert.equal(o.body.claude.today.cost_usd, 0.0123);
   assert.equal(o.body.claude.today.calls, 1);
   assert.equal(o.body.fmp.calls, 2);

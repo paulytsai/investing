@@ -33,6 +33,9 @@ export const PRODUCTS = [
   { id: "cm_pro", plan_id: "pro", name: "Pro", description: "Company model: Pro plan" },
 ];
 export const LOOKUP_KEYS = PRICE_CATALOG.map((p) => p.lookup_key);
+// the events the webhook acts on (scripts/stripe-setup.js subscribes an endpoint to these)
+export const WEBHOOK_EVENTS = ["checkout.session.completed", "customer.subscription.created", "customer.subscription.updated", "customer.subscription.deleted",
+  "invoice.paid", "invoice.payment_failed", "invoice.finalized"];
 // marks the customer portal configuration that scripts/stripe-setup.js creates
 export const PORTAL_TAG = "company-model";
 

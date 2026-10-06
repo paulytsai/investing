@@ -20,8 +20,11 @@ const LIMIT_KEYS = Object.keys(PLAN_SEED[0][2]);
 const LICENCES = ["fmp_display", "edgar_tools_display", "legal"];
 const ROLES = ["user", "admin"];
 const STATUSES = ["active", "disabled"];
+// Last seen: the profile's own stamp, or the latest session touch (sign-in stamps the session, and the session
+// middleware only stamps the profile on a later request). Needs profiles aliased as p.
+const SEEN = "NULLIF(MAX(COALESCE(p.last_seen_at, ''), COALESCE((SELECT MAX(s.last_seen_at) FROM sessions s WHERE s.user_id = p.id), '')), '')";
 // never select totp_secret or anything else private into an admin response
-const PROFILE_COLS = "id, email, role, status, locale, trial_used, totp_enrolled, created_at, last_seen_at";
+const PROFILE_COLS = `p.id, p.email, p.role, p.status, p.locale, p.trial_used, p.totp_enrolled, p.created_at, ${SEEN} AS last_seen_at`;
 
 async function body(c) {
   const b = await c.req.json().catch(() => null);
@@ -103,8 +106,9 @@ export function adminRoutes(db) {
   // ---------- overview ----------
   r.get("/overview", (c) => {
     const now = Date.now(), today = iso(dayStart(now)), month = iso(monthStart(now));
-    const users = db.get(`SELECT COUNT(*) AS total, COALESCE(SUM(last_seen_at >= ?), 0) AS active7, COALESCE(SUM(last_seen_at >= ?), 0) AS active30,
-      COALESCE(SUM(status = 'disabled'), 0) AS disabled, COALESCE(SUM(role IN ('owner', 'admin')), 0) AS admins, COALESCE(SUM(created_at >= ?), 0) AS new30 FROM profiles`,
+    const users = db.get(`SELECT COUNT(*) AS total, COALESCE(SUM(seen >= ?), 0) AS active7, COALESCE(SUM(seen >= ?), 0) AS active30,
+      COALESCE(SUM(status = 'disabled'), 0) AS disabled, COALESCE(SUM(role IN ('owner', 'admin')), 0) AS admins, COALESCE(SUM(created_at >= ?), 0) AS new30
+      FROM (SELECT ${SEEN} AS seen, p.status, p.role, p.created_at FROM profiles p)`,
       iso(now - 7 * DAY), iso(now - 30 * DAY), iso(now - 30 * DAY));
     const claude = (since) => {
       const x = db.get("SELECT COALESCE(SUM(cost_usd), 0) AS cost, COALESCE(SUM(cache_hit = 0), 0) AS calls, COALESCE(SUM(cache_hit), 0) AS cached FROM usage_events WHERE feature = 'claude' AND provider = 'anthropic' AND at >= ?", since);
@@ -155,7 +159,7 @@ export function adminRoutes(db) {
   });
 
   // ---------- users ----------
-  const profileOr404 = (id) => db.get(`SELECT ${PROFILE_COLS} FROM profiles WHERE id = ?`, id) || fail(404, "not_found", "No such user.");
+  const profileOr404 = (id) => db.get(`SELECT ${PROFILE_COLS} FROM profiles p WHERE p.id = ?`, id) || fail(404, "not_found", "No such user.");
   const userSummary = (p) => {
     const u = usageFor(db, p);
     return { id: p.id, email: p.email, role: p.role, status: p.status, mfa: !!p.totp_enrolled, created_at: p.created_at, last_seen_at: p.last_seen_at,
@@ -168,12 +172,12 @@ export function adminRoutes(db) {
     const role = c.req.query("role"), status = c.req.query("status");
     const limit = intParam(c.req.query("limit"), 100, 1, 200), offset = intParam(c.req.query("offset"), 0, 0, 1e7);
     const where = [], params = [];
-    if (q) { where.push("email LIKE ? ESCAPE '\\'"); params.push(likeEsc(q)); }
-    if (role && ["owner", ...ROLES].includes(role)) { where.push("role = ?"); params.push(role); }
-    if (status && STATUSES.includes(status)) { where.push("status = ?"); params.push(status); }
+    if (q) { where.push("p.email LIKE ? ESCAPE '\\'"); params.push(likeEsc(q)); }
+    if (role && ["owner", ...ROLES].includes(role)) { where.push("p.role = ?"); params.push(role); }
+    if (status && STATUSES.includes(status)) { where.push("p.status = ?"); params.push(status); }
     const w = where.length ? "WHERE " + where.join(" AND ") : "";
-    const total = db.get(`SELECT COUNT(*) AS n FROM profiles ${w}`, ...params).n;
-    const rows = db.all(`SELECT ${PROFILE_COLS} FROM profiles ${w} ORDER BY COALESCE(last_seen_at, created_at) DESC LIMIT ? OFFSET ?`, ...params, limit, offset);
+    const total = db.get(`SELECT COUNT(*) AS n FROM profiles p ${w}`, ...params).n;
+    const rows = db.all(`SELECT ${PROFILE_COLS} FROM profiles p ${w} ORDER BY COALESCE(${SEEN}, p.created_at) DESC LIMIT ? OFFSET ?`, ...params, limit, offset);
     return c.json({ total, limit, offset, users: rows.map(userSummary) });
   });
 
@@ -278,7 +282,7 @@ export function adminRoutes(db) {
   // ---------- allowlist ----------
   r.get("/allowlist", (c) => {
     const rows = db.all(`SELECT a.email, a.role, a.invited_at, a.accepted_at, a.note, COALESCE(i.email, a.invited_by) AS invited_by,
-        p.id AS user_id, p.role AS account_role, p.status AS account_status, p.last_seen_at
+        p.id AS user_id, p.role AS account_role, p.status AS account_status, ${SEEN} AS last_seen_at
       FROM allowlist a LEFT JOIN profiles i ON i.id = a.invited_by LEFT JOIN profiles p ON p.email = a.email
       ORDER BY a.role = 'owner' DESC, a.invited_at DESC`);
     return c.json({ rows, licensed: licencedForOthers(db), signups: { open: !!db.getConfig("signups")?.open } });
@@ -350,7 +354,7 @@ export function adminRoutes(db) {
     return c.json({
       days, from, daily: daily.days, totals,
       spenders: spenders.map((s) => {
-        const p = db.get(`SELECT ${PROFILE_COLS} FROM profiles WHERE id = ?`, s.user_id);
+        const p = db.get(`SELECT ${PROFILE_COLS} FROM profiles p WHERE p.id = ?`, s.user_id);
         const plan = p ? limitsFor(db, p) : null;
         return { ...s, claude_cost_usd: round(s.claude_cost_usd), plan: plan ? { id: plan.planId, name: plan.planName, source: plan.source } : null, paid: paid.get(s.user_id) || {} };
       }),

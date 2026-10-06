@@ -29,6 +29,7 @@ body { background: var(--bg); color: var(--fg); font: 14px/1.5 system-ui, -apple
 a { color: var(--acc); text-decoration: none; }
 a:hover { text-decoration: underline; }
 h1 { font-size: 20px; margin: 0 0 4px; }
+h1.mono { font-size: 19px; }
 h2 { font-size: 15px; margin: 0 0 10px; }
 h3 { font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: var(--mut); margin: 14px 0 6px; font-weight: 600; }
 p { margin: 0 0 10px; }
@@ -66,6 +67,9 @@ main.loading > * { opacity: .55; transition: opacity .15s; }
   .side nav::-webkit-scrollbar { display: none; }
   .side a { padding: 6px 10px; }
   main { padding: 14px 16px 40px; }
+  .tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .tile { padding: 10px 12px; }
+  .tile .value { font-size: 19px; }
 }
 
 /* ---------- building blocks ---------- */
@@ -107,6 +111,11 @@ table.t td { padding: 7px 8px; border-bottom: 1px solid var(--grid); vertical-al
 table.t tr:last-child td { border-bottom: 0; }
 table.t tbody tr:hover td { background: var(--hover); }
 table.t td.actions { white-space: nowrap; text-align: right; }
+/* long text keeps a readable width; the table scrolls sideways instead of wrapping every few letters */
+table.t td.break { min-width: 11em; }
+table.t td.detail { min-width: 18em; }
+.dq-act { display: flex; flex-wrap: wrap; gap: 4px; justify-content: flex-end; width: 15em; margin-left: auto; }
+.dq-act input { width: 100%; font-size: 12.5px; padding: 4px 8px; }
 table.kv { border-collapse: collapse; width: 100%; font-size: 13px; }
 table.kv th { text-align: left; font-weight: 500; color: var(--mut); padding: 4px 12px 4px 0; width: 42%; vertical-align: top; }
 table.kv td { padding: 4px 0; }
