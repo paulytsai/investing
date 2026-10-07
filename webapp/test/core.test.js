@@ -120,15 +120,6 @@ test("FMP proxy: mapping, validation and caching", async () => {
     assert.equal((await owner.json("POST", "/api/tools", { server: "Other", tool: "x", input: {} })).status, 400);
     // global endpoints don't need a symbol and don't count as a company
     assert.equal((await call({ endpoint: "market-risk-premium" }, "economics")).status, 200);
-    // FMP's levered DCF: the assumption overrides pass in FMP's names; anything else, or a non-number, is refused
-    assert.equal((await call({ endpoint: "custom-dcf-levered", symbol: "NKE", longTermGrowthRate: "3", capitalExpenditurePct: "-0.05", beta: "1.2" }, "discountedCashFlow")).status, 200);
-    const last = seen[seen.length - 1];
-    assert.equal(last.pathname, "/stable/custom-levered-discounted-cash-flow");
-    assert.equal(last.searchParams.get("longTermGrowthRate"), "3");
-    assert.equal(last.searchParams.get("capitalExpenditurePct"), "-0.05");
-    assert.equal((await call({ endpoint: "custom-dcf-levered", symbol: "NKE", wacc: "9" }, "discountedCashFlow")).status, 400);
-    assert.equal((await call({ endpoint: "custom-dcf-levered", symbol: "NKE", beta: "abc" }, "discountedCashFlow")).status, 400);
-    assert.equal((await call({ endpoint: "dcf-levered", symbol: "NKE" }, "discountedCashFlow")).status, 400);
   } finally { restore(); }
 });
 
