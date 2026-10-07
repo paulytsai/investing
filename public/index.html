@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>米国株四季報</title>
+  <meta name="description" content="米国上場企業の業績・財務・株主・役員を四季報形式で。決算説明会と最新ニュースをAIが要約。">
+  <link rel="stylesheet" href="/styles.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='4' fill='%230a4fb4'/><text x='16' y='22' font-size='16' text-anchor='middle' fill='white' font-family='sans-serif'>四</text></svg>">
+</head>
+<body>
+  <header class="topbar">
+    <div class="inner">
+      <a class="brand" href="#/" id="brand">米国株四季報</a>
+      <form class="searchbox" id="searchForm" autocomplete="off">
+        <input id="searchInput" placeholder="ティッカー・会社名" maxlength="40">
+        <button class="btn primary" type="submit" id="searchBtn">検索</button>
+        <div class="suggest" id="suggest"></div>
+      </form>
+      <div class="usermenu" id="userMenu"></div>
+    </div>
+  </header>
+  <main id="app"></main>
+  <script src="/i18n.js"></script>
+  <script src="/chart.js"></script>
+  <script src="/app.js"></script>
+</body>
+</html>

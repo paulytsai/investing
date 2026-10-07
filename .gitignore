@@ -25,3 +25,8 @@ data/
 .vscode/
 .idea/
 .DS_Store
+
+# Web app
+node_modules/
+.netlify/
+.data/
