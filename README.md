@@ -90,3 +90,20 @@ u = user_by_username("XDevelopers")
 user_tweets(u["id"], max_results=10)
 get("tweets/counts/recent", query="$NVDA", granularity="day")
 ```
+
+## Congressional trades report
+
+`investing/congress.py` pulls the latest Senate and House periodic transaction
+reports from FMP, tags each ticker with its sector from the company profile,
+and renders `reports/congress-trades.html`: trades grouped by sector and
+ranked by disclosed size, with filters for window, minimum size, chamber and
+side. Profiles are cached in `data/congress_profiles.json` (gitignored).
+
+```sh
+python -m investing.congress                # last 90 days of filings
+python -m investing.congress --days 180     # wider window
+```
+
+The report's **Update from FMP** button works when the page is published as a
+claude.ai Artifact with the FMP connector; it re-pulls disclosures in the
+browser. Re-run the command above to refresh the committed file.

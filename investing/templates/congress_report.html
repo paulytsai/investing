@@ -1,0 +1,573 @@
+<title>Congressional Trades</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a ledger. One column of running content, data tables edge to edge inside scroll wells,
+   controls pinned in one row above everything they filter. */
+:root {
+  --bg: #f6f5f1;
+  --surface: #fdfdfb;
+  --surface-2: #efeee8;
+  --line: #d9d7cf;
+  --line-strong: #b9b6ab;
+  --fg: #16181d;
+  --fg-2: #4e5260;
+  --fg-3: #7c8091;
+  --accent: #1f4f8f;
+  --accent-ink: #ffffff;
+  --buy: #2a78d6;
+  --sell: #eb6834;
+  --buy-soft: #e3eefb;
+  --sell-soft: #fdeae2;
+  --warn: #9a6a00;
+  --warn-soft: #fff3d6;
+  --font-display: "Fraunces", "Iowan Old Style", Georgia, serif;
+  --font-body: "IBM Plex Sans", "Helvetica Neue", Arial, sans-serif;
+  --font-mono: "IBM Plex Mono", "SFMono-Regular", Menlo, Consolas, monospace;
+  --radius: 6px;
+  --shadow: 0 1px 2px rgba(22, 24, 29, 0.06);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #15171c; --surface: #1d2027; --surface-2: #262a33; --line: #343945; --line-strong: #4a5060;
+    --fg: #eceef2; --fg-2: #b4b8c4; --fg-3: #8a8f9d; --accent: #6ea2e8; --accent-ink: #0f172a;
+    --buy: #3987e5; --sell: #d95926; --buy-soft: #1c2d47; --sell-soft: #3d2419;
+    --warn: #e2b04a; --warn-soft: #3a2f14; --shadow: 0 1px 2px rgba(0,0,0,0.4); color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #15171c; --surface: #1d2027; --surface-2: #262a33; --line: #343945; --line-strong: #4a5060;
+  --fg: #eceef2; --fg-2: #b4b8c4; --fg-3: #8a8f9d; --accent: #6ea2e8; --accent-ink: #0f172a;
+  --buy: #3987e5; --sell: #d95926; --buy-soft: #1c2d47; --sell-soft: #3d2419;
+  --warn: #e2b04a; --warn-soft: #3a2f14; --shadow: 0 1px 2px rgba(0,0,0,0.4); color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--fg); font-family: var(--font-body); font-size: 14px; line-height: 1.45; }
+.wrap { max-width: 1180px; margin: 0 auto; padding-block: 28px 56px; padding-inline: 16px; }
+h1, h2, h3 { font-family: var(--font-display); font-weight: 600; margin: 0; text-wrap: balance; }
+h1 { font-size: clamp(28px, 4vw, 40px); line-height: 1.05; letter-spacing: -0.01em; }
+h2 { font-size: 20px; }
+h3 { font-size: 17px; }
+a { color: var(--accent); }
+.eyebrow { font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--fg-3); }
+.mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
+
+/* Header */
+.masthead { display: flex; flex-wrap: wrap; gap: 16px 32px; align-items: flex-end; justify-content: space-between; padding-bottom: 18px; border-bottom: 2px solid var(--fg); }
+.masthead .lede { color: var(--fg-2); max-width: 62ch; margin-top: 8px; }
+.update { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; min-width: 0; }
+.btn { font: inherit; font-weight: 600; border: 1px solid var(--accent); background: var(--accent); color: var(--accent-ink); padding: 9px 16px; border-radius: var(--radius); cursor: pointer; display: inline-flex; align-items: center; gap: 8px; }
+.btn:hover { filter: brightness(1.08); }
+.btn:disabled { opacity: 0.6; cursor: progress; }
+.btn:focus-visible, select:focus-visible, input:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.btn .spin { width: 12px; height: 12px; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: spin 0.8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .btn .spin { animation: none; } }
+.status { font-size: 12.5px; color: var(--fg-2); max-width: 46ch; }
+.status.err { color: var(--sell); }
+.status.warn { color: var(--warn); }
+.asof { font-size: 12.5px; color: var(--fg-3); }
+
+/* Controls */
+.controls { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: flex-end; padding: 14px 0; border-bottom: 1px solid var(--line); position: sticky; top: env(safe-area-inset-top, 0px); background: var(--bg); z-index: 3; }
+.ctl { display: flex; flex-direction: column; gap: 4px; }
+.ctl label { font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--fg-3); }
+select, input[type="search"] { font: inherit; font-size: 13.5px; color: var(--fg); background: var(--surface); border: 1px solid var(--line-strong); border-radius: var(--radius); padding: 6px 8px; min-height: 34px; }
+input[type="search"] { min-width: 180px; }
+.seg { display: inline-flex; border: 1px solid var(--line-strong); border-radius: var(--radius); overflow: hidden; }
+.seg button { font: inherit; font-size: 13px; background: var(--surface); color: var(--fg-2); border: 0; padding: 6px 11px; cursor: pointer; min-height: 34px; }
+.seg button + button { border-left: 1px solid var(--line-strong); }
+.seg button[aria-pressed="true"] { background: var(--fg); color: var(--bg); }
+
+/* Stat tiles */
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; margin: 22px 0; }
+.tile { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 12px 14px; box-shadow: var(--shadow); min-width: 0; }
+.tile .v { font-family: var(--font-mono); font-size: 24px; font-weight: 500; line-height: 1.1; margin-top: 6px; font-variant-numeric: tabular-nums; }
+.tile .s { font-size: 12px; color: var(--fg-2); margin-top: 4px; overflow-wrap: anywhere; }
+.tile .v.text { font-family: var(--font-display); font-size: 21px; font-weight: 600; text-wrap: balance; }
+
+/* Sections */
+section { margin-top: 34px; }
+.sec-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 6px 16px; margin-bottom: 10px; }
+.sec-head p { margin: 0; color: var(--fg-2); font-size: 13px; }
+
+/* Chart */
+.chart-card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px 16px 8px; box-shadow: var(--shadow); position: relative; }
+.legend { display: flex; gap: 18px; font-size: 12.5px; color: var(--fg-2); margin-bottom: 8px; flex-wrap: wrap; }
+.legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; vertical-align: -1px; }
+.legend i.buy { background: var(--buy); }
+.legend i.sell { background: var(--sell); }
+.chart-scroll { overflow-x: auto; }
+svg.bars { display: block; width: 100%; height: auto; font-family: var(--font-body); }
+svg.bars text { fill: var(--fg-2); font-size: 12px; }
+svg.bars text.cat { fill: var(--fg); font-weight: 500; }
+svg.bars text.val { fill: var(--fg-2); font-family: var(--font-mono); font-size: 11px; }
+svg.bars line.grid { stroke: var(--line); stroke-width: 1; }
+svg.bars rect.buy { fill: var(--buy); }
+svg.bars rect.sell { fill: var(--sell); }
+svg.bars rect.hit { fill: transparent; }
+svg.bars g.row:hover rect.buy, svg.bars g.row:hover rect.sell { filter: brightness(1.1); }
+.tip { position: absolute; pointer-events: none; background: var(--fg); color: var(--bg); font-size: 12px; padding: 6px 9px; border-radius: 4px; white-space: nowrap; transform: translate(-50%, calc(-100% - 10px)); z-index: 4; }
+.tip b { font-weight: 600; }
+
+/* Tables */
+.well { overflow-x: auto; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); }
+table { border-collapse: collapse; width: 100%; font-size: 13px; }
+th, td { padding: 7px 10px; text-align: left; vertical-align: top; border-top: 1px solid var(--line); }
+thead th { border-top: 0; font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: var(--fg-3); background: var(--surface-2); white-space: nowrap; }
+tbody tr:hover { background: var(--surface-2); }
+td.rank { color: var(--fg-3); font-family: var(--font-mono); width: 2.5em; }
+td.member { white-space: nowrap; }
+td.member small { display: block; color: var(--fg-3); font-size: 11.5px; }
+td.asset .sym { font-family: var(--font-mono); font-weight: 500; }
+td.asset small { display: block; color: var(--fg-3); font-size: 11.5px; max-width: 28ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+td.amt { white-space: nowrap; }
+td.amt .band { font-family: var(--font-mono); font-size: 12.5px; }
+td.amt .est { display: block; color: var(--fg-3); font-size: 11px; }
+.pill { display: inline-block; font-size: 11px; font-weight: 600; letter-spacing: 0.03em; padding: 2px 7px; border-radius: 999px; white-space: nowrap; }
+.pill.buy { background: var(--buy-soft); color: var(--buy); }
+.pill.sell { background: var(--sell-soft); color: var(--sell); }
+.pill.other { background: var(--surface-2); color: var(--fg-2); }
+.pill.sen { background: var(--surface-2); color: var(--fg-2); }
+.pill.rep { background: var(--surface-2); color: var(--fg-2); }
+td.date { font-family: var(--font-mono); font-size: 12px; white-space: nowrap; color: var(--fg-2); }
+td.link a { font-size: 12px; white-space: nowrap; }
+
+/* Sector blocks */
+.sector { margin-top: 26px; }
+.sector-head { display: grid; grid-template-columns: 1fr auto; gap: 8px 20px; align-items: end; padding: 8px 0 8px; border-top: 2px solid var(--fg); }
+.sector-head h3 { font-size: 19px; }
+.sector-head .meta { font-size: 12.5px; color: var(--fg-2); margin-top: 2px; }
+.flow { display: flex; gap: 16px; font-family: var(--font-mono); font-size: 12.5px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.flow .b { color: var(--buy); } .flow .s { color: var(--sell); }
+.flow .n { color: var(--fg); font-weight: 500; }
+.flowbar { grid-column: 1 / -1; height: 6px; border-radius: 3px; background: var(--surface-2); overflow: hidden; display: flex; }
+.flowbar i { display: block; height: 100%; }
+.flowbar i.b { background: var(--buy); } .flowbar i.s { background: var(--sell); margin-left: 2px; }
+.more { font: inherit; font-size: 12.5px; background: none; border: 0; color: var(--accent); cursor: pointer; padding: 8px 10px; text-decoration: underline; }
+.empty { padding: 28px; text-align: center; color: var(--fg-3); }
+.note { font-size: 12.5px; color: var(--fg-3); margin-top: 28px; max-width: 80ch; }
+.note p { margin: 4px 0; }
+@media (max-width: 640px) {
+  .sector-head { grid-template-columns: 1fr; }
+  .tile .v { font-size: 20px; }
+}
+</style>
+
+<div class="wrap">
+  <header class="masthead">
+    <div>
+      <div class="eyebrow">Senate &amp; House periodic transaction reports</div>
+      <h1>Congressional Trades</h1>
+      <p class="lede">Stock, option and fund transactions disclosed by U.S. senators, representatives and their spouses and dependents, grouped by sector and ranked by disclosed size. Source: Financial Modeling Prep.</p>
+    </div>
+    <div class="update">
+      <button class="btn" id="refresh" type="button"><span id="refresh-label">Update from FMP</span></button>
+      <div class="status" id="status" aria-live="polite"></div>
+      <div class="asof" id="asof"></div>
+    </div>
+  </header>
+
+  <div class="controls" role="group" aria-label="Filters">
+    <div class="ctl"><label for="f-days">Filed within</label>
+      <select id="f-days"><option value="30">30 days</option><option value="60">60 days</option><option value="90" selected>90 days</option><option value="180">180 days</option></select></div>
+    <div class="ctl"><label for="f-min">Minimum size</label>
+      <select id="f-min"><option value="0">Any</option><option value="15001">$15k and up</option><option value="50001" selected>$50k and up</option><option value="100001">$100k and up</option><option value="250001">$250k and up</option><option value="1000001">$1M and up</option></select></div>
+    <div class="ctl"><label id="l-chamber">Chamber</label>
+      <div class="seg" aria-labelledby="l-chamber" id="f-chamber"><button type="button" data-v="all" aria-pressed="true">Both</button><button type="button" data-v="senate" aria-pressed="false">Senate</button><button type="button" data-v="house" aria-pressed="false">House</button></div></div>
+    <div class="ctl"><label id="l-side">Side</label>
+      <div class="seg" aria-labelledby="l-side" id="f-side"><button type="button" data-v="all" aria-pressed="true">All</button><button type="button" data-v="buy" aria-pressed="false">Buys</button><button type="button" data-v="sell" aria-pressed="false">Sells</button></div></div>
+    <div class="ctl"><label for="f-q">Member or ticker</label>
+      <input type="search" id="f-q" placeholder="e.g. Whitehouse, NVDA"></div>
+  </div>
+
+  <div class="tiles" id="tiles"></div>
+
+  <section>
+    <div class="sec-head"><h2>Where the money went</h2><p>Estimated dollars by sector, buys beside sells. Estimates use the midpoint of each disclosed range.</p></div>
+    <div class="chart-card">
+      <div class="legend"><span><i class="buy"></i>Purchases</span><span><i class="sell"></i>Sales</span></div>
+      <div class="chart-scroll" id="chart"></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head"><h2>Largest disclosed trades</h2><p>Top 20 across all sectors in the current view.</p></div>
+    <div class="well" id="top"></div>
+  </section>
+
+  <section>
+    <div class="sec-head"><h2>By sector</h2><p>Sectors ordered by total estimated volume. Trades ranked largest first within each.</p></div>
+    <div id="sectors"></div>
+  </section>
+
+  <div class="note">
+    <p>Members disclose each transaction as a dollar range, not an exact figure. Ranking uses the range midpoint; open-ended bands such as “Over $50,000,000” are estimated at 1.5× the floor and marked with a plus sign. Rows show the filed range alongside.</p>
+    <p>Sectors come from the FMP company profile of each ticker. Exchange-traded and mutual funds are grouped as “ETFs &amp; Funds”; bonds, municipal securities and assets without a listed ticker are grouped as “Bonds, Munis &amp; Other”. Options on a stock take that stock’s sector.</p>
+    <p>“Update from FMP” re-pulls the latest Senate and House disclosures through your Financial Modeling Prep connector in claude.ai, looks up sectors for any new tickers, and keeps the result in this browser. The committed report in the repository is regenerated with <code>python -m investing.congress</code>.</p>
+  </div>
+</div>
+
+<script id="report-data" type="application/json">__REPORT_DATA__</script>
+<script>
+(function () {
+  'use strict';
+  var BASE = JSON.parse(document.getElementById('report-data').textContent);
+  var STORE_KEY = 'congress-trades:v1';
+  var FUND_TYPES = { 'ETF': 1, 'Mutual Fund': 1, 'Other Investment Fund': 1 };
+  var BOND_TYPES = { 'Municipal Security': 1, 'Government Securities': 1, 'Corporate Bond': 1 };
+  var ETF_SECTOR = 'ETFs & Funds';
+  var OTHER_SECTOR = 'Bonds, Munis & Other';
+  var UNKNOWN_SECTOR = 'Unclassified';
+
+  var state = { days: 90, min: 50001, chamber: 'all', side: 'all', q: '' };
+  var data = loadStored() || BASE;
+
+  function loadStored() {
+    try {
+      var raw = localStorage.getItem(STORE_KEY);
+      if (!raw) return null;
+      var d = JSON.parse(raw);
+      if (!d || !Array.isArray(d.trades) || !d.generatedAt) return null;
+      return d.generatedAt > BASE.generatedAt ? d : null;
+    } catch (e) { return null; }
+  }
+  function store(d) { try { localStorage.setItem(STORE_KEY, JSON.stringify(d)); } catch (e) { /* per-browser convenience only */ } }
+
+  // ---------- derived fields ----------
+  function side(t) {
+    var ty = (t.type || '').toLowerCase();
+    if (ty.indexOf('purchase') === 0) return 'buy';
+    if (ty.indexOf('sale') === 0) return 'sell';
+    return 'other';
+  }
+  function est(t) {
+    if (!t.low) return 0;
+    return t.high ? (t.low + t.high) / 2 : t.low * 1.5;
+  }
+  function sectorOf(t, profiles) {
+    var p = t.symbol ? profiles[t.symbol] : null;
+    if (FUND_TYPES[t.assetType] || (p && (p.isEtf || p.isFund))) return ETF_SECTOR;
+    if (p && p.sector) return p.sector;
+    if (BOND_TYPES[t.assetType] || !t.symbol) return OTHER_SECTOR;
+    return UNKNOWN_SECTOR;
+  }
+  function decorate(d) {
+    var profiles = d.profiles || {};
+    d.trades.forEach(function (t) {
+      t._side = side(t);
+      t._est = est(t);
+      t._sector = sectorOf(t, profiles);
+      var p = t.symbol ? profiles[t.symbol] : null;
+      t._industry = p && p.industry ? p.industry : '';
+      t._company = p && p.name ? p.name : t.asset;
+    });
+    return d;
+  }
+
+  // ---------- formatting ----------
+  function money(n) {
+    if (n >= 1e9) return '$' + (n / 1e9).toFixed(2).replace(/\.?0+$/, '') + 'B';
+    if (n >= 1e6) return '$' + (n / 1e6).toFixed(n >= 1e7 ? 0 : 1).replace(/\.0$/, '') + 'M';
+    if (n >= 1e3) return '$' + Math.round(n / 1e3) + 'k';
+    return '$' + Math.round(n);
+  }
+  function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+  function chamberPill(t) { return t.chamber === 'senate' ? '<span class="pill sen">Sen.</span>' : '<span class="pill rep">Rep.</span>'; }
+  function sidePill(t) {
+    var cls = t._side, label = t._side === 'buy' ? 'Buy' : t._side === 'sell' ? 'Sell' : 'Exch.';
+    if (t._side === 'sell' && /full/i.test(t.type)) label = 'Sell (full)';
+    if (t._side === 'sell' && /partial/i.test(t.type)) label = 'Sell (part)';
+    return '<span class="pill ' + cls + '">' + label + '</span>';
+  }
+  function fmtDate(s) { return s ? s.slice(0, 10) : ''; }
+  function todayISO() { return new Date().toISOString().slice(0, 10); }
+  function cutoffISO(days) { var d = new Date(); d.setUTCDate(d.getUTCDate() - days); return d.toISOString().slice(0, 10); }
+
+  // ---------- filtering ----------
+  function visibleTrades() {
+    var cutoff = cutoffISO(state.days);
+    var q = state.q.trim().toLowerCase();
+    return data.trades.filter(function (t) {
+      if (t.disclosureDate < cutoff) return false;
+      if (t.low < state.min) return false;
+      if (state.chamber !== 'all' && t.chamber !== state.chamber) return false;
+      if (state.side !== 'all' && t._side !== state.side) return false;
+      if (q && t.name.toLowerCase().indexOf(q) < 0 && t.symbol.toLowerCase() !== q && t._company.toLowerCase().indexOf(q) < 0) return false;
+      return true;
+    }).sort(bySize);
+  }
+  function bySize(a, b) { return (b._est - a._est) || (b.low - a.low) || (b.disclosureDate < a.disclosureDate ? -1 : 1); }
+
+  // ---------- rendering ----------
+  function render() {
+    var rows = visibleTrades();
+    renderTiles(rows);
+    var groups = groupBySector(rows);
+    renderChart(groups);
+    renderTop(rows);
+    renderSectors(groups);
+    renderAsOf();
+  }
+  function renderAsOf() {
+    var g = data.generatedAt ? new Date(data.generatedAt) : null;
+    var oldest = data.since || '';
+    document.getElementById('asof').textContent = (g ? 'Data as of ' + g.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }) : '') + (oldest ? ' · covers filings since ' + oldest : '');
+    var sel = document.getElementById('f-days');
+    var available = data.days || 90;
+    Array.prototype.forEach.call(sel.options, function (o) { o.disabled = +o.value > available; o.textContent = o.value + ' days' + (+o.value > available ? ' (update to load)' : ''); });
+  }
+  function renderTiles(rows) {
+    var buys = 0, sells = 0, members = {}, counts = {}, largest = rows[0];
+    rows.forEach(function (t) {
+      if (t._side === 'buy') buys += t._est; else if (t._side === 'sell') sells += t._est;
+      members[t.name] = (members[t.name] || 0) + t._est;
+      counts[t.name] = (counts[t.name] || 0) + 1;
+    });
+    var top = Object.keys(counts).sort(function (a, b) { return (counts[b] - counts[a]) || (members[b] - members[a]); })[0];
+    var html = '';
+    html += tile('Trades in view', rows.length.toLocaleString(), 'of ' + data.trades.length.toLocaleString() + ' loaded');
+    html += tile('Est. volume', money(buys + sells), '<span style="color:var(--buy)">' + money(buys) + ' bought</span> · <span style="color:var(--sell)">' + money(sells) + ' sold</span>');
+    html += tile('Largest trade', largest ? money(largest._est) + (largest.high ? '' : '+') : '—', largest ? esc(largest.name) + ' · ' + esc(largest.symbol || trunc(largest.asset, 48)) : 'No trades match');
+    html += tile('Most trades', top ? '<span class="name">' + esc(top) + '</span>' : '—', top ? counts[top] + ' trades · ' + money(members[top]) + ' estimated' : '', true);
+    document.getElementById('tiles').innerHTML = html;
+  }
+  function tile(label, value, sub, text) { return '<div class="tile"><div class="eyebrow">' + label + '</div><div class="v' + (text ? ' text' : '') + '">' + value + '</div><div class="s">' + sub + '</div></div>'; }
+
+  function groupBySector(rows) {
+    var map = {};
+    rows.forEach(function (t) {
+      var g = map[t._sector] || (map[t._sector] = { name: t._sector, trades: [], buy: 0, sell: 0, total: 0 });
+      g.trades.push(t);
+      if (t._side === 'buy') g.buy += t._est; else if (t._side === 'sell') g.sell += t._est;
+      g.total += t._est;
+    });
+    return Object.keys(map).map(function (k) { return map[k]; }).sort(function (a, b) { return b.total - a.total; });
+  }
+
+  function renderChart(groups) {
+    var el = document.getElementById('chart');
+    if (!groups.length) { el.innerHTML = '<div class="empty">No trades match the current filters.</div>'; return; }
+    var max = 0;
+    groups.forEach(function (g) { max = Math.max(max, g.buy, g.sell); });
+    if (!max) max = 1;
+    var labelW = 170, valW = 64, plotW = 560, rowH = 38, barH = 12, gap = 2, padT = 8, padB = 22;
+    var W = labelW + plotW + valW, H = padT + groups.length * rowH + padB;
+    var x = function (v) { return labelW + (v / max) * plotW; };
+    var s = '<svg class="bars" viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="Estimated purchases and sales by sector">';
+    var ticks = niceTicks(max, 4);
+    ticks.forEach(function (tv) {
+      s += '<line class="grid" x1="' + x(tv) + '" x2="' + x(tv) + '" y1="' + padT + '" y2="' + (H - padB + 4) + '"/>';
+      s += '<text x="' + x(tv) + '" y="' + (H - 6) + '" text-anchor="middle" class="val">' + money(tv) + '</text>';
+    });
+    groups.forEach(function (g, i) {
+      var y = padT + i * rowH;
+      s += '<g class="row" data-i="' + i + '">';
+      s += '<text class="cat" x="' + (labelW - 10) + '" y="' + (y + rowH / 2 + 4) + '" text-anchor="end">' + esc(trunc(g.name, 24)) + '</text>';
+      var yb = y + rowH / 2 - barH - gap / 2, ys = y + rowH / 2 + gap / 2;
+      s += '<rect class="buy" x="' + labelW + '" y="' + yb + '" width="' + Math.max(0, x(g.buy) - labelW) + '" height="' + barH + '" rx="0"/>';
+      s += '<rect class="sell" x="' + labelW + '" y="' + ys + '" width="' + Math.max(0, x(g.sell) - labelW) + '" height="' + barH + '" rx="0"/>';
+      if (g.buy) s += '<text class="val" x="' + (x(g.buy) + 5) + '" y="' + (yb + barH - 2) + '">' + money(g.buy) + '</text>';
+      if (g.sell) s += '<text class="val" x="' + (x(g.sell) + 5) + '" y="' + (ys + barH - 2) + '">' + money(g.sell) + '</text>';
+      s += '<rect class="hit" x="0" y="' + y + '" width="' + W + '" height="' + rowH + '"/>';
+      s += '</g>';
+    });
+    s += '</svg>';
+    el.innerHTML = s;
+    var card = el.parentNode, tip = null;
+    el.querySelectorAll('g.row').forEach(function (row) {
+      var g = groups[+row.getAttribute('data-i')];
+      row.addEventListener('mousemove', function (ev) {
+        if (!tip) { tip = document.createElement('div'); tip.className = 'tip'; card.appendChild(tip); }
+        var r = card.getBoundingClientRect();
+        tip.innerHTML = '<b>' + esc(g.name) + '</b> · ' + g.trades.length + ' trades<br>Bought ' + money(g.buy) + ' · Sold ' + money(g.sell) + ' · Net ' + (g.buy - g.sell >= 0 ? '+' : '−') + money(Math.abs(g.buy - g.sell));
+        tip.style.left = (ev.clientX - r.left) + 'px'; tip.style.top = (ev.clientY - r.top) + 'px';
+      });
+      row.addEventListener('mouseleave', function () { if (tip) { tip.remove(); tip = null; } });
+    });
+  }
+  function niceTicks(max, n) {
+    var raw = max / n, mag = Math.pow(10, Math.floor(Math.log10(raw))), norm = raw / mag;
+    var step = (norm <= 1 ? 1 : norm <= 2 ? 2 : norm <= 5 ? 5 : 10) * mag, out = [];
+    for (var v = 0; v <= max; v += step) out.push(v);
+    return out;
+  }
+  function trunc(s, n) { return s.length > n ? s.slice(0, n - 1) + '…' : s; }
+
+  function tradeRow(t, i) {
+    var est = money(t._est) + (t.high ? '' : '+');
+    var who = esc(t.name) + (t.district ? ' <small>' + esc(t.district) + (t.owner ? ' · ' + esc(t.owner) : '') + '</small>' : (t.owner ? ' <small>' + esc(t.owner) + '</small>' : ''));
+    return '<tr>' +
+      '<td class="rank">' + (i + 1) + '</td>' +
+      '<td class="amt"><span class="band">' + esc(t.amount) + '</span><span class="est">est. ' + est + '</span></td>' +
+      '<td>' + sidePill(t) + '</td>' +
+      '<td class="member">' + chamberPill(t) + ' ' + who + '</td>' +
+      '<td class="asset"><span class="sym">' + esc(t.symbol || '—') + '</span><small title="' + esc(t._company) + '">' + esc(t._company) + (t.assetType && t.assetType !== 'Stock' ? ' · ' + esc(t.assetType) : '') + '</small></td>' +
+      '<td>' + esc(t._industry || t._sector) + '</td>' +
+      '<td class="date">' + fmtDate(t.transactionDate) + '</td>' +
+      '<td class="date">' + fmtDate(t.disclosureDate) + '</td>' +
+      '<td class="link">' + (t.link ? '<a href="' + esc(t.link) + '" target="_blank" rel="noopener">Filing</a>' : '') + '</td>' +
+      '</tr>';
+  }
+  var THEAD = '<thead><tr><th>#</th><th>Size</th><th>Side</th><th>Member</th><th>Asset</th><th>Industry</th><th>Traded</th><th>Filed</th><th></th></tr></thead>';
+  function table(rows, limit) {
+    var shown = limit ? rows.slice(0, limit) : rows;
+    return '<table>' + THEAD + '<tbody>' + shown.map(tradeRow).join('') + '</tbody></table>';
+  }
+  function renderTop(rows) {
+    var el = document.getElementById('top');
+    el.innerHTML = rows.length ? table(rows, 20) : '<div class="empty">No trades match the current filters.</div>';
+  }
+  function renderSectors(groups) {
+    var el = document.getElementById('sectors');
+    if (!groups.length) { el.innerHTML = '<div class="empty">No trades match the current filters.</div>'; return; }
+    var LIMIT = 15, html = '';
+    groups.forEach(function (g, i) {
+      var max = Math.max(g.buy, g.sell, 1), net = g.buy - g.sell;
+      html += '<div class="sector" id="sector-' + i + '">' +
+        '<div class="sector-head"><div><h3>' + esc(g.name) + '</h3><div class="meta">' + g.trades.length + ' trade' + (g.trades.length === 1 ? '' : 's') + ' · ' + countMembers(g.trades) + ' member' + (countMembers(g.trades) === 1 ? '' : 's') + '</div></div>' +
+        '<div class="flow"><span class="b">Bought ' + money(g.buy) + '</span><span class="s">Sold ' + money(g.sell) + '</span><span class="n">Net ' + (net >= 0 ? '+' : '−') + money(Math.abs(net)) + '</span></div>' +
+        '<div class="flowbar" aria-hidden="true"><i class="b" style="width:' + (50 * g.buy / max) + '%"></i><i class="s" style="width:' + (50 * g.sell / max) + '%"></i></div></div>' +
+        '<div class="well">' + table(g.trades, LIMIT) +
+        (g.trades.length > LIMIT ? '<button type="button" class="more" data-sector="' + i + '">Show all ' + g.trades.length + ' trades</button>' : '') +
+        '</div></div>';
+    });
+    el.innerHTML = html;
+    el.querySelectorAll('button.more').forEach(function (b) {
+      b.addEventListener('click', function () {
+        var g = groups[+b.getAttribute('data-sector')];
+        b.parentNode.innerHTML = table(g.trades, 0);
+      });
+    });
+  }
+  function countMembers(rows) { var m = {}; rows.forEach(function (t) { m[t.name] = 1; }); return Object.keys(m).length; }
+
+  // ---------- controls ----------
+  document.getElementById('f-days').addEventListener('change', function (e) { state.days = +e.target.value; render(); });
+  document.getElementById('f-min').addEventListener('change', function (e) { state.min = +e.target.value; render(); });
+  document.getElementById('f-q').addEventListener('input', function (e) { state.q = e.target.value; render(); });
+  ['chamber', 'side'].forEach(function (k) {
+    var seg = document.getElementById('f-' + k);
+    seg.addEventListener('click', function (e) {
+      var b = e.target.closest('button'); if (!b) return;
+      seg.querySelectorAll('button').forEach(function (x) { x.setAttribute('aria-pressed', x === b ? 'true' : 'false'); });
+      state[k] = b.getAttribute('data-v'); render();
+    });
+  });
+
+  // ---------- refresh through the viewer's FMP connector ----------
+  var btn = document.getElementById('refresh'), label = document.getElementById('refresh-label'), statusEl = document.getElementById('status');
+  function setStatus(msg, cls) { statusEl.textContent = msg; statusEl.className = 'status' + (cls ? ' ' + cls : ''); }
+  var mcpPromise = (window.claude && typeof window.claude.use === 'function') ? window.claude.use('mcp') : Promise.resolve(null);
+  mcpPromise.then(function (mcp) {
+    if (!mcp) {
+      btn.disabled = true;
+      setStatus('Live updates run inside claude.ai, where this page can use your FMP connector. To refresh this file, run: python -m investing.congress');
+    }
+  });
+  btn.addEventListener('click', refresh);
+
+  function payloadOf(res) {
+    var p = res && res.payload !== undefined ? res.payload : res;
+    if (typeof p === 'string') { try { p = JSON.parse(p); } catch (e) { /* leave as text */ } }
+    return p;
+  }
+  function explain(err) {
+    var code = err && err.code;
+    switch (code) {
+      case 'needs_reauth': return 'Reconnect FMP in claude.ai Settings → Connectors, then try again.';
+      case 'server_not_connected': return 'Add the FMP (Financial Modeling Prep) connector in claude.ai Settings → Connectors.';
+      case 'selection_required': return 'Choose which FMP connector this page may use, then try again.';
+      case 'not_in_manifest': case 'blocked_by_policy': return 'This page was not allowed to use FMP. Allow it from the artifact’s Permissions menu.';
+      case 'approval_required': case 'consent_required': return 'The FMP call was not approved. Click Update again to approve it.';
+      case 'tool_error': return 'FMP reported an error: ' + (err.message || 'unknown');
+      default: return 'Update failed' + (err && err.message ? ': ' + err.message : '') + '.';
+    }
+  }
+  function sleep(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+  async function call(mcp, tool, input, retried) {
+    try {
+      return payloadOf(await mcp.callTool('FMP', tool, input, { cache: false }));
+    } catch (err) {
+      if (!retried && err && err.retryable) { await sleep((err.retryAfterMs || 1500) + Math.random() * 500); return call(mcp, tool, input, true); }
+      throw err;
+    }
+  }
+  async function fetchChamber(mcp, chamber, cutoff) {
+    var endpoint = chamber === 'senate' ? 'senate-latest' : 'house-latest', out = [], page;
+    for (page = 0; page < 60; page++) {
+      setStatus('Fetching ' + chamber + ' disclosures, page ' + (page + 1) + '…');
+      var rows = await call(mcp, 'senate', { endpoint: endpoint, page: page, limit: 100 });
+      if (!Array.isArray(rows)) throw { code: 'tool_error', message: typeof rows === 'string' ? rows.slice(0, 120) : 'unexpected response' };
+      if (!rows.length) break;
+      rows.forEach(function (r) {
+        if ((r.disclosureDate || '') >= cutoff) out.push(normalize(r, chamber));
+      });
+      if ((rows[rows.length - 1].disclosureDate || '') < cutoff || rows.length < 100) break;
+    }
+    return out;
+  }
+  function parseAmount(text) {
+    var nums = (String(text || '').match(/\$?[\d,]+/g) || []).map(function (n) { return parseInt(n.replace(/[$,]/g, ''), 10); }).filter(function (n) { return !isNaN(n); });
+    if (!nums.length) return [0, null];
+    if (nums.length === 1) return [nums[0], null];
+    return [Math.min(nums[0], nums[1]), Math.max(nums[0], nums[1])];
+  }
+  function normalize(r, chamber) {
+    var lh = parseAmount(r.amount);
+    return {
+      chamber: chamber, symbol: String(r.symbol || '').trim().toUpperCase(),
+      name: (String(r.firstName || '').trim() + ' ' + String(r.lastName || '').trim()).trim(),
+      district: r.district || '', owner: r.owner || '', asset: r.assetDescription || '', assetType: r.assetType || '',
+      type: r.type || '', amount: r.amount || '', low: lh[0], high: lh[1],
+      transactionDate: r.transactionDate || '', disclosureDate: r.disclosureDate || '', link: r.link || ''
+    };
+  }
+  async function fetchProfiles(mcp, symbols, profiles) {
+    var todo = symbols.filter(function (s) { return s && !(s in profiles); });
+    var MAX = 120; // keep an update to a bounded number of connector calls
+    var skipped = Math.max(0, todo.length - MAX);
+    todo = todo.slice(0, MAX);
+    var i = 0, done = 0;
+    async function worker() {
+      while (i < todo.length) {
+        var sym = todo[i++];
+        try {
+          var rows = await call(mcp, 'company', { endpoint: 'profile-symbol', symbol: sym });
+          var p = Array.isArray(rows) && rows[0] ? rows[0] : null;
+          profiles[sym] = p ? { name: p.companyName || '', sector: p.sector || '', industry: p.industry || '', isEtf: !!p.isEtf, isFund: !!p.isFund, marketCap: p.marketCap || 0 } : null;
+        } catch (err) { /* leave this ticker unclassified; the next update retries it */ }
+        done++;
+        setStatus('Looking up sectors for new tickers, ' + done + ' of ' + todo.length + '…');
+      }
+    }
+    await Promise.all([worker(), worker(), worker(), worker()]);
+    return skipped;
+  }
+  async function refresh() {
+    var mcp = await mcpPromise;
+    if (!mcp) return;
+    btn.disabled = true; label.innerHTML = '<span class="spin"></span> Updating…';
+    try {
+      var days = Math.max(state.days, 90), cutoff = cutoffISO(days);
+      var trades = (await fetchChamber(mcp, 'senate', cutoff)).concat(await fetchChamber(mcp, 'house', cutoff));
+      var profiles = {};
+      Object.keys(data.profiles || {}).forEach(function (k) { profiles[k] = data.profiles[k]; });
+      var symbols = {}; trades.forEach(function (t) { if (t.symbol) symbols[t.symbol] = 1; });
+      var skipped = await fetchProfiles(mcp, Object.keys(symbols), profiles);
+      var next = { generatedAt: new Date().toISOString(), since: cutoff, days: days, source: data.source, trades: trades, profiles: profiles };
+      data = decorate(next);
+      store(next);
+      render();
+      setStatus('Updated: ' + trades.length.toLocaleString() + ' disclosures loaded.' + (skipped ? ' ' + skipped + ' new tickers left unclassified; update again to look them up.' : ''), skipped ? 'warn' : '');
+    } catch (err) {
+      setStatus(explain(err), 'err');
+    } finally {
+      btn.disabled = false; label.textContent = 'Update from FMP';
+    }
+  }
+
+  decorate(data);
+  render();
+})();
+</script>
