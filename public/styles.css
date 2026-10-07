@@ -12,6 +12,11 @@
   --down: #c93c37;
   --warn-bg: #fff7e0;
   --warn-border: #e6c56a;
+  --logo-sea: #0b3d6b;
+  --logo-grid: rgba(255,255,255,.14);
+  --logo-contour: #7fb3dd;
+  --logo-star: #f2c14e;
+  --logo-course: #ffffff;
 }
 * { box-sizing: border-box; }
 html, body { margin: 0; padding: 0; }
@@ -23,7 +28,15 @@ a { color: var(--link); }
 button, input, select { font: inherit; }
 .topbar { background: var(--panel); border-bottom: 1px solid var(--border); }
 .topbar .inner { max-width: 980px; margin: 0 auto; padding: 8px 16px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
-.brand { font-weight: 700; font-size: 17px; color: var(--text); text-decoration: none; letter-spacing: .02em; }
+.brand { display: inline-flex; align-items: center; gap: 9px; color: var(--text); text-decoration: none; }
+.logo-mark { width: 34px; height: 34px; flex: none; }
+.brand-text { display: flex; flex-direction: column; line-height: 1.05; }
+.brand-name { font-weight: 700; font-size: 18px; letter-spacing: .03em; font-family: Georgia, "Hiragino Mincho ProN", "Noto Serif JP", "Times New Roman", serif; }
+.brand-sub { font-size: 9.5px; letter-spacing: .18em; text-transform: uppercase; color: var(--muted); margin-top: 2px; }
+.hero .logo-mark { width: 84px; height: 84px; }
+.hero .brand-name { font-size: 34px; }
+.hero .brand-sub { font-size: 12px; margin-top: 6px; }
+.hero .brand { flex-direction: column; gap: 10px; margin-bottom: 12px; }
 .searchbox { display: flex; gap: 6px; flex: 1; min-width: 220px; position: relative; }
 .searchbox input { flex: 1; padding: 6px 10px; border: 1px solid var(--border); border-radius: 3px; text-transform: uppercase; }
 .searchbox input::placeholder { text-transform: none; }
@@ -103,7 +116,8 @@ table.shk tr.sep td, table.shk tr.sep th { border-top: 2px solid var(--border); 
 .center { text-align: center; }
 @media (max-width: 640px) {
   .topbar .inner { padding: 6px 10px; gap: 6px; }
-  .brand { font-size: 15px; }
+  .brand-name { font-size: 16px; }
+  .logo-mark { width: 30px; height: 30px; }
   .searchbox { order: 3; flex-basis: 100%; }
   .usermenu { margin-left: auto; }
   .lang button { white-space: nowrap; padding: 3px 6px; }

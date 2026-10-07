@@ -1,8 +1,8 @@
-// UI strings. Japanese uses Kaisha Shikiho terminology; English and Traditional Chinese mirror it.
+// UI strings for Kabukaizu (ja / en / zh-TW).
 window.I18N = {
   ja: {
-    siteName: "米国株四季報",
-    tagline: "米国上場企業の業績・財務・株主・役員を四季報形式で。決算説明会と最新ニュースをAIが要約。",
+    siteName: "Kabukaizu",
+    tagline: "米国上場企業の業績・財務・株主・役員を1ページに。決算説明会と最新ニュースをAIが要約する米国株アルマナック。",
     searchPlaceholder: "ティッカー・会社名",
     search: "検索",
     login: "ログイン",
@@ -61,8 +61,8 @@ window.I18N = {
     language: "言語",
   },
   en: {
-    siteName: "US Stock Almanac",
-    tagline: "Shikiho-style one-page profiles of US-listed companies: results, financials, holders, officers, plus AI digests of earnings calls and news.",
+    siteName: "Kabukaizu",
+    tagline: "One-page profiles of US-listed companies: results, financials, holders and officers, plus AI digests of earnings calls and news.",
     searchPlaceholder: "Ticker or company name",
     search: "Search", login: "Log in", signup: "Sign up", logout: "Log out", account: "Account",
     username: "Username", email: "Email", password: "Password", loginId: "Username or email",
@@ -102,8 +102,8 @@ window.I18N = {
     language: "Language",
   },
   "zh-TW": {
-    siteName: "美股四季報",
-    tagline: "以四季報格式呈現美國上市公司的業績、財務、股東與經營層，並以AI摘要財報電話會議與最新新聞。",
+    siteName: "Kabukaizu",
+    tagline: "一頁掌握美國上市公司的業績、財務、股東與經營層，並以AI摘要財報電話會議與最新新聞的美股年鑑。",
     searchPlaceholder: "代號或公司名稱",
     search: "搜尋", login: "登入", signup: "註冊", logout: "登出", account: "帳戶",
     username: "使用者名稱", email: "電子郵件", password: "密碼", loginId: "使用者名稱或電子郵件",

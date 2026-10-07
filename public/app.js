@@ -1,4 +1,4 @@
-/* US Shikiho — single-page app (no build step). */
+/* Kabukaizu — single-page app (no build step). */
 (function () {
   const state = {
     config: null, user: null, ent: null, locale: "ja", route: { view: "home" },
@@ -69,8 +69,7 @@
     if (!state.config.locales.includes(loc)) loc = state.config.defaultLocale;
     state.locale = loc;
     document.documentElement.lang = loc;
-    document.title = t("siteName");
-    $("#brand").textContent = t("siteName");
+    document.title = state.symbol && state.route.view === "stock" ? `${state.symbol} | ${t("siteName")}` : t("siteName");
     $("#searchInput").placeholder = t("searchPlaceholder");
     $("#searchBtn").textContent = t("search");
     try { localStorage.setItem("locale", loc); } catch {}
@@ -129,7 +128,7 @@
     stopSummaryPolling();
     const price = state.config.priceLabel;
     if (!state.user) {
-      app.innerHTML = `<div class="panel hero"><h1>${t("siteName")}</h1><p>${t("tagline")}</p>
+      app.innerHTML = `<div class="panel hero"><div class="brand">${$("#logoTpl").innerHTML}<span class="brand-text"><span class="brand-name">Kabukaizu</span><span class="brand-sub">US Stock Almanac</span></span></div><p>${t("tagline")}</p>
         <ul>${t("features").map((f) => `<li>${esc(f)}</li>`).join("")}</ul>
         <p><b>${t("pricing")}</b>: ${t("priceLine", { price })}<br>${t("trialNote", { price })}</p>
         <div class="actions"><a class="btn primary" href="#/signup">${t("createAccount")}</a><a class="btn" href="#/login">${t("login")}</a></div></div>
@@ -236,6 +235,7 @@
         recent.unshift(symbol); localStorage.setItem("recent", JSON.stringify(recent.slice(0, 10)));
       } catch {}
     }
+    document.title = `${symbol} | ${t("siteName")}`;
     renderStock();
     loadChart(state.chartRange);
     loadSummary();
@@ -471,7 +471,7 @@
     let loc = null;
     try { loc = localStorage.getItem("locale"); } catch {}
     if (!loc && state.user) loc = state.user.locale;
-    if (!loc) { const nav = (navigator.language || "").toLowerCase(); loc = state.config.locales.find((l) => nav.startsWith(l.toLowerCase().slice(0, 2))) || state.config.defaultLocale; }
+    if (!loc) loc = state.config.defaultLocale; // site default (Japanese on the JP site), never the browser language
     state.route = parseRoute();
     setLocale(loc, false);
   }
