@@ -1474,6 +1474,7 @@ function runModel(m, inp, opts) {
     const focusKey = ae && ae.classList && ae.classList.contains("in") ? [ae.dataset.s, ae.dataset.k, ae.dataset.fy] : null;
     const focusCmt = ae && ae.matches && ae.matches("td.gc[data-gk]") ? [ae.dataset.gk, ae.dataset.gf] : null;
     const sel = focusKey && ae.selectionStart === 0 && ae.selectionEnd === ae.value.length;
+    const typed = focusKey && ae.value !== ae.defaultValue ? [ae.value, ae.selectionStart, ae.selectionEnd] : null;
 
     const { hist, drill, model, guide, cons, cols, firsts } = columns();
     const cc = cols.map((c, j) => colCls(c, j, firsts));
@@ -1581,7 +1582,7 @@ function runModel(m, inp, opts) {
     renderTabs(); applyTab();
     if (focusKey) {
       const el = document.querySelector('input.in[data-s="' + focusKey[0] + '"][data-k="' + CSS.escape(focusKey[1]) + '"][data-fy="' + focusKey[2] + '"]');
-      if (el) { el.focus(); if (sel) el.select(); }
+      if (el) { el.focus(); if (typed) { el.value = typed[0]; try { el.setSelectionRange(typed[1], typed[2]); } catch (e) {} } else if (sel) el.select(); }
     }
     if (focusCmt) { const el = document.querySelector('td.gc[data-gk="' + CSS.escape(focusCmt[0]) + '"][data-gf="' + CSS.escape(focusCmt[1]) + '"]'); if (el) el.focus(); }
   }
@@ -1913,6 +1914,9 @@ ${text}`;
     const t = state.ticker, mcp = await mcpP, sample = await sampleP;
     const lang = LANG, TRL = (x) => (lang === "en" ? x : I18N[lang]?.[x] ?? x); // labels in the draft's own language
     if (!mcp || !sample || state.notesBusy || state.busy || state.inpFor !== t) return;
+    // FMP's DCF with the user's assumptions may still be recalculating
+    while (state.dcfBusy && state.dcfP) await state.dcfP.catch(() => {});
+    if (state.notesBusy || state.busy || state.ticker !== t || state.inpFor !== t) return;
     // everything about the company is read from this snapshot, so switching ticker mid-run can't mix data
     const S = { act: state.act, mdl: state.mdl, mkt: state.mkt, prof: state.prof, inp: state.inp, dcf: state.dcf, dcfUp: dcfUp(state.dcf), rec: state.recRes, raw: state.raw };
     const note = (msg) => setNotice(esc(t) + TR(" notes: ") + msg + TR(" Keep this page open until it finishes; each call's summary is saved as it is done, so if the run stops, the next one picks up from there."));
@@ -2082,7 +2086,7 @@ ${text}`;
       const ev = isNum(mk.ev) ? mk.ev : mk.mcap + (R.netDebt ?? 0), fcf0 = fcf(A.ltm);
       const gi = impliedGrowth(ev, fcf0, 10, R.wacc, R.g);
       const dRev = cagr(rev, 3), dEps = cagr((c) => nn(c.i?.epsDiluted), 3), dFcf = cagr(fcf, 3);
-      out.push("WHAT THE PRICE ASSUMES (engine reverse DCF):\n" + (isNum(gi) ? "At today's enterprise value of " + f0(ev) + "m, discounting at FMP's WACC of " + pc(R.wacc) + " with FMP's long-term growth of " + pc(R.g) + " after ten years, the price implies free cash flow (last 12 months " + f0(fcf0) + "m) growing " + pc(gi) + " a year for ten years." : "No implied growth: trailing free cash flow is not positive (" + f0(fcf0) + "m), so the price rests on a recovery in cash flow.") +
+      out.push("WHAT THE PRICE ASSUMES (engine reverse DCF):\n" + (isNum(gi) ? "At today's enterprise value of " + f0(ev) + "m, discounting at FMP's WACC of " + pc(R.wacc) + " with FMP's long-term growth of " + pc(R.g) + " after ten years, the price implies free cash flow (last 12 months " + f0(fcf0) + "m) growing " + pc(gi) + " a year for ten years." : (!(fcf0 > 0) ? "No implied growth: trailing free cash flow is not positive (" + f0(fcf0) + "m), so the price rests on a recovery in cash flow." : !(R.wacc > R.g) ? "No implied growth: the long-term growth rate of " + pc(R.g) + " is not below FMP's WACC of " + pc(R.wacc) + "." : "No implied growth: today's enterprise value is not positive.")) +
         " Delivered over the last three fiscal years: revenue " + pc(dRev) + " a year, diluted EPS " + pc(dEps) + " a year, free cash flow " + pc(dFcf) + " a year. FMP's levered DCF value per share " + (isNum(R.perShare) ? R.perShare.toFixed(2) + (R.valid ? "" : " (not meaningful)") : "n/a") + " against a price of " + (isNum(mk.price) ? mk.price.toFixed(2) : "n/a") + (isNum(S.dcfUp) ? " (" + FMT.yoy(S.dcfUp).replace("−", "-") + ")" : "") + ".");
     }
     return out.join("\n\n");
@@ -2317,7 +2321,8 @@ ${text}`;
   const DCF_PARAM = { rg: ["revenueGrowthPct", "frac"], ocf: ["operatingCashFlowPct", "frac"], capex: ["capitalExpenditurePct", "neg"], rf: ["riskFreeRate", "pct"], beta: ["beta", "raw"], erp: ["marketRiskPremium", "pct"], ke: ["costOfEquity", "pct"], kdPre: ["costOfDebt", "pct"], tm: ["taxRate", "frac"], g: ["longTermGrowthRate", "pct"] };
   const dcfParams = (o) => {
     const p = {};
-    Object.entries(DCF_PARAM).forEach(([k, [name, u]]) => { const v = o?.[k]; if (isNum(v)) p[name] = String(+(u === "pct" ? v * 100 : u === "neg" ? -Math.abs(v) : v).toFixed(8)); });
+    // (FMP ignores a parameter of exactly 0 and uses its own value, so a typed 0 goes as a negligible amount)
+    Object.entries(DCF_PARAM).forEach(([k, [name, u]]) => { const v = o?.[k]; if (!isNum(v)) return; const x = +(u === "pct" ? v * 100 : u === "neg" ? -Math.abs(v) : v).toFixed(8); p[name] = x === 0 ? (u === "neg" ? "-0.000001" : "0.000001") : String(x); });
     return p;
   };
   // inputs from the page's earlier DCF (Damodaran's FCFF model) that FMP's levered DCF has no place for
@@ -2343,7 +2348,11 @@ ${text}`;
       fcfT1: f(L.freeCashFlowT1), tv: f(L.terminalValue), pvTv: f(L.presentTerminalValue), ev: f(L.enterpriseValue), equity: f(L.equityValue), perShare: f(L.equityValuePerShare),
     };
     D.cash = isNum(D.totalDebt) && isNum(D.netDebt) ? D.totalDebt - D.netDebt : null;
-    D.tvShare = div(D.pvTv, D.ev);
+    // a share price quoted in pence or cents (GBp, ZAc, ILA): FMP's amounts are in the main unit, its value per share in
+    // the price's unit, 100 times as many
+    const ratio = isNum(D.equity) && D.equity !== 0 && D.shares > 0 && isNum(D.perShare) ? (D.perShare * D.shares) / D.equity : 1;
+    D.unit = Math.abs(ratio - 100) < 1 ? 100 : 1;
+    D.tvShare = D.ev > 0 && isNum(wacc) && isNum(g) && wacc > g ? div(D.pvTv, D.ev) : null;
     // not meaningful: growth at or above the discount rate, or a value of nothing or less
     D.valid = isNum(D.perShare) && isNum(wacc) && isNum(g) && wacc > g && D.perShare > 0;
     return D;
@@ -2352,9 +2361,11 @@ ${text}`;
   const dcfAt = (D, w, g) => {
     if (!D || !(w > g) || !D.years.every((y) => isNum(y.fcf)) || !isNum(D.netDebt) || !(D.shares > 0)) return null;
     const pv = D.years.reduce((a, y, i) => a + y.fcf / Math.pow(1 + w, i + 1), 0), f5 = D.years[4].fcf;
-    return (pv + (f5 * (1 + g)) / (w - g) / Math.pow(1 + w, 5) - D.netDebt) / D.shares;
+    return ((pv + (f5 * (1 + g)) / (w - g) / Math.pow(1 + w, 5) - D.netDebt) / D.shares) * (D.unit || 1);
   };
   const DCF_SHIFTS = [-0.01, -0.005, 0, 0.005, 0.01];
+  // the currency of FMP's amounts: the price's, or its main unit when the price is in pence or cents
+  const dcfCur = (D, c) => (D?.unit === 100 ? { GBp: "GBP", GBX: "GBP", ZAc: "ZAR", ILA: "ILS" }[c] || c : c);
   // one of the user's assumptions as FMP has it (the input's default)
   const dcfVal = (D, k) => (!D ? null : { rg: D.years[0].g, ocf: D.years[0].ocfPct, capex: isNum(D.years[0].capexPct) ? Math.abs(D.years[0].capexPct) : null, rf: D.rf, beta: D.beta, erp: D.mrp, ke: D.ke, kdPre: D.kd, tm: D.tax, g: D.g }[k] ?? null);
   const dcfUp = (D) => (D && D.valid && isNum(state.mkt?.price) ? D.perShare / state.mkt.price - 1 : null);
@@ -2371,6 +2382,8 @@ ${text}`;
     state.dcfP = (async () => {
       let D = null, err = null;
       try { const mcp = await mcpP; D = fmpDcf(await call(mcp, "discountedCashFlow", { endpoint: "custom-dcf-levered", symbol: t, ...p })); if (!D) err = "none"; } catch (e) { err = e || "error"; }
+      // FMP applies a typed tax rate to WACC (clamped to 0–100%) but returns its own rate and after-tax cost of debt
+      if (D && p.taxRate != null) { D.tax = Math.min(1, Math.max(0, +p.taxRate)); if (isNum(D.kd)) D.kdAT = D.kd * (1 - D.tax); }
       if (state.dcfKey !== key) return; // a newer set of assumptions is being read
       state.dcf = D; state.dcfErr = err; state.dcfBusy = false;
       render();
@@ -2398,8 +2411,10 @@ ${text}`;
     if (D && isNum(D.tvShare) && D.tvShare > 0.75) flags.push(["warn", TR("The terminal value is ") + pct(D.tvShare, 0) + TR(" of enterprise value, so the answer rests mostly on the long-term growth rate and WACC.")]);
     if (/financial/i.test(state.prof?.sector || "")) flags.push(["warn", TR("For banks, insurers and other financial companies, operating cash flow and debt include customers' deposits and policy flows, so a free-cash-flow DCF like FMP's doesn't describe what the shares are worth.")]);
     if (isNum(sbcSh) && sbcSh > 0.01) flags.push(["", TR("Operating cash flow adds back stock-based compensation (") + pct(sbcSh) + TR(" of revenue in FY") + B.fy0 + TR("), so this DCF doesn't count it as a cost.")]);
-    if (isNum(sti) && sti > 0 && D && isNum(D.shares) && D.shares > 0) flags.push(["", TR("FMP's net debt counts cash and cash equivalents only: FY") + B.fy0 + TR(" short-term investments of ") + mm(sti) + TR(" (") + cur + " " + (sti / D.shares).toFixed(2) + TR(" a share) are left out.")]);
-    if (mk.reportCur && cur && mk.reportCur !== cur) flags.push(["", TR("FMP converts the ") + mk.reportCur + TR(" statements to ") + cur + TR(" at today's exchange rate, so this DCF is in ") + cur + TR(", per share as priced.")]);
+    // (the page's statements are in the reporting currency; FMP's at its own rate: FY0 revenue gives it)
+    const fx = D ? div(D.hist[D.hist.length - 1]?.rev, rev(fyA || {})) : null, stiF = isNum(sti) && isNum(fx) && fx > 0 ? sti * fx : null;
+    if (isNum(stiF) && stiF > 0 && isNum(D.shares) && D.shares > 0) flags.push(["", TR("FMP's net debt counts cash and cash equivalents only: FY") + B.fy0 + TR(" short-term investments of ") + mm(stiF) + TR(" (") + cur + " " + ((stiF / D.shares) * D.unit).toFixed(2) + TR(" a share) are left out.")]);
+    if (mk.reportCur && cur && mk.reportCur !== dcfCur(B, cur)) flags.push(["", TR("FMP converts the ") + mk.reportCur + TR(" statements to ") + dcfCur(B, cur) + TR(" at today's exchange rate, so this DCF is in ") + dcfCur(B, cur) + TR(", per share as priced.")]);
     flags.push(["", TR("FMP discounts free cash flow after interest at WACC and then takes away net debt; it uses FY") + B.fy0 + TR(" annual figures only, and discounts year 1 (FY") + ys[0].fy + TR(") a full year from today.")]);
     const cols = D ? [...D.hist.map((h) => ({ ...h, a: true })), ...D.years] : [];
     const line = (label, fn, f, key, tv) => '<tr class="' + (key ? "key" : "") + '"><td>' + label + "</td>" + cols.map((c) => '<td class="' + (c.a ? "fade" : "") + '">' + (fmt(fn(c), f) ?? "–") + "</td>").join("") + "<td>" + (tv != null ? fmt(tv, f) ?? "–" : "") + "</td></tr>";
@@ -2428,7 +2443,7 @@ ${text}`;
     const up = dcfUp(D);
     el.innerHTML = head +
       TR("<p>FMP's levered DCF, calculated by FMP from its FY") + B.fy0 + TR(" annual statements: revenue grows ") + growthTxt + TR(" for five years (FY") + ys[0].fy + "–FY" + ys[4].fy + TR("); free cash flow is operating cash flow less capex, each a fixed share of revenue; each year is discounted at WACC, and a terminal value grows at the long-term rate. Equity value is enterprise value less net debt. The assumptions are FMP's until you type your own; FMP then recalculates with them.</p>") +
-      (!D ? "<p class=\"warn\">" + TR("FMP couldn't value it with your assumptions: ") + dcfErrText(state.dcfErr) + TR(" Change or clear them below (or in Settings).") + "</p>" : "") +
+      (!D && !state.dcfBusy ? "<p class=\"warn\">" + TR("FMP couldn't value it with your assumptions: ") + dcfErrText(state.dcfErr) + TR(" Change or clear them below (or in Settings).") + "</p>" : "") +
       '<div class="grid3">' +
       TR('<div class="kv"><h3 style="grid-column:1/-1">Cash flows</h3>') +
       row(TR("Revenue growth, years 1–5"), "rg", ov("rg") ? TR("Yours, in every year") : TR("FMP: ") + growthTxt + TR("; a typed rate applies to all five years")) +
@@ -2455,7 +2470,7 @@ ${text}`;
         out(TR("Value per share"), isNum(D.perShare) ? (D.valid ? "" : "n/m ") + (cur ? cur + " " : "") + D.perShare.toFixed(2) : "–", "big") +
         out(TR("Price today"), isNum(mk.price) ? cur + " " + mk.price.toFixed(2) : "–") +
         out(TR("Upside / (downside)"), isNum(up) ? FMT.yoy(up) : "–", "big " + (isNum(up) ? (up >= 0 ? "pos" : "neg") : "")) +
-        out(TR("Terminal value share of EV"), pct(D.tvShare, 0)) : "<span>" + TR("No value until FMP can calculate it.") + "</span>") + "</div>" +
+        out(TR("Terminal value share of EV"), pct(D.tvShare, 0)) : "<span>" + (state.dcfBusy ? TR("Recalculating with FMP…") : TR("No value until FMP can calculate it.")) + "</span>") + "</div>" +
       "</div>" + tbl +
       (sens ? TR("<h3>Value per share: WACC × long-term growth <span class=\"save\" style=\"text-transform:none;letter-spacing:0;font-weight:400\">· FMP's formula on FMP's cash flows · small figure = upside to today's price</span></h3>") + sens : "") +
       '<ul class="flags">' + flags.map(([c, t]) => '<li class="' + c + '">' + t + "</li>").join("") + "</ul>";
@@ -3132,7 +3147,7 @@ ${GUIDE_LINE_RULES}
     let loaded; state.loadP = new Promise((r) => (loaded = r));
     setNotice("");
     $("coName").textContent = t; $("coMeta").textContent = TR("Loading 30 years of financials, the current year's quarters, consensus and market data…");
-    state.act = null; state.mdl = null; state.mkt = null; state.dcf = null; state.dcf0 = null; state.dcf0For = null; state.dcfKey = null; state.dcfBusy = false; state.dcfP = null; render(); $("strip").hidden = true;
+    state.act = null; state.mdl = null; state.mkt = null; state.dcf = null; state.dcf0 = null; state.dcf0For = null; state.dcfKey = null; state.dcfBusy = false; state.dcfP = null; state.dcfErr = null; render(); $("strip").hidden = true;
     const st = (endpoint, period, extra) => call(mcp, "statements", { endpoint, symbol: t, period, ...extra });
     const from = new Date(Date.now() - 20 * 864e5).toISOString().slice(0, 10);
     const jobs = {
@@ -3217,6 +3232,7 @@ ${GUIDE_LINE_RULES}
       if (Number.isNaN(raw)) { el.value = ""; }
       const v = raw == null || Number.isNaN(raw) ? null : UNIT[el.dataset.u].parse(raw);
       setIn(el.dataset.s, el.dataset.k, el.dataset.fy === "" ? null : +el.dataset.fy, v);
+      if (el.dataset.s === "d" && state.dcfErr) state.dcfKey = null; // after a failed read, the same assumptions are read again
       recompute(); render(); scheduleSave();
     } else if (el.matches && el.matches('input[type=checkbox][data-act]')) {
       // the recovery value's switches (shown, leave out inflated P/Es) are stored with the valuation inputs
@@ -3371,7 +3387,7 @@ ${GUIDE_LINE_RULES}
       let y = 1;
       const kv = (label, v, fmt) => { d.getCell(y, 1).value = label; d.getCell(y, 1).font = base; const c = d.getCell(y, 2); c.value = v; c.numFmt = fmt; c.font = { ...base, color: { argb: ARGB.ink } }; y++; };
       const bold = (t) => { d.getCell(y, 1).value = t; d.getCell(y, 1).font = { ...base, bold: true }; y++; };
-      const dcur = state.prof?.currency || cur;
+      const dcur = dcfCur(R, state.prof?.currency || cur);
       if (R) {
         d.getCell("A1").value = TR("DCF · FMP's levered free cash flow"); d.getCell("A1").font = { ...base, size: 13, bold: true };
         d.getCell("A2").value = TR("Calculated by FMP from its FY") + R.fy0 + TR(" annual statements (") + dcur + TR(" millions); free cash flow = operating cash flow + capex, each a fixed share of revenue; discounted at WACC; equity value = enterprise value − net debt. As of ") + new Date().toLocaleDateString("en-CA") + ".";
@@ -3815,7 +3831,7 @@ ${GUIDE_LINE_RULES}
 
     ];
     if (vBody.length) {
-      doc.autoTable({ head: [[R ? TR("DCF (FMP levered)") : TR("Valuation"), ""]], body: vBody, startY: y, margin: { left: m, right: m + half + 16 }, theme: "plain", styles: { font: PF, fontSize: 7.2, cellPadding: 1.6, halign: "right", textColor: ink }, headStyles: { fontStyle: "bold", fillColor: band }, columnStyles: { 0: { halign: "left" } }, didParseCell: (d) => { if (d.section === "head") d.cell.styles.halign = d.column.index === 0 ? "left" : "right"; } });
+      doc.autoTable({ head: [[R ? TR("DCF (FMP levered)") + (prof.currency && dcfCur(R, prof.currency) !== cur ? " · " + dcfCur(R, prof.currency) : "") : TR("Valuation"), ""]], body: vBody, startY: y, margin: { left: m, right: m + half + 16 }, theme: "plain", styles: { font: PF, fontSize: 7.2, cellPadding: 1.6, halign: "right", textColor: ink }, headStyles: { fontStyle: "bold", fillColor: band }, columnStyles: { 0: { halign: "left" } }, didParseCell: (d) => { if (d.section === "head") d.cell.styles.halign = d.column.index === 0 ? "left" : "right"; } });
       yDcf = doc.lastAutoTable.finalY;
     }
     if (R && isNum(R.wacc) && isNum(R.g)) {
@@ -3910,7 +3926,7 @@ ${GUIDE_LINE_RULES}
     try {
       await ensureGuidance();
       // a DCF FMP is still recalculating with the user's assumptions
-      if (state.dcfP) await state.dcfP.catch(() => {});
+      while (state.dcfBusy && state.dcfP) await state.dcfP.catch(() => {});
       btn.textContent = TR("Preparing…");
       const file = await build(btn);
       await dl.save(file);
