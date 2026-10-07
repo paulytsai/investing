@@ -35,6 +35,14 @@ export const FMP_MAP = {
   calendar: {
     "earnings-company": { path: "earnings", params: { symbol: "symbol", limit: "limit" }, ttl: 6 * H },
   },
+  // FMP's levered DCF, with the page's assumption overrides (FMP's own parameter names and units)
+  discountedCashFlow: {
+    "custom-dcf-levered": {
+      path: "custom-levered-discounted-cash-flow",
+      params: { symbol: "symbol", revenueGrowthPct: "revenueGrowthPct", operatingCashFlowPct: "operatingCashFlowPct", capitalExpenditurePct: "capitalExpenditurePct", riskFreeRate: "riskFreeRate", beta: "beta", marketRiskPremium: "marketRiskPremium", costOfEquity: "costOfEquity", costOfDebt: "costOfDebt", taxRate: "taxRate", longTermGrowthRate: "longTermGrowthRate" },
+      numeric: true, ttl: H,
+    },
+  },
 };
 
 const VALUE = /^[A-Za-z0-9.\-_^:]{1,24}$/;
@@ -49,6 +57,8 @@ export function resolveFmp(tool, input) {
     const s = String(v);
     if (!VALUE.test(s)) fail(400, "bad_parameter", `Bad value for ${k}.`);
     if (k === "limit" && !(+s >= 1 && +s <= 40)) fail(400, "bad_parameter", "limit must be 1-40.");
+    // an endpoint whose inputs besides the symbol are numbers (FMP ignores any other value silently)
+    if (def.numeric && k !== "symbol" && !(s.trim() !== "" && Number.isFinite(+s))) fail(400, "bad_parameter", `${k} must be a number.`);
     q[name] = k === "symbol" ? s.toUpperCase() : s;
   }
   if (!def.global && !q.symbol) fail(400, "bad_parameter", "symbol is required.");
