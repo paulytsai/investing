@@ -128,11 +128,48 @@
     stopSummaryPolling();
     const price = state.config.priceLabel;
     if (!state.user) {
-      app.innerHTML = `<div class="panel hero"><div class="brand">${$("#logoTpl").innerHTML}<span class="brand-text"><span class="brand-name">Kabukaizu</span><span class="brand-sub">US Stock Almanac</span></span></div><p>${t("tagline")}</p>
-        <ul>${t("features").map((f) => `<li>${esc(f)}</li>`).join("")}</ul>
-        <p><b>${t("pricing")}</b>: ${t("priceLine", { price })}<br>${t("trialNote", { price })}</p>
-        <div class="actions"><a class="btn primary" href="#/signup">${t("createAccount")}</a><a class="btn" href="#/login">${t("login")}</a></div></div>
-        <div class="footer">${t("sources")}<br>${t("disclaimer")}</div>`;
+      const L = t("landing");
+      const logo = `<div class="brand">${$("#logoTpl").innerHTML}<span class="brand-text"><span class="brand-name">Kabukaizu</span><span class="brand-sub">US Stock Almanac</span></span></div>`;
+      app.innerHTML = `
+      <section class="hero">${logo}
+        <h1>${esc(L.heroTitle)}</h1><p class="lead">${esc(L.heroLead)}</p>
+        <div class="actions"><a class="btn primary big" href="#/signup">${esc(L.ctaPrimary)}</a><a class="btn big" href="#/login">${esc(L.ctaSecondary)}</a></div>
+        <p class="muted small">${esc(L.ctaNote.replace("{price}", price))}</p>
+      </section>
+      <section class="land">
+        <h2>${esc(L.samplesTitle)}</h2><p class="lead">${esc(L.samplesLead)}</p>
+        <div class="gallery">
+          <div class="gallery-tabs">${L.samples.map((x, i) => `<button data-sample="${x.key}" class="${i === 0 ? "active" : ""}">${esc(x.label)}</button>`).join("")}</div>
+          <figure class="shotframe"><img id="sampleImg" src="/img/sample-${L.samples[0].key}.jpg" alt="${esc(L.samples[0].label)}" loading="eager"><figcaption id="sampleCap">${esc(L.samples[0].caption)}</figcaption></figure>
+        </div>
+      </section>
+      <section class="land">
+        <h2>${esc(L.featuresTitle)}</h2>
+        <div class="features">${L.features.map((f) => `<div class="feat"><h3>${esc(f.title)}</h3><p>${esc(f.body)}</p></div>`).join("")}</div>
+      </section>
+      <section class="land ai-sample">
+        <h2>${esc(L.aiTitle)}</h2>
+        <blockquote>${esc(L.aiSample)}</blockquote>
+        <p class="muted small">${esc(L.aiNote)}</p>
+      </section>
+      <section class="land">
+        <h2>${esc(L.dataTitle)}</h2><p class="lead">${esc(L.dataLead)}</p>
+        <div class="sources">${L.data.map((d) => `<div class="src"><h3>${esc(d.name)}</h3><p>${esc(d.body)}</p></div>`).join("")}</div>
+        <p class="muted small">${esc(L.dataNote)}</p>
+      </section>
+      <section class="land pricing">
+        <h2>${esc(L.pricingTitle)}</h2>
+        <div class="pricecard"><div class="plan">${esc(L.pricingPlan)}</div><div class="amount">${esc(price)}</div>
+          <ul>${L.pricingBullets.map((b) => `<li>${esc(b)}</li>`).join("")}</ul>
+          <a class="btn primary big" href="#/signup">${esc(L.ctaPrimary)}</a>
+          <p class="muted small">${esc(L.pricingNote)}</p></div>
+      </section>
+      <div class="footer center">${esc(L.disclaimer)}</div>`;
+      document.querySelectorAll(".gallery-tabs button").forEach((b) => b.addEventListener("click", () => {
+        const x = L.samples.find((y) => y.key === b.dataset.sample);
+        document.querySelectorAll(".gallery-tabs button").forEach((o) => o.classList.toggle("active", o === b));
+        $("#sampleImg").src = `/img/sample-${x.key}.jpg`; $("#sampleImg").alt = x.label; $("#sampleCap").textContent = x.caption;
+      }));
       return;
     }
     let recent = [];

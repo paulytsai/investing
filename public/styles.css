@@ -131,3 +131,33 @@ table.shk tr.sep td, table.shk tr.sep th { border-top: 2px solid var(--border); 
   table.shk th.rowh { width: 5.5em; }
   .tabs button { padding: 6px 8px; font-size: 13px; }
 }
+
+/* ---------- landing ---------- */
+.hero { text-align: center; padding: 34px 10px 26px; }
+.hero h1 { font-size: 30px; margin: 6px 0 10px; text-wrap: balance; letter-spacing: .01em; }
+.hero .lead, .land .lead { color: var(--muted); max-width: 640px; margin: 0 auto 18px; font-size: 15px; }
+.hero .actions { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin-bottom: 10px; }
+.btn.big { padding: 10px 22px; font-size: 15px; }
+.small { font-size: 12px; }
+.land { background: var(--panel); border: 1px solid var(--border); padding: 22px 20px; margin-bottom: 14px; text-align: center; }
+.land h2 { font-size: 20px; margin: 0 0 8px; }
+.land h3 { font-size: 15px; margin: 0 0 6px; }
+.gallery-tabs { display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; margin-bottom: 12px; }
+.gallery-tabs button { border: 1px solid var(--border); background: #fff; padding: 5px 12px; border-radius: 3px; cursor: pointer; font-size: 13px; }
+.gallery-tabs button.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+.shotframe { margin: 0; }
+.shotframe img { width: 100%; max-width: 900px; border: 1px solid var(--border); box-shadow: 0 8px 24px rgba(11,61,107,.12); display: block; margin: 0 auto; }
+.shotframe figcaption { color: var(--muted); font-size: 13px; margin-top: 10px; }
+.features { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; text-align: left; margin-top: 14px; }
+.feat { border-top: 3px solid var(--accent); padding-top: 10px; }
+.feat p { margin: 0; font-size: 13px; color: var(--muted); }
+.ai-sample blockquote { text-align: left; max-width: 760px; margin: 12px auto; padding: 14px 18px; border-left: 4px solid var(--logo-star); background: var(--bg); font-size: 14px; line-height: 1.8; }
+.sources { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; text-align: left; margin-top: 10px; }
+.src { border: 1px solid var(--border-soft); padding: 12px 14px; }
+.src p { margin: 0; font-size: 13px; color: var(--muted); }
+.pricecard { max-width: 380px; margin: 10px auto 0; border: 2px solid var(--accent); padding: 18px 22px; }
+.pricecard .plan { font-size: 13px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+.pricecard .amount { font-size: 30px; font-weight: 700; margin: 6px 0 10px; }
+.pricecard ul { text-align: left; margin: 0 0 16px; padding-left: 20px; font-size: 14px; }
+.pricecard .btn { display: block; }
+@media (max-width: 720px) { .features, .sources { grid-template-columns: 1fr; } .hero h1 { font-size: 24px; } }
