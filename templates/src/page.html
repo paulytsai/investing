@@ -158,9 +158,10 @@ td.flag { color: var(--muted); }
 .gmk { display: inline-block; width: 0; height: 0; border-style: solid; border-width: 0 7px 7px 0; border-color: transparent var(--gd-ink) transparent transparent; vertical-align: top; margin-left: 2px; }
 td.gc { cursor: help; }
 input.in.gw::placeholder { color: var(--gd-ink); font-style: italic; opacity: 1; }
-#gpop { position: fixed; z-index: 60; max-width: min(380px, calc(100vw - 16px)); max-height: min(60vh, 420px); overflow-y: auto; background: var(--surface); color: var(--ink); border: 1px solid var(--gd-ink); border-radius: 4px; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15); padding: 8px 10px; font: 400 13px/1.4 var(--body); text-align: left; white-space: normal; }
+#gpop { position: fixed; z-index: 60; max-width: min(380px, calc(100vw - 16px)); max-height: min(60vh, 420px); overflow-y: auto; overscroll-behavior: contain; pointer-events: none; background: var(--surface); color: var(--ink); border: 1px solid var(--gd-ink); border-radius: 4px; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15); padding: 8px 10px; font: 400 13px/1.4 var(--body); text-align: left; white-space: normal; }
 .gwt { display: inline-block; max-width: 92px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: bottom; font-style: italic; color: var(--gd-ink); }
 td.gc[tabindex]:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+#gpop.scroll { pointer-events: auto; }
 #gpop b { display: block; font-weight: 600; font-size: 12px; color: var(--gd-ink); margin-bottom: 4px; }
 #gpop div + div { margin-top: 4px; }
 .na-flag:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
@@ -862,7 +863,7 @@ footer.foot .fine { font-size: 11px; max-width: 110ch; }
             if (r.g) {
               const lines = guideCmt(c.gkey, r.g.k), wordsG = guideWords(c.gkey, r.g.k), v = inVal("g", c.gkey + "::" + r.g.k);
               const lab = TR("Guidance · ") + TR(r.l) + " · " + c.label + (lines.length ? ". " + lines.join(" · ") : "");
-              return { html: inputHTML("g", c.gkey + "::" + r.g.k, null, r.g.u, wordsG ? "gw" : "", wordsG || null, lab) + (lines.length ? CMT_MARK : ""), cls: "in" + (lines.length ? " gc" : ""), attr: cmtAttr(lines, cmtTitle(c.gkey, r.g.k)), val: v, note: lines.join("\n"), ntitle: lines.length ? cmtTitle(c.gkey, r.g.k) : "", words: wordsG };
+              return { html: inputHTML("g", c.gkey + "::" + r.g.k, null, r.g.u, wordsG ? "gw" : "", wordsG || null, lab) + (lines.length ? CMT_MARK : ""), cls: "in" + (lines.length ? " gc" : ""), attr: cmtAttr(lines, TR(r.l).trim() + " · " + c.label + ": " + cmtTitle(c.gkey, r.g.k)), val: v, note: lines.join("\n"), ntitle: lines.length ? cmtTitle(c.gkey, r.g.k) : "", words: wordsG };
             }
             const out = r.v && !s.driver ? cellOut(r.v(c), r.f, r.sign) : cellOut(null);
             // a line the G column has no input for (cost of revenue, EBIT, free cash flow…): its guidance as a comment
@@ -870,7 +871,7 @@ footer.foot .fine { font-size: 11px; max-width: 110ch; }
             if (!gl.length) return out;
             const gwd = guideWords(c.gkey, r.gc);
             return { html: (out.val === "" && gwd ? '<span class="gwt">' + esc(gwd) + "</span>" : out.html) + CMT_MARK, cls: (out.cls + " gc").trim(), val: out.val, note: gl.join("\n"), ntitle: cmtTitle(c.gkey, r.gc), words: gwd,
-              attr: cmtAttr(gl, cmtTitle(c.gkey, r.gc)) + ' tabindex="0" data-gk="' + esc(c.gkey) + '" data-gf="' + r.gc + '" aria-label="' + esc(TR("Guidance · ") + TR(r.l) + " · " + c.label + ". " + gl.join(" · ")) + '"' };
+              attr: cmtAttr(gl, TR(r.l).trim() + " · " + c.label + ": " + cmtTitle(c.gkey, r.gc)) + ' tabindex="0" data-gk="' + esc(c.gkey) + '" data-gf="' + r.gc + '" aria-label="' + esc(TR("Guidance · ") + TR(r.l) + " · " + c.label + ". " + gl.join(" · ")) + '"' };
           }
           if (s.driver) {
             if (c.kind === "A" && c.type === "FY") {
@@ -1048,29 +1049,50 @@ footer.foot .fine { font-size: 11px; max-width: 110ch; }
   const gpop = document.createElement("div");
   gpop.id = "gpop"; gpop.setAttribute("role", "tooltip"); gpop.hidden = true;
   document.body.appendChild(gpop);
-  let gpopFor = null;
+  let gpopFor = null, gpopTxt = "";
+  // The pop-up sits flush beside its cell (left of it when there's no room on the right), so the pointer goes straight
+  // from the cell into it and the rows below stay in reach. A comment that fits lets clicks through to the cells under
+  // it; a long one takes the pointer, to scroll (with the mouse, or from the focused cell with the arrow and page keys,
+  // Alt+ them in an input).
+  function placeCmt(td) {
+    const r = td.getBoundingClientRect(), w = gpop.offsetWidth, h = gpop.offsetHeight;
+    const left = r.right + w <= window.innerWidth - 8 ? r.right - 1 : r.left - w + 1;
+    gpop.style.left = Math.max(8, Math.min(left, window.innerWidth - w - 8)) + "px";
+    gpop.style.top = Math.max(8, Math.min(r.top, window.innerHeight - h - 8)) + "px";
+  }
   function showCmt(td) {
     const txt = td && td.dataset.cmt; if (!txt) return;
-    const [head, ...lines] = txt.split("\n");
-    gpop.innerHTML = "<b>" + esc(head) + "</b>" + lines.map((l) => "<div>" + esc(l) + "</div>").join("");
-    gpop.hidden = false; gpopFor = td;
-    const r = td.getBoundingClientRect(), w = gpop.offsetWidth, h = gpop.offsetHeight;
-    gpop.style.left = Math.max(8, Math.min(r.left, window.innerWidth - w - 8)) + "px";
-    gpop.style.top = (r.bottom + 4 + h > window.innerHeight - 8 ? Math.max(8, r.top - h - 4) : r.bottom + 4) + "px";
+    if (td !== gpopFor || txt !== gpopTxt || gpop.hidden) {
+      const [head, ...lines] = txt.split("\n");
+      gpop.innerHTML = "<b>" + esc(head) + "</b>" + lines.map((l) => "<div>" + esc(l) + "</div>").join("");
+      gpop.hidden = false; gpopFor = td; gpopTxt = txt; gpop.scrollTop = 0;
+      gpop.classList.toggle("scroll", gpop.scrollHeight > gpop.clientHeight + 1);
+    }
+    placeCmt(td);
   }
   let gpopTimer = null;
-  function hideCmt(td) { clearTimeout(gpopTimer); if (!td || td === gpopFor) { gpop.hidden = true; gpopFor = null; } }
-  // leaving the cell for the pop-up (to scroll a long comment) keeps it open
-  const hideSoon = (td) => { clearTimeout(gpopTimer); gpopTimer = setTimeout(() => { if (!gpop.matches(":hover") && !(gpopFor && gpopFor.contains(document.activeElement))) hideCmt(td); }, 250); };
   const cmtCell = (el) => (el && el.closest ? el.closest("td.gc[data-cmt]") : null);
+  function hideCmt(td) { clearTimeout(gpopTimer); if (!td || td === gpopFor) { gpop.hidden = true; gpopFor = null; } }
+  // leaving the cell for the pop-up (to scroll a long comment) keeps it open; once it closes, the focused cell's own
+  // comment comes back
+  const hideSoon = (td) => { clearTimeout(gpopTimer); gpopTimer = setTimeout(() => { if (!gpop.matches(":hover") && !(gpopFor && gpopFor.contains(document.activeElement))) { hideCmt(td); const f = cmtCell(document.activeElement); if (f && gpop.hidden) showCmt(f); } }, 250); };
   document.addEventListener("mouseover", (e) => { const td = cmtCell(e.target); if (td && td !== gpopFor) showCmt(td); if (td || gpop.contains(e.target)) clearTimeout(gpopTimer); });
   document.addEventListener("mouseout", (e) => { const td = cmtCell(e.target); if (td && !td.contains(e.relatedTarget) && !td.contains(document.activeElement)) hideSoon(td); });
   gpop.addEventListener("mouseleave", (e) => { if (gpopFor && !gpopFor.contains(e.relatedTarget)) hideSoon(gpopFor); });
   document.addEventListener("focusin", (e) => { const td = cmtCell(e.target); if (td) showCmt(td); else if (!gpop.contains(e.target)) hideCmt(); });
-  document.addEventListener("focusout", (e) => { const td = cmtCell(e.target); if (td && !td.contains(e.relatedTarget)) hideCmt(td); });
-  document.addEventListener("keydown", (e) => { if (e.key === "Escape") hideCmt(); });
+  // a click inside the pop-up (to select its text) moves focus to the page, but keeps the pop-up
+  document.addEventListener("focusout", (e) => { const td = cmtCell(e.target); if (td && !td.contains(e.relatedTarget) && !(e.relatedTarget == null && gpop.matches(":hover"))) hideCmt(td); });
+  const GPOP_KEYS = { ArrowDown: 40, ArrowUp: -40, PageDown: 0.9, PageUp: -0.9 };
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") { hideCmt(); return; }
+    const by = GPOP_KEYS[e.key];
+    if (!by || gpop.hidden || !gpopFor || !gpopFor.contains(document.activeElement) || gpop.scrollHeight <= gpop.clientHeight + 1) return;
+    if (document.activeElement.tagName === "INPUT" ? !e.altKey : e.altKey) return;
+    e.preventDefault();
+    gpop.scrollBy(0, Math.abs(by) < 1 ? by * gpop.clientHeight : by);
+  });
   // scrolling: a focused cell's comment follows it (the browser scrolls a cell into view as it takes focus); others close
-  window.addEventListener("scroll", (e) => { if (gpop.contains(e.target)) return; if (gpopFor && gpopFor.isConnected && gpopFor.contains(document.activeElement)) showCmt(gpopFor); else hideCmt(); }, true);
+  window.addEventListener("scroll", (e) => { if (gpop.contains(e.target)) return; if (gpopFor && gpopFor.isConnected && gpopFor.contains(document.activeElement)) placeCmt(gpopFor); else hideCmt(); }, true);
 
   // the note boxes grow with their text, so the whole draft reads without an inner scroll bar
   function fitNotes() {
@@ -1860,8 +1882,9 @@ Rules:
 - GAAP and non-GAAP: put GAAP (or reported) figures in the line when they are given. If only adjusted, non-GAAP, comparable, organic or currency-neutral figures are given, use the one closest to reported and name it in text; give any other measure for the same line in other, verbatim.
 - If current and prior guidance are both shown, use the current figures and say in text what changed.
 - Periods: one entry per guided quarter ("Q1".."Q4") or fiscal year ("FY"), with the company's fiscal year number (e.g. "third quarter of fiscal 2027" is Q3, 2027). Guidance for a half year, a calendar year, several years, a long-term target or part of a period goes in other of the fiscal period it overlaps most (for a multi-year program or target, the current fiscal year), with that period named in item ("H2 gross margin", "calendar 2026 capex", "FY2029-FY2030 program savings"). Don't create an entry for a period with nothing guided.
-- other: everything else management guides for the period, most important first: segments, geographies and brands, other income, interest, free cash flow, share repurchases and dividends, foreign-exchange, tariff and other effects, restructuring, and the assumptions and exclusions behind the guidance. Each {"item","text"}: item under 80 characters, text verbatim (figures included) under 300 characters. Leave out product launches and operational targets unless they carry a financial figure. An empty list if there is none.
-- Every text and every other item must come from the document. Never copy values or phrases from the example below.`;
+- other: guidance for the period that has no line of its own, most important first: segments, geographies and brands, share repurchases and dividends, foreign-exchange, tariff and other effects, restructuring, and the assumptions and exclusions behind the guidance. Each {"item","text"}: item under 80 characters, text verbatim (figures included) under 300 characters. Leave out product launches and operational targets unless they carry a financial figure. An empty list if there is none.
+- If management withdraws or suspends guidance it gave before, return each period it applies to with "withdrawn" set to management's words, verbatim, under 300 characters, and the lines it names as {"text":"withdrawn: <their words>"} with figures null.
+- Every text and every other item must come from the document. Never copy values or phrases from the example above.`;
   const GUIDE_PROMPT = `You read a company's quarterly earnings press release and extract its financial guidance (outlook). Return JSON only, no prose. The example shows the shape only (a made-up company):
 {"periods":[{"period":"Q3","fiscal_year":2027,"revenue":{"low":2940000000,"high":3060000000,"mid":3000000000,"basis":"absolute","text":"approximately $3.0 billion, plus or minus 2%"},"gross_margin":{"low":0.415,"high":0.425,"mid":0.42,"basis":"absolute","text":null},"operating_expenses":{"low":null,"high":null,"mid":null,"basis":"yoy","text":"to grow slower than revenue"},"other":[{"item":"foreign exchange","text":"a headwind of about 1 point to revenue growth"}]},{"period":"FY","fiscal_year":2027,"tax_rate":{"low":0.18,"high":0.18,"mid":0.18,"basis":"absolute","text":"about 18%, excluding discrete items"},"other":[]}],"quote":"the outlook, verbatim"}
 Rules:
@@ -1905,17 +1928,31 @@ ${GUIDE_LINE_RULES}
   // level = figures for a line the G column has no input for; raw = a basis that can't be converted.
   const lvlTxt = (x, u) => (!isNum(x) ? "" : u === "pct" ? (x * 100).toFixed(1) + "%" : u === "eps" ? x.toFixed(2) : u === "num" ? String(+x.toFixed(4)) : big(x));
   const rateTxt = (x, bp) => (!isNum(x) ? "" : bp ? (x * 10000).toFixed(0) + "bp" : (x * 100).toFixed(1) + "%");
-  // (tt: the translator; the notes draft's data passes English through unchanged)
-  function howText(h, tt = TR) {
+  const BASIS_TXT = { yoy: "vs a year earlier", change: "change on a year earlier", sequential: "vs the previous quarter" };
+  // Claude's basis, with the usual synonyms; with none, a fraction on a money or share line is growth, not a level
+  const BASIS_SYN = { level: "absolute", abs: "absolute", "y/y": "yoy", "year-over-year": "yoy", "year over year": "yoy", growth: "yoy", bp: "change", bps: "change", points: "change", "q/q": "sequential", qoq: "sequential" };
+  const normBasis = (b, u, nums) => {
+    const x = String(b || "").trim().toLowerCase();
+    if (x) return BASIS_SYN[x] || x;
+    return u === "pct" || u === "eps" || !nums.filter(isNum).every((n) => Math.abs(n) < 1) ? "absolute" : "";
+  };
+  // (tt: the translator; the notes draft's data passes English through unchanged. val: the figure the cell holds now,
+  // null for none; left out where the reading describes the guidance alone, as in the derivations.)
+  function howText(h, tt = TR, val) {
     if (!h) return "";
     if (typeof h === "string") return h; // read before this format existed
-    const abs = h.basis === "absolute", one = (x) => (abs ? lvlTxt(x, h.u) : rateTxt(x, h.bp));
-    const span = isNum(h.lo) && isNum(h.hi) && h.lo !== h.hi ? one(h.lo) + tt(" to ") + one(h.hi) : one(h.mid ?? h.lo ?? h.hi);
+    // a money or share figure that isn't a level: a fraction is a rate, anything larger an amount (a change in dollars)
+    const abs = h.basis === "absolute", one = (x) => (abs || ((h.u === "money" || h.u === "sh") && Math.abs(x) >= 1) ? lvlTxt(x, h.u) : rateTxt(x, h.bp));
+    const side = !isNum(h.mid) && isNum(h.lo) !== isNum(h.hi);
+    const span = side ? (isNum(h.lo) ? tt("at least ") + one(h.lo) : tt("at most ") + one(h.hi)) : isNum(h.lo) && isNum(h.hi) && h.lo !== h.hi ? one(h.lo) + tt(" to ") + one(h.hi) : one(h.mid ?? h.lo ?? h.hi);
     const vs = !abs && h.base ? (h.basis === "change" ? tt(" change on ") : tt(" vs ")) + h.base : "";
-    if (h.k === "nobase") return span + (h.basis === "change" ? tt(" change on a year earlier, which isn't reported, so no level is shown") : tt(" growth on a year earlier, which isn't reported, so no level is shown"));
-    if (h.k === "range") return span + tt(", midpoint shown");
-    if (h.k === "bound") return (isNum(h.lo) ? tt("at least ") + one(h.lo) : tt("at most ") + one(h.hi)) + vs + tt(" (a bound, so no figure is shown)");
-    if (h.k === "raw") return span + " (" + (h.basis && !abs ? h.basis + ", " : "") + tt("not converted") + ")";
+    const bTxt = h.basis && !abs ? tt(BASIS_TXT[h.basis] || h.basis) : "";
+    // once the cell holds a figure of the user's, a reading that says no figure (or the midpoint) is shown is out of date
+    const own = isNum(val);
+    if (h.k === "nobase") return own ? span + " (" + bTxt + ")" : span + (h.basis === "change" ? tt(" change on a year earlier, which isn't reported, so no level is shown") : tt(" growth on a year earlier, which isn't reported, so no level is shown"));
+    if (h.k === "range") { const m = isNum(h.mid) ? h.mid : (h.lo + h.hi) / 2; return span + (val === undefined || (own && Math.abs(val - m) <= 1e-9 * Math.max(1, Math.abs(m))) ? tt(", midpoint shown") : ""); }
+    if (h.k === "bound") return span + vs + (own ? "" : tt(" (a bound, so no figure is shown)"));
+    if (h.k === "raw") return span + " (" + (bTxt ? bTxt + ", " : "") + tt("not converted") + ")";
     return span + vs;
   }
   // One period's guidance (from the release or the call) as G column figures, plus a comment per line with
@@ -1931,10 +1968,8 @@ ${GUIDE_LINE_RULES}
       if (!g || typeof g !== "object") return;
       const text = cleanWords(g.text, 400), lo0 = gnum(g.low), hi0 = gnum(g.high), mid0 = gnum(g.mid);
       const given = [lo0, hi0, mid0].some(isNum);
-      let basis = String(g.basis || "").trim().toLowerCase();
-      // a basis must fit the line: margins and rates are levels or changes, money, EPS and shares levels or growth;
-      // with no basis, a fraction on a money or share line is growth, not a level
-      if (!basis) basis = u === "pct" || u === "eps" || ![lo0, hi0, mid0].filter(isNum).every((x) => Math.abs(x) < 1) ? "absolute" : "";
+      // a basis must fit the line: margins and rates are levels or changes, money, EPS and shares levels or growth
+      const basis = normBasis(g.basis, u, [lo0, hi0, mid0]);
       const fits = basis === "absolute" || (basis === "change" && u === "pct") || (basis === "yoy" && u !== "pct");
       const b = base[f], P = { lo: lo0, hi: hi0, mid: mid0, basis, u, bp, base: base.label || null };
       let h = null;
@@ -1966,7 +2001,7 @@ ${GUIDE_LINE_RULES}
       if (!g) return null;
       const L = GUIDE_LINES.find((Lx) => item.endsWith(Lx[2])), nums = [gnum(g.low), gnum(g.high), gnum(g.mid)];
       const u = L ? L[3] : nums.filter(isNum).every((n) => Math.abs(n) >= 1000) ? "money" : "num";
-      const h = nums.some(isNum) ? { k: "raw", lo: nums[0], hi: nums[1], mid: nums[2], basis: String(g.basis || "absolute").toLowerCase(), u, bp: L ? L[4] : false } : null;
+      const h = nums.some(isNum) ? { k: "raw", lo: nums[0], hi: nums[1], mid: nums[2], basis: normBasis(g.basis, u, nums), u, bp: L ? L[4] : false } : null;
       const t = cleanWords(g.text, 400);
       return t || h ? { item, t, h } : null;
     }).filter(Boolean);
@@ -1990,24 +2025,31 @@ ${GUIDE_LINE_RULES}
       const E = (res[pk] = res[pk] || { per: per || "FY", fy, lines: {}, other: [] });
       Object.entries(p).forEach(([k, v]) => {
         if (k === "period" || k === "fiscal_year" || v == null || v === "") return;
+        if (k === "withdrawn") {
+          const w = cleanWords(typeof v === "string" ? v : "", 300) || (v ? "withdrawn" : "");
+          if (w && tag) E.other.push({ item: tag.trim(), text: w }); else if (w) E.withdrawn = w;
+          return;
+        }
         if (k === "other") { (Array.isArray(v) ? v : [v]).forEach((x) => E.other.push(x && typeof x === "object" ? { ...x, item: tag + (x.item || "") } : { item: tag.trim(), text: String(x) })); return; }
         const L = GUIDE_LINES.find((x) => x[0] === k);
         if (!tag && L && !(k in E.lines)) { E.lines[k] = v; return; }
         E.other.push({ item: (tag + (L ? L[2] : k.replace(/_/g, " "))).trim(), line: v });
       });
     });
-    return Object.entries(res).map(([pk, E]) => ({ pk, fields: guideFields(A, E) }));
+    return Object.entries(res).map(([pk, E]) => ({ pk, fields: { ...guideFields(A, E), withdrawn: E.withdrawn || "" } }));
   }
   const perLabel = (pk) => { const [q, fy] = pk.split("|"); return q === "FY" ? "FY" + fy : q + " FY" + String(fy).slice(-2); };
   // how growth and changes were read, for the notice, the Excel file and the PDF
   const derivText = (list) => (list || []).map((x) => (typeof x === "string" ? x : x.per + ": " + TR(GLINE[x.f]?.[2] || x.f) + " " + howText(x.h))).join("; ");
   // a guidance comment in the user's language: management's words, how a figure was read from them, and the source
   const cmtSrc = (e) => (e.k === "call" ? e.d + TR(" call") : TR("release ") + e.d);
-  const cmtLine = (e) => { const hw = howText(e.h || e.how); return (e.item ? e.item + ": " : "") + (e.t ? "“" + e.t + "”" : "") + (hw ? (e.t ? " → " : "") + hw : "") + " (" + cmtSrc(e) + ")"; };
+  const cmtLine = (e, val) => { const hw = howText(e.h || e.how, TR, val); return (e.item ? e.item + ": " : "") + (e.t ? "“" + e.t + "”" : "") + (hw ? (e.t ? " → " : "") + hw : "") + " (" + cmtSrc(e) + ")"; };
   const cmtEntries = (pk, f) => { const es = state.inp?.guide?.cmt?.[pk]?.[f]; return Array.isArray(es) ? es : []; };
-  const guideCmt = (pk, f) => cmtEntries(pk, f).map(cmtLine);
+  // the figure a guidance input holds now (null for none); undefined for lines with no input
+  const gVal = (pk, f) => (GLINE[f]?.[5] ? (isNum(state.inp?.guide?.periods?.[pk]?.[f]) ? state.inp.guide.periods[pk][f] : null) : undefined);
+  const guideCmt = (pk, f) => cmtEntries(pk, f).map((e) => cmtLine(e, gVal(pk, f)));
   // what an empty cell shows: management's words, or how the line was read
-  const guideWords = (pk, f) => cmtEntries(pk, f).map((e) => e.t || howText(e.h || e.how)).filter(Boolean).join(" / ");
+  const guideWords = (pk, f) => cmtEntries(pk, f).map((e) => e.t || howText(e.h || e.how, TR, gVal(pk, f))).filter(Boolean).join(" / ");
   // the pop-up's title: management's words, or only the page's reading of their figures
   const cmtTitle = (pk, f) => (cmtEntries(pk, f).some((e) => e.t) ? TR("Company guidance, in management's words") : TR("Company guidance: how the figure was read"));
   const guideLineNames = () => ({ rev: TR("Revenue"), gm: TR("Gross margin"), opex: TR("Opex"), om: TR("Operating margin"), tax: TR("Tax rate"), eps: "EPS", capex: TR("Capex"), da: "D&A", sh: TR("Diluted shares (mm)"), cogs: TR("Cost of revenue"), ebit: TR("Operating income (EBIT)"), int: TR("Interest expense"), oth: TR("Other non-operating items"), ni: TR("Net income"), cfo: TR("Cash from operations"), fcf: TR("Free cash flow") });
@@ -2078,24 +2120,41 @@ ${GUIDE_LINE_RULES}
     if (!src.filed && !src.call) {
       return done(edgarErr && edgarErr.code === "server_not_connected" ? TR("Guidance needs the EDGAR Tools connector (and FMP for the call). Add it in claude.ai Settings → Connectors.") : TR("No recent earnings release or call found for ") + esc(t) + TR(". Type guidance into the G column instead."));
     }
-    // Apply it line by line: a line this read gives (a figure or words) replaces that line's earlier figures and
-    // comments; lines it doesn't give keep theirs. The release's figure wins where both give one, with its range.
+    // Apply it line by line: a line this read gives a figure for replaces that line's earlier figures and comments; a
+    // line given only in words ("reaffirmed") keeps its earlier figure, and the earlier documents' comments that explain
+    // it, next to the new words; lines it doesn't give keep theirs. The release's figure wins where both give one, with its range. Guidance withdrawn for a period
+    // clears its figures and comments, and the withdrawal shows on every line that had guidance and on the header.
     const found = [];
     let words = false;
     const baseOf = (k) => k.replace(/(Lo|Hi)$/, "");
     const linesOf = (fl) => new Set(fl ? [...Object.keys(fl.o).map(baseOf), ...Object.keys(fl.cmt)] : []);
+    const wordsOnly = (f, R, C) => ![R, C].some((x) => x && (Object.keys(x.o).some((k) => baseOf(k) === f) || x.cmt[f]?.h || /^(not guided|withdrawn)/i.test(x.cmt[f]?.t || "")));
     [...new Set([...Object.keys(read.release), ...Object.keys(read.call)])].forEach((pk) => {
       const R = read.release[pk], C = read.call[pk];
-      const P = { ...(G.periods[pk] || {}) }, K = { ...(G.cmt[pk] || {}) };
-      [...linesOf(R), ...linesOf(C)].forEach((f) => { delete P[f]; delete P[f + "Lo"]; delete P[f + "Hi"]; delete K[f]; });
+      let P = { ...(G.periods[pk] || {}) }, K = { ...(G.cmt[pk] || {}) };
       const add = (f, e) => { (K[f] = K[f] || []).push(e); if (e.t) words = true; };
-      let fromRel = 0, fromCall = 0;
+      const wd = R?.withdrawn ? { k: "release", d: src.filed, t: R.withdrawn } : C?.withdrawn ? { k: "call", d: src.call.label, t: C.withdrawn } : null;
+      if (wd) {
+        const had = new Set([...Object.keys(P).map(baseOf), ...Object.keys(K).filter((f) => f !== "_other")]);
+        P = {}; K = {};
+        had.forEach((f) => { if (!R?.cmt[f] && !C?.cmt[f]) add(f, { ...wd }); });
+      }
+      [...linesOf(R), ...linesOf(C)].forEach((f) => {
+        if (wordsOnly(f, R, C)) {
+          // a comment from the documents read now is replaced by what they say now
+          const kept = (K[f] || []).filter((e) => !((R?.cmt[f] && e.k === "release" && e.d === src.filed) || (C?.cmt[f] && e.k === "call" && e.d === src.call?.label)));
+          if (kept.length) K[f] = kept; else delete K[f];
+          return;
+        }
+        delete P[f]; delete P[f + "Lo"]; delete P[f + "Hi"]; delete K[f];
+      });
+      let fromRel = wd && wd.k === "release" ? 1 : 0, fromCall = wd && wd.k === "call" ? 1 : 0;
       const relFig = new Set(Object.keys(R?.o || {}).map(baseOf));
       if (R) {
         Object.assign(P, R.o);
         Object.entries(R.cmt).forEach(([f, c]) => add(f, { k: "release", d: src.filed, t: c.t, h: c.h }));
         R.notes.forEach((n) => src.notes.push({ per: perLabel(pk), ...n }));
-        fromRel = Object.keys(R.o).length + Object.keys(R.cmt).length + R.other.length;
+        fromRel += Object.keys(R.o).length + Object.keys(R.cmt).length + R.other.length;
       }
       if (C) {
         const keep = Object.fromEntries(Object.entries(C.o).filter(([k]) => !relFig.has(baseOf(k))));
@@ -2109,7 +2168,7 @@ ${GUIDE_LINE_RULES}
         fromCall += Object.keys(keep).length + C.other.length;
       }
       // other guidance: replaced when this read gives some for the period
-      const oth = [...(R?.other || []).map((x) => ({ k: "release", d: src.filed, ...x })), ...(C?.other || []).map((x) => ({ k: "call", d: src.call?.label, ...x }))];
+      const oth = [...(wd ? [{ ...wd, item: "" }] : []), ...(R?.other || []).map((x) => ({ k: "release", d: src.filed, ...x })), ...(C?.other || []).map((x) => ({ k: "call", d: src.call?.label, ...x }))];
       if (oth.length) { K._other = oth; if (oth.some((x) => x.t)) words = true; }
       if (Object.keys(P).length) G.periods[pk] = P; else delete G.periods[pk];
       if (Object.keys(K).length) G.cmt[pk] = K; else delete G.cmt[pk];
@@ -2124,22 +2183,27 @@ ${GUIDE_LINE_RULES}
     done(TR("Guidance for ") + found.map(perLabel).join(", ") + TR(" from ") + esc(guideSrcText(src)) + "." + (derived ? TR(" Growth and margin changes are applied to the same period a year earlier (") + esc(derived) + ")." : "") + (words ? TR(" Guidance given in words is kept as a comment on its cell, and guidance with no line of its own on the column header (both marked in the corner).") : "") + (src.quote ? " “" + esc(src.quote.slice(0, 220)) + "”" : src.call?.quote ? " “" + esc(src.call.quote.slice(0, 220)) + "”" : ""));
   }
   // The release's outlook as text for Claude: its prose and outlook tables. Some releases put their guidance in tables
-  // the outlook filter doesn't pick (Coca-Cola's "Full Year Guidance" and "Considerations"); when the outlook tables
-  // carry no figures, the tables that look like guidance are read from all of the release's tables, first.
+  // the outlook filter doesn't pick, titled in the prose rather than in the table (Coca-Cola's "Full Year Guidance" and
+  // "Considerations"). When the outlook tables carry no figures, all of the release's tables with figures are read,
+  // except the financial statements and reconciliations: those that look like guidance first, the rest last (so a
+  // long release loses those first to the length limit).
   async function releaseOutlookText(mcp, acc) {
     const sec = await call(mcp, "filing_section", { accession: acc, section: "earnings_release", tables: "outlook", prose: "full" }, false, EDGAR);
     const prose = String(sec?.content || "");
-    let tables = tablesToText(sec?.tables_html);
+    let tables = tablesToText(sec?.tables_html), rest = "";
     if ((tables.match(/\d/g) || []).length < 12) {
       try {
         const all = await call(mcp, "filing_section", { accession: acc, section: "earnings_release", tables: "all", prose: "none" }, false, EDGAR);
         const each = (Array.isArray(all?.tables_html) ? all.tables_html : []).map((h) => tablesToText([h])).filter((x) => /\d/.test(x));
-        const GUIDE_TABLE = /guidance|outlook|consideration|expect|forecast|projected|full[- ]year 20\d\d|fiscal (year )?20\d\d|range/i;
-        const guideLike = each.filter((x) => GUIDE_TABLE.test(x.slice(0, 600))), picked = guideLike.length ? guideLike : each;
-        if (picked.length) tables = (tables ? tables + "\n\n" : "") + picked.join("\n\n");
+        const GUIDE_TABLE = /guidance|outlook|consideration|expect|forecast|projected|full[- ]year 20\d\d|fiscal (year )?20\d\d|\brange\b/i;
+        const STMT = /reconciliation|balance sheets?|statements? of (cash flows|income|operations|earnings)|operating segments/i;
+        const guideLike = each.filter((x) => GUIDE_TABLE.test(x.slice(0, 600)) && !STMT.test(x.slice(0, 300)));
+        const others = each.filter((x) => !guideLike.includes(x) && !STMT.test(x.slice(0, 300)));
+        if (guideLike.length) tables = (tables ? tables + "\n\n" : "") + guideLike.join("\n\n");
+        rest = others.join("\n\n");
       } catch (e) { /* the outlook as first read */ }
     }
-    return (prose + "\n\nTables:\n" + tables).slice(0, 60000);
+    return (prose + "\n\nTables:\n" + tables + (rest ? "\n\n" + rest : "")).slice(0, 60000);
   }
 
   // ---------- all saved models: list, back up, restore ----------
@@ -2524,7 +2588,8 @@ ${GUIDE_LINE_RULES}
       const grp = c.type !== "FY" && c.kind !== "G" ? "By quarter" : TR(KIND_NAME[c.kind]);
       if (grp !== prevKind) { const cell = ws.getCell(5, j + 2); cell.value = grp; cell.font = { ...base, size: 9, bold: true, color: { argb: ARGB.muted } }; prevKind = grp; }
       const h = ws.getCell(6, j + 2); h.value = c.label + " " + c.kind + (c.months ? "\n" + c.months : "");
-      if (c.note) h.note = TR("Other guidance for ") + c.label + "\n" + c.note;
+      // Excel shows a note in a small box: a long one says where it's in full
+      if (c.note) h.note = TR("Other guidance for ") + c.label + (c.note.length > 160 ? " (" + TR("in full on the Guidance sheet") + ")" : "") + "\n" + c.note;
       h.font = { ...base, bold: true }; h.alignment = { horizontal: "right", vertical: "bottom", wrapText: true };
       h.fill = { type: "pattern", pattern: "solid", fgColor: { argb: c.kind === "A" ? ARGB.band : ARGB[c.kind] } };
       h.border = { bottom: { style: "thin", color: { argb: ARGB.ink } } };
@@ -2551,7 +2616,7 @@ ${GUIDE_LINE_RULES}
         c.font = { ...base, bold: x.key, italic: x.t === "yoy" || x.ratio, size: x.t === "yoy" ? 9 : 10, color: { argb: cell.inp ? ARGB.inInk : x.t === "yoy" ? ARGB.muted : ARGB.ink } };
         // guidance given in words: the words in an otherwise empty cell, the full comment as the cell's note
         if (cell.note) {
-          c.note = (cell.ntitle || TR("Company guidance, in management's words")) + "\n" + cell.note;
+          c.note = (cell.ntitle || TR("Company guidance, in management's words")) + (cell.note.length > 160 ? " (" + TR("in full on the Guidance sheet") + ")" : "") + "\n" + cell.note;
           if (c.value == null && cell.words) { c.value = cell.words; c.font = { ...c.font, italic: true, size: 9 }; c.alignment = { horizontal: "right" }; }
         }
         if (cell.inp) c.fill = { type: "pattern", pattern: "solid", fgColor: { argb: ARGB.inBg } };
@@ -2683,7 +2748,12 @@ ${GUIDE_LINE_RULES}
       for (let j = 2; j <= GCOLS.length - 1; j++) gw.getColumn(j).width = 12;
       gw.getColumn(GCOLS.length).width = 90;
       const lineName = guideLineNames();
-      const wrapRow = (row, text) => { const k = row.getCell(GCOLS.length); k.value = text; k.font = { ...base, size: 9 }; k.alignment = { wrapText: true, vertical: "top" }; row.height = Math.min(409, Math.max(15, 12.5 * Math.ceil(String(text).length / 105))); };
+      // the row's height from the text's width: Japanese, Chinese and Korean characters count twice
+      const wrapRow = (row, text) => {
+        const k = row.getCell(GCOLS.length); k.value = text; k.font = { ...base, size: 9 }; k.alignment = { wrapText: true, vertical: "top" };
+        const wl = [...String(text)].reduce((n, ch) => n + (/[\u1100-\u115f\u2e80-\ua4cf\uac00-\ud7a3\uf900-\ufaff\ufe30-\ufe4f\uff00-\uff60\uffe0-\uffe6]/.test(ch) ? 2 : 1), 0);
+        row.height = Math.min(409, Math.max(15, 12.5 * Math.ceil(wl / 105)));
+      };
       let y = 6;
       if (!gs.length) gw.getCell(y, 1).value = TR("No guidance found or entered.");
       gs.forEach((c) => {
@@ -2762,22 +2832,22 @@ ${GUIDE_LINE_RULES}
   const CJK_CH = "\\u3000-\\u30ff\\u31f0-\\u31ff\\u3400-\\u4dbf\\u4e00-\\u9fff\\uf900-\\ufaff\\uff00-\\uffef";
   const PDF_TOKEN = new RegExp("[" + CJK_CH + "]|[^\\s" + CJK_CH + "]+|\\s+", "g");
   const NO_LINE_START = /^[、。，．・：；？！）」』】〕》〉ー々ゝゞぁぃぅぇぉっゃゅょゎァィゥェォッャュョヮヵヶ％,.;:!?)\]}’”%]/;
-  function wrapPdf(doc, text, width) {
-    const out = [];
+  function wrapPdf(doc, text, width, measure) {
+    const tw0 = measure || ((x) => doc.getTextWidth(x)), out = [];
     String(text ?? "").replace(/\r\n?/g, "\n").split("\n").forEach((para) => {
       if (!para.trim()) { out.push(""); return; }
-      const lead = para.match(/^[ \t　]*/)[0], indent = lead.replace(/\t/g, "    "), iw = doc.getTextWidth(indent);
+      const lead = para.match(/^[ \t　]*/)[0], indent = lead.replace(/\t/g, "    "), iw = tw0(indent);
       let line = indent, w = iw, gap = "";
       const flush = () => { out.push(line.replace(/\s+$/, "")); line = indent; w = iw; gap = ""; };
       for (const tk of para.slice(lead.length).match(PDF_TOKEN) || []) {
         // whitespace between words is kept as typed (tabs as four spaces), so pasted columns stay apart
         if (/^\s+$/.test(tk)) { if (line.length > indent.length) gap += tk.replace(/\t/g, "    "); continue; }
-        const tw = doc.getTextWidth(tk), gw = gap ? doc.getTextWidth(gap) : 0;
-        if (w + gw + tw <= width || ([...tk].length === 1 && NO_LINE_START.test(tk) && line.length > indent.length)) { line += gap + tk; w += gw + tw; gap = ""; continue; }
+        const tw = tw0(tk), gw = gap ? tw0(gap) : 0;
+        if (w + gw + tw <= width || ([...tk].length === 1 && NO_LINE_START.test(tk) && line.length > indent.length && w <= width)) { line += gap + tk; w += gw + tw; gap = ""; continue; }
         if (line.length > indent.length) flush();
         gap = "";
         if (iw + tw <= width) { line += tk; w += tw; continue; }
-        for (const ch of tk) { const cw = doc.getTextWidth(ch); if (w + cw > width && line.length > indent.length) flush(); line += ch; w += cw; }
+        for (const ch of tk) { const cw = tw0(ch); if (w + cw > width && line.length > indent.length) flush(); line += ch; w += cw; }
       }
       flush();
     });
@@ -2797,6 +2867,8 @@ ${GUIDE_LINE_RULES}
       return (memo[key] = ok);
     };
   }
+  // text as it should print: composed accents (NFC), no invisible characters, line and paragraph separators as line breaks
+  const pdfClean = (t) => String(t ?? "").normalize("NFC").replace(/[\u200b-\u200d\u2060\ufeff\ufe0e\ufe0f]/g, "").replace(/\r\n?|[\u2028\u2029]/g, "\n");
   // a stand-in for a character the font lacks, only if the font has the stand-in's characters; else "?"
   const plainChar = (ch, ok) => {
     for (const alt of [latinPdf(ch), ch.normalize("NFKD").replace(/[\u0300-\u036f]/g, "")]) if (alt && alt !== ch && alt.length <= 3 && [...alt].every(ok)) return alt;
@@ -2812,11 +2884,14 @@ ${GUIDE_LINE_RULES}
     const A = state.act, M = state.mdl, mk = state.mkt, R = state.dcf, prof = state.prof || {};
     // the notes and guidance comments may be in another script than the page: load a font for each script they use
     const gSrc0 = state.inp.guide?.src, guidesAll = exportGuides();
-    const freeText = [state.inp.notesDraft, state.inp.notes, gSrc0?.quote, gSrc0?.call?.quote, gSrc0?.call?.speaker, gSrc0 ? guideSrcText(gSrc0) : "", derivText([...(gSrc0?.notes || []), ...(gSrc0?.call?.notes || [])]), ...guidesAll.flatMap((c) => Object.keys(state.inp.guide?.cmt?.[c.gkey] || {}).flatMap((f) => guideCmt(c.gkey, f)))].filter(Boolean).map(String);
+    const freeText = [state.inp.notesDraft, state.inp.notes, gSrc0?.quote, gSrc0?.call?.quote, gSrc0?.call?.speaker, gSrc0 ? guideSrcText(gSrc0) : "", derivText([...(gSrc0?.notes || []), ...(gSrc0?.call?.notes || [])]), ...guidesAll.flatMap((c) => Object.keys(state.inp.guide?.cmt?.[c.gkey] || {}).flatMap((f) => guideCmt(c.gkey, f)))].filter(Boolean).map(pdfClean);
     const FONTS = {};
     if (LANG !== "en") FONTS[LANG] = PF;
     const has = glyphCheck(doc);
-    const tryFont = async (lang) => { if (FONTS[lang]) return; try { FONTS[lang] = await pdfFontFor(doc, lang); } catch (e) { if (lang === LANG) throw e; } };
+    // a font for another script than the page's that can't be loaded (offline, CDN blocked) doesn't stop the export,
+    // but the file comes with a warning: its characters print as stand-ins
+    const fontFailed = [];
+    const tryFont = async (lang) => { if (FONTS[lang]) return; try { FONTS[lang] = await pdfFontFor(doc, lang); } catch (e) { if (lang === LANG) throw e; fontFailed.push(lang); } };
     for (const lang of new Set(freeText.map((t) => pdfScript(t) || (LANG === "en" && !isCp1252(latinPdf(t)) ? "ja" : null)).filter(Boolean))) await tryFont(lang);
     // kanji/hanzi the first CJK font lacks (Chinese in Japanese notes, or the reverse): load the other one too
     const han = [...new Set(freeText.join("").match(/[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]/g) || [])];
@@ -2825,10 +2900,10 @@ ${GUIDE_LINE_RULES}
     const uncovered = (re) => [...new Set(freeText.join("").match(re) || [])].some((ch) => !Object.values(FONTS).some((fnt) => has(fnt, ch)));
     if (uncovered(/[\uac00-\ud7af\u1100-\u11ff\u3130-\u318f]/g)) await tryFont("kr");
     if (uncovered(/[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]/g)) await tryFont("sc");
-    const fontFor = (t) => {
-      const sc = pdfScript(String(t || "")), loaded = Object.values(FONTS);
+    const fontFor = (t0) => {
+      const t = pdfClean(t0), sc = pdfScript(t), loaded = Object.values(FONTS);
       const order = [...new Set([sc && FONTS[sc], ...(LANG === "en" ? ["helvetica"] : [PF]), ...loaded, "helvetica"].filter(Boolean))];
-      const chars = [...new Set([...String(t || "")].filter((ch) => !/\s/.test(ch)))];
+      const chars = [...new Set([...t].filter((ch) => !/\s/.test(ch)))];
       let best = order[0], miss = Infinity;
       // what counts is what would print as "?": a character the font lacks but has a plain stand-in for is fine
       for (const fnt of order) {
@@ -2838,9 +2913,26 @@ ${GUIDE_LINE_RULES}
       }
       return best;
     };
-    const pdfTxt = (t, fnt) => { const s0 = fnt === "helvetica" ? latinPdf(t) : String(t), ok = (ch) => has(fnt, ch); return [...s0].map((ch) => (/\s/.test(ch) || ok(ch) ? ch : plainChar(ch, ok))).join(""); };
+    // Text for a block set in fnt. A character fnt lacks is kept when another loaded font has it (it's drawn in that
+    // font: see runs), else it gets a stand-in fnt has, or "?"; whitespace fnt lacks prints as a space (tabs stay, for
+    // wrapPdf). one: a single font for the whole block (a table cell), so only fnt's own characters are kept.
+    const others = (fnt) => Object.values(FONTS).concat("helvetica").filter((x) => x !== fnt);
+    const pdfTxt = (t, fnt, one) => {
+      const s0 = fnt === "helvetica" ? latinPdf(pdfClean(t)) : pdfClean(t), ok = (ch) => has(fnt, ch);
+      return [...s0].map((ch) => (/\s/.test(ch) ? (ch === "\t" || ch === "\n" || ok(ch) ? ch : " ") : ok(ch) || (!one && others(fnt).some((o) => has(o, ch))) ? ch : plainChar(ch, ok))).join("");
+    };
+    // a block's text as runs of one font each: fnt, and another loaded font for the characters fnt lacks
+    const runs = (s, fnt) => {
+      const out = [];
+      for (const ch of s) { const f = /\s/.test(ch) || has(fnt, ch) ? fnt : others(fnt).find((o) => has(o, ch)) || fnt; const last = out[out.length - 1]; if (last && last.f === f) last.s += ch; else out.push({ f, s: ch }); }
+      return out;
+    };
+    // Helvetica has bold and italic; the Noto fonts are loaded in their regular weight only
+    const fstyle = (f, st) => (f === "helvetica" && st ? st : "normal");
+    const runsWidth = (s, fnt, st) => { const rs = runs(s, fnt); if (rs.length < 2) return doc.getTextWidth(s); let w = 0; rs.forEach((r) => { doc.setFont(r.f, fstyle(r.f, st)); w += doc.getTextWidth(r.s); }); doc.setFont(fnt, fstyle(fnt, st)); return w; };
+    const drawRuns = (s, fnt, st, x, y) => { runs(s, fnt).forEach((r) => { doc.setFont(r.f, fstyle(r.f, st)); doc.text(r.s, x, y); x += doc.getTextWidth(r.s); }); doc.setFont(fnt, fstyle(fnt, st)); };
     // a cell of free text, in the font its script needs
-    const txtCell = (t, styles) => { const fnt = fontFor(t); return { content: pdfTxt(t, fnt), styles: { font: fnt, ...(styles || {}) } }; };
+    const txtCell = (t, styles) => { const fnt = fontFor(t); return { content: pdfTxt(t, fnt, true), styles: { font: fnt, ...(styles || {}) } }; };
     // "*" on a guidance figure that has a comment (management's words, or how the figure was read)
     const gmark = (c, fld) => (c && c.guide && guideCmt(c.gkey, fld).length ? "*" : "");
     let marked = false;
@@ -3001,17 +3093,17 @@ ${GUIDE_LINE_RULES}
     const PH = () => doc.internal.pageSize.getHeight(), PW = () => doc.internal.pageSize.getWidth();
     const textPage = (title, orient, base) => { doc.addPage("letter", orient); header(title); ty = m + 40; tPage = { base: base || title, orient }; };
     const room = (h) => { if (ty + h > PH() - 30) textPage(tPage.base + TR(" (continued)"), tPage.orient, tPage.base); };
-    const heading = (t, size) => { room(30); doc.setFont(PF, "bold"); doc.setFontSize(size || 11); doc.setTextColor(...ink); const fnt = fontFor(t); if (fnt !== PF) doc.setFont(fnt, "normal"); doc.text(pdfTxt(t, fnt), m, ty); ty += (size || 11) + 5; };
-    // free text, paragraph by paragraph, each in the font that covers it best
+    const heading = (t, size) => { room(30); doc.setFontSize(size || 11); doc.setTextColor(...ink); const fnt = fontFor(t); doc.setFont(fnt, fstyle(fnt, "bold")); drawRuns(pdfTxt(t, fnt), fnt, "bold", m, ty); ty += (size || 11) + 5; };
+    // free text, paragraph by paragraph, each in the font that covers it best (and others for what it lacks)
     const para = (t, opts = {}) => {
-      const size = opts.size || 9.2, lh = size * 1.32;
-      String(t ?? "").replace(/\r\n?/g, "\n").split("\n").forEach((p) => {
+      const size = opts.size || 9.2, lh = size * 1.32, st = opts.italic ? "italic" : "";
+      pdfClean(t).split("\n").forEach((p) => {
         const fnt = fontFor(p);
-        const set = () => { doc.setFont(fnt, opts.italic && fnt === "helvetica" ? "italic" : "normal"); doc.setFontSize(size); doc.setTextColor(...(opts.color || ink)); };
+        const set = () => { doc.setFont(fnt, fstyle(fnt, st)); doc.setFontSize(size); doc.setTextColor(...(opts.color || ink)); };
         set();
-        wrapPdf(doc, pdfTxt(p, fnt), PW() - 2 * m - (opts.indent || 0)).forEach((ln) => {
+        wrapPdf(doc, pdfTxt(p, fnt), PW() - 2 * m - (opts.indent || 0), (x) => runsWidth(x, fnt, st)).forEach((ln) => {
           if (ty + lh > PH() - 30) { room(lh); set(); }
-          if (ln) doc.text(ln, m + (opts.indent || 0), ty);
+          if (ln) drawRuns(ln, fnt, st, m + (opts.indent || 0), ty);
           ty += ln ? lh : lh * 0.55;
         });
       });
@@ -3041,7 +3133,7 @@ ${GUIDE_LINE_RULES}
     const derived = derivText([...(gSrc0?.notes || []), ...(gSrc0?.call?.notes || [])]);
     if (derived) { heading(TR("How growth and changes were read"), 9.5); para(TR("Growth and margin changes are applied to the same period a year earlier: ") + derived, { size: 8.4 }); ty += 4; }
     if (gSrc0?.quote) { heading(TR("The release's outlook, verbatim"), 9.5); para("“" + gSrc0.quote + "”", { size: 8.4, italic: true }); ty += 4; }
-    if (gSrc0?.call?.quote) { heading(TR("On the call, verbatim") + (gSrc0.call.speaker ? " (" + gSrc0.call.speaker + ")" : ""), 9.5); para("“" + gSrc0.call.quote + "”", { size: 8.4, italic: true }); }
+    if (gSrc0?.call?.quote) { heading(TR("On the call, verbatim"), 9.5); if (gSrc0.call.speaker) para(gSrc0.call.speaker, { size: 8, color: muted }); para("“" + gSrc0.call.quote + "”", { size: 8.4, italic: true }); }
 
     // ---- notes: Claude's draft and my notes, in full
     textPage(TR("Notes on the fundamentals"), "portrait");
@@ -3055,7 +3147,7 @@ ${GUIDE_LINE_RULES}
       doc.setPage(i); doc.setFont(PF, "normal"); doc.setFontSize(6.5); doc.setTextColor(...muted);
       doc.text(i + " / " + nPages, doc.internal.pageSize.getWidth() - m, doc.internal.pageSize.getHeight() - 16, { align: "right" });
     }
-    return { filename: fileBase() + ".pdf", data: doc.output("blob") };
+    return { filename: fileBase() + ".pdf", data: doc.output("blob"), warn: fontFailed.length ? TR("Some characters in the notes or guidance print as \"?\" in this PDF: a font for them couldn't be loaded. Try again when online.") : "" };
   }
 
   async function runExport(btn, build) {
@@ -3068,7 +3160,7 @@ ${GUIDE_LINE_RULES}
       btn.textContent = TR("Preparing…");
       const file = await build(btn);
       await dl.save(file);
-      setNotice("");
+      setNotice(file.warn ? esc(file.warn) : "");
     } catch (e) {
       if (e && e.code === "declined") {}
       else if (e && (e.code === "extension_not_enabled" || e.code === "unavailable")) setNotice(TR("Saving files isn't available in this view."));
