@@ -48,10 +48,14 @@ else:
     (web / "public").mkdir(parents=True, exist_ok=True)
     (web / "public" / "app.html").write_text(doc)
     prompts = {}
-    for name in ("CALL_PROMPT", "NOTES_SYSTEM", "NOTES_PROMPT", "SEC_PROMPT", "GUIDE_PROMPT", "GUIDE_CALL_PROMPT"):
+    def literal(name):
         start = page.index("const %s = `" % name) + len("const %s = `" % name)
-        end = page.index("`", start)
-        body = page[start:end]
+        return page[start:page.index("`", start)]
+    shared = {"GUIDE_LINE_RULES": literal("GUIDE_LINE_RULES")}  # pieces the prompts include as ${NAME}
+    for name in ("CALL_PROMPT", "NOTES_SYSTEM", "NOTES_PROMPT", "SEC_PROMPT", "GUIDE_PROMPT", "GUIDE_CALL_PROMPT"):
+        body = literal(name)
+        for k, v in shared.items():
+            body = body.replace("${%s}" % k, v)
         assert "\\" not in body and "${" not in body, name + " needs template-literal unescaping"
         prompts[name] = body
     # the language suffix of the notes prompt and the translation template, evaluated from the page's own code, so
