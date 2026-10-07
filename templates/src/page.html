@@ -170,6 +170,11 @@ td.gc[tabindex]:focus-visible { outline: 2px solid var(--accent); outline-offset
 .panel { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding-inline: 16px; padding-block: 14px 16px; display: grid; gap: 12px; min-width: 0; }
 .panel header { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: baseline; justify-content: space-between; }
 .panel p { margin: 0; color: var(--muted); line-height: 1.5; max-width: 80ch; }
+#pe p, #dcf p { max-width: none; }
+.how { display: grid; gap: 6px; }
+.howsteps { margin: 6px 0 0; padding-left: 22px; display: grid; gap: 6px; color: var(--muted); line-height: 1.5; }
+.howsteps b { color: var(--ink); font-weight: 600; }
+.howsteps ul { margin: 4px 0 0; padding-left: 18px; display: grid; gap: 3px; list-style: disc; }
 .grid3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
 .kv { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; align-items: center; font-variant-numeric: tabular-nums; }
 .kv > span { color: var(--muted); }
@@ -232,7 +237,7 @@ svg.scatter .ptlab { fill: var(--ink); font-weight: 600; }
 .multiples { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
 
 footer.foot { color: var(--muted); font-size: 12px; line-height: 1.5; display: grid; gap: 6px; }
-footer.foot .fine { font-size: 11px; max-width: 110ch; }
+footer.foot .fine { font-size: 11px; }
 @media (max-width: 600px) {
   #tbl td:first-child { min-width: 170px; }
   .co h1 { font-size: 18px; }
@@ -332,6 +337,8 @@ footer.foot .fine { font-size: 11px; max-width: 110ch; }
   const I18N = /*__I18N__*/ { ja: {}, zh: {} };
   let LANG = (() => { const v = store.get("tmpl.lang"); return v === "ja" || v === "zh" ? v : "en"; })();
   function TR(s) { if (LANG === "en" || typeof s !== "string") return s; const d = I18N[LANG]; return d && Object.prototype.hasOwnProperty.call(d, s) ? d[s] : s; }
+  // a translated sentence with {name} slots filled after translation, so a language can put them in its own order
+  const TRF = (s, v) => TR(s).replace(/\{(\w+)\}/g, (m, k) => (Object.prototype.hasOwnProperty.call(v, k) ? String(v[k]) : m));
   const LOCALE = () => (LANG === "ja" ? "ja-JP" : LANG === "zh" ? "zh-TW" : "en-US");
   const LANG_NAME = { en: "English", ja: "Japanese (日本語)", zh: "Traditional Chinese (繁體中文, Taiwan usage)" };
   function applyStatic() {
@@ -1717,6 +1724,56 @@ ${text}`;
       render();
     })();
   }
+  // How FMP's levered DCF is calculated, step by step, with this company's numbers. The formula is FMP's, rebuilt from
+  // its results and checked against them; what FMP doesn't explain (its long-term growth rate, some growth rates) is
+  // said to be FMP's own.
+  function dcfHowHTML(D, cur, ov) {
+    const pct = (v, dp = 1) => (isNum(v) ? (v * 100).toFixed(dp).replace("-", "−") + "%" : "–"), mm = (v) => (isNum(v) ? FMT.usd(v) : "–");
+    const ys = D.years, H = D.hist, w = D.wacc, g = D.g, unit = D.unit || 1;
+    const px = (v) => (isNum(v) ? (cur ? cur + " " : "") + v.toFixed(2).replace("-", "−") : "–");
+    const clip = (x) => Math.max(-1, Math.min(1, x)), avg = (xs) => (xs.length ? xs.reduce((a, x) => a + x, 0) / xs.length : null);
+    const list = (xs) => xs.map(([fy, v]) => "FY" + fy + " " + pct(v)).join(", ");
+    const same = (a, b) => isNum(a) && isNum(b) && Math.abs(a - b) < 0.0005;
+    const steps = [];
+    // 1. revenue
+    const gh = H.slice(1).filter((h) => isNum(h.g)).map((h) => [h.fy, h.g]), gAvg = avg(gh.map(([, v]) => clip(v)));
+    const g1 = ys[0].g, flat = ys.every((y) => isNum(y.g) && Math.abs(y.g - g1) < 1e-6), all = ys.map((y) => pct(y.g)).join(", ");
+    const gFY0 = H.length ? H[H.length - 1].g : null;
+    steps.push([TR("Revenue"), ov("rg") ? TRF("Revenue grows at your rate of {g} in each of the five years, from FY{fy0}'s {rev}.", { g: pct(g1, 2), fy0: D.fy0, rev: mm(H[H.length - 1]?.rev) })
+      : flat && same(gAvg, g1) ? TRF("Revenue grows at {g} a year for five years, from FY{fy0}'s {rev}: the average of the last four annual growth rates ({list}), each capped at ±100%.", { g: pct(g1, 2), fy0: D.fy0, rev: mm(H[H.length - 1]?.rev), list: list(gh) })
+        : !flat && ys.every((y) => isNum(y.g)) && g1 !== 0 && isNum(gFY0) && gFY0 !== 0 ? TRF("Revenue growth fades: each year's growth is {r} times the year before's, starting from FY{fy0}'s {g0}, so {all} in years 1 to 5. FMP sets the factor from how growth has changed over the last four years ({list}).", { r: (ys[1].g / g1).toFixed(3), fy0: D.fy0, g0: pct(gFY0), all, list: list(gh) })
+          : TRF("Revenue grows at FMP's own rates for this company: {all} in years 1 to 5 (the last four annual growth rates were {list}).", { all, list: list(gh) })]);
+    // 2. cash flow as shares of revenue
+    const oh = H.filter((h) => isNum(h.ocfPct)).map((h) => [h.fy, h.ocfPct]), ch = H.filter((h) => isNum(h.capexPct)).map((h) => [h.fy, h.capexPct]);
+    const o1 = ys[0].ocfPct, c1 = ys[0].capexPct, oA = avg(oh.map(([, v]) => clip(v))), cA = avg(ch.map(([, v]) => clip(v)));
+    const shareTxt = (k, v, A, hist) => { const sg = (x) => (k === "capex" && isNum(x) ? Math.abs(x) : x), L = list(hist.map(([fy, x]) => [fy, sg(x)])); return ov(k) ? TRF("your {p} of revenue in every year", { p: pct(sg(v), 2) }) : same(A, v) ? TRF("{p} of revenue in every year, the average of the five reported years ({list}), each capped at ±100%", { p: pct(sg(v), 2), list: L }) : TRF("FMP's {p} of revenue in every year (the five reported years: {list})", { p: pct(sg(v), 2), list: L }); };
+    steps.push([TR("Free cash flow"), [
+      TRF("Operating cash flow: {ocf}.", { ocf: shareTxt("ocf", o1, oA, oh) }),
+      TRF("Capex: {capex}.", { capex: shareTxt("capex", c1, cA, ch) }),
+      TRF("Free cash flow = operating cash flow − capex, so {p} of revenue: in year 1 (FY{y1}), {rev} × {p} = {fcf}. Operating cash flow is after interest and tax and adds back depreciation and stock-based compensation, so this is free cash flow to shareholders after interest (\"levered\").", { p: pct(isNum(o1) && isNum(c1) ? o1 + c1 : null, 2), y1: ys[0].fy, rev: mm(ys[0].rev), fcf: mm(ys[0].fcf) })]]);
+    // 3. the discount rate
+    const fixedRates = !ov("rf") && !ov("erp") ? TRF(" FMP uses the same risk-free rate ({rf}) and premium ({mrp}) for every company; they aren't today's market rates.", { rf: pct(D.rf, 2), mrp: pct(D.mrp, 2) }) : "";
+    const keTxt = ov("ke") ? TRF("Cost of equity: your {ke}.", { ke: pct(D.ke, 2) }) : TRF("Cost of equity = risk-free rate + beta × market risk premium = {rf} + {beta} × {mrp} = {ke}.", { rf: pct(D.rf, 2), beta: isNum(D.beta) ? D.beta.toFixed(2) : "–", mrp: pct(D.mrp, 2), ke: pct(D.ke, 2) }) + fixedRates;
+    const kdTxt = ov("kdPre") ? TRF("Cost of debt before tax: your {kd}.", { kd: pct(D.kd, 2) }) : TRF("Cost of debt before tax: {kd}, FY{fy0} interest expense ÷ total debt, but at least 5.03%.", { kd: pct(D.kd, 2), fy0: D.fy0 });
+    const taxTxt = ov("tm") ? TRF("Tax: your {t}, in place of FMP's average of the five reported years.", { t: pct(D.tax, 2) }) : TRF("Tax: the average of the five reported years' rates (income tax ÷ pre-tax income); FY{fy0}'s was {t}.", { fy0: D.fy0, t: pct(D.tax, 2) });
+    steps.push([TR("Discount rate (WACC)"), [keTxt, kdTxt, taxTxt, TRF("WACC = equity weight × cost of equity + debt weight × cost of debt × (1 − tax) = {wE} × {ke} + {wD} × {kd} × (1 − tax) = {w}. The weights use today's share price × diluted shares for equity and total debt at the FY{fy0} year-end.", { wE: pct(D.wE), ke: pct(D.ke, 2), wD: pct(D.wD), kd: pct(D.kd, 2), w: pct(w, 2), fy0: D.fy0 })]]);
+    // 4. present values
+    const d1 = isNum(w) ? 1 + w : null, d5 = isNum(w) ? Math.pow(1 + w, 5) : null;
+    steps.push([TR("Present values"), TRF("Each projected year's free cash flow is divided by (1 + WACC) raised to its year number: year 1 by {d1}, so {fcf1} ÷ {d1} = {pv1}; year 5 by {d5}. FMP treats year 1 (FY{y1}) as ending a full year from today, whatever part of it has already passed. The five present values add up to {sum}.", { d1: isNum(d1) ? d1.toFixed(4) : "–", fcf1: mm(ys[0].fcf), pv1: mm(ys[0].pv), d5: isNum(d5) ? d5.toFixed(4) : "–", y1: ys[0].fy, sum: mm(D.sumPv) })]);
+    // 5. terminal value
+    steps.push([TR("Terminal value"), (isNum(w) && isNum(g) && w > g ? TRF("Terminal value = year-5 free cash flow × (1 + long-term growth) ÷ (WACC − long-term growth) = {f5} × (1 + {g}) ÷ ({w} − {g}) = {tv}, discounted like year 5: {tv} ÷ {d5} = {pvtv}.", { f5: mm(ys[4].fcf), g: pct(g, 2), w: pct(w, 2), tv: mm(D.tv), d5: isNum(d5) ? d5.toFixed(4) : "–", pvtv: mm(D.pvTv) }) + (isNum(D.tvShare) ? " " + TRF("That is {share} of enterprise value.", { share: pct(D.tvShare, 0) }) : "") : TRF("Long-term growth ({g}) is not below WACC ({w}), so the terminal value formula, year-5 free cash flow × (1 + growth) ÷ (WACC − growth), has no meaning.", { g: pct(g, 2), w: pct(w, 2) })) + " " + (ov("g") ? TR("The long-term growth rate is yours.") : TRF("The long-term growth rate ({g}) is FMP's own figure for this company; FMP doesn't publish how it sets it.", { g: pct(g, 2) }))]);
+    // 6. from enterprise value to a value per share
+    steps.push([TR("Value per share"), [
+      TRF("Enterprise value = present values of years 1–5 + present value of the terminal value = {sum} + {pvtv} = {ev}.", { sum: mm(D.sumPv), pvtv: mm(D.pvTv), ev: mm(D.ev) }),
+      TRF("Equity value = enterprise value − net debt = {ev} − {nd} = {eq}. Net debt is total debt ({debt}) less cash and cash equivalents ({cash}) at the FY{fy0} year-end.", { ev: mm(D.ev), nd: mm(D.netDebt), debt: mm(D.totalDebt), cash: mm(D.cash), fy0: D.fy0, eq: mm(D.equity) }),
+      TRF("Value per share = equity value ÷ {sh} million diluted shares = {vps}, against today's price of {price}.", { sh: isNum(D.shares) ? FMT.sh(D.shares) : "–", vps: px(D.perShare), price: px(state.mkt?.price) }) + (unit === 100 ? " " + TR("FMP's amounts are in the main currency unit and its value per share in the unit the shares are priced in (pence or cents), 100 times as many.") : "")]]);
+    return '<details class="about how" id="dcfHow"' + (state.dcfHow ? " open" : "") + "><summary>" + TR("How FMP's DCF works, step by step") + "</summary>" +
+      "<p>" + TRF("FMP calculates it from its latest annual statements (FY{a}–FY{b}, in {cur} millions unless shown otherwise); the page reads FMP's result and shows how it is made up.", { a: H.length ? H[0].fy : D.fy0, b: D.fy0, cur: dcfCur(D, cur) || "" }) + "</p>" +
+      '<ol class="howsteps">' + steps.map(([h, t]) => "<li><b>" + h + ".</b> " + (Array.isArray(t) ? "<ul>" + t.map((x) => "<li>" + x + "</li>").join("") + "</ul>" : t) + "</li>").join("") + "</ol>" +
+      "<p>" + TR("Free cash flow after interest is usually discounted at the cost of equity, with no deduction for debt; or free cash flow before interest at WACC, less net debt. FMP's levered model uses free cash flow after interest, WACC and the net-debt deduction together.") + "</p>" +
+      "<p>" + TRF("What it leaves out: the page's own forecast, consensus and company guidance; the quarters reported since FY{fy0}; short-term and long-term investments, minority interests, and leases that aren't in debt. Stock-based compensation isn't a cost here, because operating cash flow adds it back.", { fy0: D.fy0 }) + "</p>" +
+      "<p>" + TR("Your assumptions: each one you type is sent to FMP, which recalculates everything above. The WACC × long-term growth table applies the same formula to FMP's cash flows, because FMP takes no WACC input.") + "</p></details>";
+  }
   function renderDcf() {
     const el = $("dcf"), A = state.act, mk = state.mkt;
     if (!A || !mk || state.dcf0For !== state.ticker) { el.hidden = true; return; }
@@ -1771,6 +1828,7 @@ ${text}`;
     const up = dcfUp(D);
     el.innerHTML = head +
       TR("<p>FMP's levered DCF, calculated by FMP from its FY") + B.fy0 + TR(" annual statements: revenue grows ") + growthTxt + TR(" for five years (FY") + ys[0].fy + "–FY" + ys[4].fy + TR("); free cash flow is operating cash flow less capex, each a fixed share of revenue; each year is discounted at WACC, and a terminal value grows at the long-term rate. Equity value is enterprise value less net debt. The assumptions are FMP's until you type your own; FMP then recalculates with them.</p>") +
+      (D ? dcfHowHTML(D, cur, ov) : "") +
       (!D && !state.dcfBusy ? "<p class=\"warn\">" + TR("FMP couldn't value it with your assumptions: ") + dcfErrText(state.dcfErr) + TR(" Change or clear them below (or in Settings).") + "</p>" : "") +
       '<div class="grid3">' +
       TR('<div class="kv"><h3 style="grid-column:1/-1">Cash flows</h3>') +
@@ -2574,6 +2632,9 @@ ${GUIDE_LINE_RULES}
   document.addEventListener("keydown", (e) => {
     if (e.key === "Enter" && e.target.matches && e.target.matches("input.in")) { e.preventDefault(); e.target.blur(); }
   });
+  // the DCF's step-by-step explanation stays open or closed across re-renders and visits (it's redrawn with the panel)
+  state.dcfHow = store.get("tmpl.dcfHow") === "1";
+  document.addEventListener("toggle", (e) => { if (e.target && e.target.id === "dcfHow") { state.dcfHow = e.target.open; store.set("tmpl.dcfHow", e.target.open ? "1" : "0"); } }, true);
   document.addEventListener("click", (e) => {
     const b = e.target.closest && e.target.closest("button[data-act]");
     if (!b || !state.inp) return;
