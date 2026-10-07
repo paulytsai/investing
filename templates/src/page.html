@@ -158,7 +158,7 @@ td.flag { color: var(--muted); }
 .gmk { display: inline-block; width: 0; height: 0; border-style: solid; border-width: 0 7px 7px 0; border-color: transparent var(--gd-ink) transparent transparent; vertical-align: top; margin-left: 2px; }
 td.gc { cursor: help; }
 input.in.gw::placeholder { color: var(--gd-ink); font-style: italic; opacity: 1; }
-#gpop { position: fixed; z-index: 60; max-width: min(380px, calc(100vw - 16px)); max-height: min(60vh, 420px); overflow-y: auto; overscroll-behavior: contain; pointer-events: none; background: var(--surface); color: var(--ink); border: 1px solid var(--gd-ink); border-radius: 4px; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15); padding: 8px 10px; font: 400 13px/1.4 var(--body); text-align: left; white-space: normal; }
+#gpop { position: fixed; z-index: 60; width: max-content; max-width: min(380px, calc(100vw - 16px)); max-height: min(60vh, 420px); overflow-y: auto; overscroll-behavior: contain; pointer-events: none; background: var(--surface); color: var(--ink); border: 1px solid var(--gd-ink); border-radius: 4px; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15); padding: 8px 10px; font: 400 13px/1.4 var(--body); text-align: left; white-space: normal; }
 .gwt { display: inline-block; max-width: 92px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: bottom; font-style: italic; color: var(--gd-ink); }
 td.gc[tabindex]:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 #gpop.scroll { pointer-events: auto; }
@@ -861,7 +861,7 @@ footer.foot .fine { font-size: 11px; max-width: 110ch; }
           if (r.mv && !r.v && !r.hv && !r.inBase) return cellOut(null);
           if (c.guide) {
             if (r.g) {
-              const lines = guideCmt(c.gkey, r.g.k), wordsG = guideWords(c.gkey, r.g.k), v = inVal("g", c.gkey + "::" + r.g.k);
+              const lines = guideCmt(c.gkey, r.g.k), wordsG = guideWords(c.gkey, r.g.k), v0 = inVal("g", c.gkey + "::" + r.g.k), v = isNum(v0) && r.g.u === "mmneg" ? -v0 : v0;
               const lab = TR("Guidance · ") + TR(r.l) + " · " + c.label + (lines.length ? ". " + lines.join(" · ") : "");
               return { html: inputHTML("g", c.gkey + "::" + r.g.k, null, r.g.u, wordsG ? "gw" : "", wordsG || null, lab) + (lines.length ? CMT_MARK : ""), cls: "in" + (lines.length ? " gc" : ""), attr: cmtAttr(lines, TR(r.l).trim() + " · " + c.label + ": " + cmtTitle(c.gkey, r.g.k)), val: v, note: lines.join("\n"), ntitle: lines.length ? cmtTitle(c.gkey, r.g.k) : "", words: wordsG };
             }
@@ -1051,20 +1051,26 @@ footer.foot .fine { font-size: 11px; max-width: 110ch; }
   document.body.appendChild(gpop);
   let gpopFor = null, gpopTxt = "";
   // The pop-up sits flush beside its cell (left of it when there's no room on the right), so the pointer goes straight
-  // from the cell into it and the rows below stay in reach. A comment that fits lets clicks through to the cells under
-  // it; a long one takes the pointer, to scroll (with the mouse, or from the focused cell with the arrow and page keys,
-  // Alt+ them in an input).
+  // from the cell into it and the rows below stay in reach; in a window too narrow for either, below the cell (or
+  // above it). A comment that fits lets clicks through to the cells under it; a long one takes the pointer, to scroll
+  // (with the mouse, or from the focused cell with the arrow and page keys, Alt+ them in an input). It moves with its
+  // cell, and hides while the cell is scrolled out of view.
   function placeCmt(td) {
-    const r = td.getBoundingClientRect(), w = gpop.offsetWidth, h = gpop.offsetHeight;
-    const left = r.right + w <= window.innerWidth - 8 ? r.right - 1 : r.left - w + 1;
-    gpop.style.left = Math.max(8, Math.min(left, window.innerWidth - w - 8)) + "px";
-    gpop.style.top = Math.max(8, Math.min(r.top, window.innerHeight - h - 8)) + "px";
+    const r = td.getBoundingClientRect(), W = window.innerWidth, H = window.innerHeight, w = gpop.offsetWidth, h = gpop.offsetHeight;
+    const sh = td.closest(".sheet")?.getBoundingClientRect(), vis = { top: Math.max(0, sh ? sh.top : 0), bottom: Math.min(H, sh ? sh.bottom : H), left: Math.max(0, sh ? sh.left : 0), right: Math.min(W, sh ? sh.right : W) };
+    gpop.style.visibility = r.bottom <= vis.top || r.top >= vis.bottom || r.right <= vis.left || r.left >= vis.right ? "hidden" : "";
+    const fitsR = r.right + w <= W - 8, fitsL = r.left - w + 1 >= 8;
+    let left, top;
+    if (fitsR || fitsL) { left = fitsR ? r.right - 1 : r.left - w + 1; top = Math.max(8, Math.min(r.top, H - h - 8)); top = Math.min(Math.max(top, r.top - h + 1), r.bottom - 1); }
+    else { left = Math.max(8, Math.min(r.left, W - w - 8)); top = r.bottom + 4 + h <= H - 8 || r.top - h - 4 < 8 ? r.bottom + 4 : r.top - h - 4; }
+    gpop.style.left = left + "px"; gpop.style.top = top + "px";
   }
   function showCmt(td) {
     const txt = td && td.dataset.cmt; if (!txt) return;
     if (td !== gpopFor || txt !== gpopTxt || gpop.hidden) {
       const [head, ...lines] = txt.split("\n");
       gpop.innerHTML = "<b>" + esc(head) + "</b>" + lines.map((l) => "<div>" + esc(l) + "</div>").join("");
+      gpop.style.left = "0px"; gpop.style.top = "0px";
       gpop.hidden = false; gpopFor = td; gpopTxt = txt; gpop.scrollTop = 0;
       gpop.classList.toggle("scroll", gpop.scrollHeight > gpop.clientHeight + 1);
     }
@@ -1276,8 +1282,9 @@ ${text}`;
       Object.keys(gp).forEach((k) => { const o = gp[k], nums = Object.entries(o).filter(([, v]) => isNum(v)); if (nums.length) data.push("Guidance " + k.replace("|", " FY") + ": " + nums.map(([f, v]) => f + " " + gfmt(f, v)).join(", ") + " (levels; where management gave growth or a change, the page applied it to the year-earlier period, as noted below)"); });
       // guidance in management's words, how the page read figures from growth, and guidance without a line of its own
       const gc = S.inp.guide?.cmt || {}, en = (x) => x;
+      const gv = (k, f) => (GLINE[f]?.[5] ? (isNum(S.inp.guide?.periods?.[k]?.[f]) ? S.inp.guide.periods[k][f] : null) : undefined);
       Object.keys(gc).sort().forEach((k) => {
-        const parts = Object.entries(gc[k] || {}).flatMap(([f, es]) => (Array.isArray(es) ? es : []).map((e) => { const hw = howText(e.h || e.how, en); return (f === "_other" ? e.item || "other" : GLINE[f]?.[2] || f) + (e.t ? " \"" + e.t + "\"" : "") + (hw ? (e.t ? ", read as " : " ") + hw : "") + " (" + (e.k === "call" ? e.d + " call" : "release " + e.d) + ")"; }));
+        const parts = Object.entries(gc[k] || {}).flatMap(([f, es]) => (Array.isArray(es) ? es : []).map((e) => { const hw = howText(e.h || e.how, en, gv(k, f)); return (f === "_other" ? e.item || "other" : GLINE[f]?.[2] || f) + (e.t ? " \"" + e.t + "\"" : "") + (hw ? (e.t ? ", read as " : " ") + hw : "") + " (" + (e.k === "call" ? e.d + " call" : "release " + e.d) + ")"; }));
         if (parts.length) data.push("Guidance " + k.replace("|", " FY") + " in management's words: " + parts.join("; "));
       });
       const M = S.mdl;
@@ -1872,32 +1879,33 @@ Rules:
   // Both guidance prompts return the same shape per guided line: figures (with what they're measured against) and
   // management's own words whenever they say more than plain figures, so guidance given as a phrase still reaches the
   // G column, as the cell's comment
-  const GUIDE_LINE_RULES = `- Lines: revenue, gross_margin, operating_expenses, operating_margin, tax_rate, eps, capex, depreciation, diluted_shares, and where they are guided cost_of_revenue, operating_income, interest, other_income, net_income, cash_from_operations, free_cash_flow. Each guided line is an object {"low","high","mid","basis","text"}; leave out (or null) a line that isn't guided.
+  const GUIDE_LINE_RULES = `- Lines: revenue, gross_margin, operating_expenses, operating_margin, tax_rate, eps, capex, depreciation, diluted_shares, and where they are guided cost_of_revenue, operating_income, interest, other_income, net_income, cash_from_operations, free_cash_flow. Each guided line is an object {"low","high","mid","basis","measure","text"}; leave out (or null) a line that isn't guided.
 - basis "absolute": a level (money in full currency units, "$12.5 billion" = 12500000000; percentages as fractions, 74.0% = 0.74; EPS in currency per share). basis "yoy": growth against the same period a year earlier, as a fraction (down 5% = -0.05). basis "change": a margin or rate change against the same period a year earlier, as a fraction (down 75 basis points = -0.0075). basis "sequential": growth against the previous quarter, as a fraction.
+- measure: null when the figures are GAAP or reported; otherwise management's name for the measure ("adjusted EPS", "organic revenue", "comparable EPS", "currency-neutral revenue", "non-GAAP gross margin"). If the document says its comparisons are on another basis unless noted ("growth rates are currency neutral unless otherwise noted"), that is the measure of each growth figure it covers.
 - If a line is given both as a level and as growth, use the level.
 - "X plus or minus 2%" means low = X*0.98, high = X*1.02; "plus or minus 50 basis points" on a margin means +-0.005. A range "between A and B" gives low A, high B, mid the average. "Approximately X" (about, around, roughly, approx.) gives low, mid and high all equal to X.
-- One-sided figures ("over", "at least", "more than", "up to", "less than"): set only low or only high and leave mid null; "double digits" growth is low 0.10.
+- One-sided figures ("over", "at least", "more than", "up to", "less than"): set only low or only high and leave mid null; "double digits" growth is low 0.10. A direction with a one-sided size is bounded at zero on the other side: "down less than 1 point" on a margin is low -0.01, high 0, mid -0.005; "growth of up to 5%" is low 0, high 0.05, mid 0.025.
 - Words to numbers for growth: flat = -0.01 to 0.01; low single digits = 0.01 to 0.03; low to mid single digits = 0.01 to 0.06; mid single digits = 0.04 to 0.06; mid to high single digits = 0.04 to 0.09; high single digits = 0.07 to 0.09; low double digits or low teens = 0.10 to 0.13; mid teens = 0.14 to 0.16; high teens = 0.17 to 0.19; negative when management says down, decline or lower. For a margin or rate change, flat or roughly flat = -0.005 to 0.005. Give low and high, and mid as their average. A direction with no size (up, down, lower, expand, pressure, decline by more than revenue) leaves low, mid and high null.
-- text: management's words for the line, verbatim, whenever they say more than plain figures: the line given in words or as a phrase ("down low single digits", "roughly flat", "modestly higher", "in line with last year"); an approximation ("approximately", "about"); a one-sided figure ("over $50 billion"); a condition or exclusion ("excluding discrete items", "at current exchange rates", "assuming the sale closes in Q3"); a measure other than GAAP or reported, named as management names it ("adjusted EPS (non-GAAP)", "organic revenue growth", "currency-neutral"); a driver or caveat attached to the guidance; and whether it was raised, lowered or reaffirmed, and from what. Join several statements about the same line with " … ". If management says it won't guide a line but describes its direction, begin with "not guided:". text is null only for plain figures with nothing more said. Under 300 characters; mark any omission with "…".
-- GAAP and non-GAAP: put GAAP (or reported) figures in the line when they are given. If only adjusted, non-GAAP, comparable, organic or currency-neutral figures are given, use the one closest to reported and name it in text; give any other measure for the same line in other, verbatim.
-- If current and prior guidance are both shown, use the current figures and say in text what changed.
-- Periods: one entry per guided quarter ("Q1".."Q4") or fiscal year ("FY"), with the company's fiscal year number (e.g. "third quarter of fiscal 2027" is Q3, 2027). Guidance for a half year, a calendar year, several years, a long-term target or part of a period goes in other of the fiscal period it overlaps most (for a multi-year program or target, the current fiscal year), with that period named in item ("H2 gross margin", "calendar 2026 capex", "FY2029-FY2030 program savings"). Don't create an entry for a period with nothing guided.
-- other: guidance for the period that has no line of its own, most important first: segments, geographies and brands, share repurchases and dividends, foreign-exchange, tariff and other effects, restructuring, and the assumptions and exclusions behind the guidance. Each {"item","text"}: item under 80 characters, text verbatim (figures included) under 300 characters. Leave out product launches and operational targets unless they carry a financial figure. An empty list if there is none.
+- text: management's words for the line, verbatim, whenever they say more than plain figures: the line given in words or as a phrase ("down low single digits", "roughly flat", "modestly higher", "in line with last year"); an approximation ("approximately", "about"); a one-sided figure ("over $50 billion"); a condition or exclusion ("excluding discrete items", "at current exchange rates", "assuming the sale closes in Q3"); a measure other than GAAP or reported, named as management names it; a headwind, tailwind or other effect on the line ("a headwind of approximately 400 basis points to revenues", "including about 1 point from currency"), including effects the line's figure excludes when they are given separately; a driver or caveat; and whether it was raised, lowered or reaffirmed, and from what. Collect what management says about the line anywhere in the document (prepared remarks and Q&A, every speaker), including a clause inside a sentence about another line ("this outlook reflects continued pressure on gross margin" belongs in gross_margin too). If management says it won't guide a line, begin with "not guided:" and go on with the direction words they used. When guidance is stated against a past result ("similar to the June quarter"), keep management's figure for that base if they give it. Join statements with " … " in the order they appear in the document; each piece must make sense on its own (keep the subject and the figure of its sentence), so drop a whole statement rather than half of one. text is null only for plain figures with nothing more said. Under 400 characters; mark any omission with "…".
+- GAAP and non-GAAP: put GAAP (or reported) figures in the line when they are given. If only adjusted, non-GAAP, comparable, organic or currency-neutral figures are given, use the one closest to reported and set measure. When one sentence gives the line on two measures, quote it in the line's text and don't repeat it in other; give another measure for the same line in other only when it is stated separately.
+- If current and prior guidance are both shown, use the current figures and say in text what changed, as "<current words> (prior: <prior words>)".
+- Periods: one entry per guided quarter ("Q1".."Q4") or fiscal year ("FY"), with the company's fiscal year number (e.g. "third quarter of fiscal 2027" is Q3, 2027). Guidance for a half year, a calendar year, several years, a long-term target or part of a period goes in other of the fiscal period it overlaps most (on a tie, the later one; for a multi-year program or target, the current fiscal year), with that period named in item ("H2 gross margin", "calendar 2026 capex", "FY2029-FY2030 program savings"). Outlook for a period after the last one guided (a driver, risk or direction with no figures), and any statement that management won't guide a later period, goes in other of the last guided period, with that later period named in item. Don't create an entry for a period with nothing guided.
+- other: guidance for the period that has no line of its own, most important first: segments, geographies and brands (including what management says about their revenue, margin or profit without a figure), share repurchases and dividends, effects that aren't on one line, restructuring and savings programs, and the assumptions, exclusions and caveats behind the guidance as a whole (such as not being able to reconcile non-GAAP guidance to GAAP). Each {"item","text"}: item under 80 characters; text verbatim (figures included) under 400 characters, keeping the drivers, conditions and qualifiers that change how its figure is read (gross or net, partly reinvested, timing), joined as for a line's text. Don't repeat in other what a line's text already says. Leave out product launches and operational targets unless they carry a financial figure. An empty list if there is none.
 - If management withdraws or suspends guidance it gave before, return each period it applies to with "withdrawn" set to management's words, verbatim, under 300 characters, and the lines it names as {"text":"withdrawn: <their words>"} with figures null.
 - Every text and every other item must come from the document. Never copy values or phrases from the example above.`;
   const GUIDE_PROMPT = `You read a company's quarterly earnings press release and extract its financial guidance (outlook). Return JSON only, no prose. The example shows the shape only (a made-up company):
-{"periods":[{"period":"Q3","fiscal_year":2027,"revenue":{"low":2940000000,"high":3060000000,"mid":3000000000,"basis":"absolute","text":"approximately $3.0 billion, plus or minus 2%"},"gross_margin":{"low":0.415,"high":0.425,"mid":0.42,"basis":"absolute","text":null},"operating_expenses":{"low":null,"high":null,"mid":null,"basis":"yoy","text":"to grow slower than revenue"},"other":[{"item":"foreign exchange","text":"a headwind of about 1 point to revenue growth"}]},{"period":"FY","fiscal_year":2027,"tax_rate":{"low":0.18,"high":0.18,"mid":0.18,"basis":"absolute","text":"about 18%, excluding discrete items"},"other":[]}],"quote":"the outlook, verbatim"}
+{"periods":[{"period":"Q3","fiscal_year":2027,"revenue":{"low":2940000000,"high":3060000000,"mid":3000000000,"basis":"absolute","measure":null,"text":"approximately $3.0 billion, plus or minus 2%, including a headwind of about 1 point from foreign exchange"},"gross_margin":{"low":0.415,"high":0.425,"mid":0.42,"basis":"absolute","measure":"non-GAAP gross margin","text":"non-GAAP gross margin of 41.5% to 42.5%"},"operating_expenses":{"low":null,"high":null,"mid":null,"basis":"yoy","measure":null,"text":"to grow slower than revenue"},"other":[{"item":"share repurchases","text":"about $500 million in the quarter"}]},{"period":"FY","fiscal_year":2027,"tax_rate":{"low":0.18,"high":0.18,"mid":0.18,"basis":"absolute","measure":null,"text":"about 18%, excluding discrete items"},"other":[]}],"quote":"the outlook, verbatim"}
 Rules:
 ${GUIDE_LINE_RULES}
-- quote: every outlook sentence, verbatim (for an outlook table, its rows as "label: value" joined by "; "), under 1,200 characters; keep every sentence that carries a figure, a period or a condition, and mark omissions with "…".
+- quote: every outlook sentence, verbatim (for an outlook table, including a reconciliation of GAAP to non-GAAP outlook, its rows as "label: value" joined by "; "), under 1,200 characters; company-level sentences first, then every sentence that carries a figure, a period or a condition; mark omissions with "…".
 - If the release has no guidance at all, return {"periods":[]}.`;
   const GUIDE_CALL_PROMPT = `You read an earnings call transcript and pull out the forward guidance (outlook) that management gave for future periods. Return JSON only, no prose. The example shows the shape only (a made-up company):
-{"periods":[{"period":"Q2","fiscal_year":2027,"revenue":{"low":-0.06,"high":-0.04,"mid":-0.05,"basis":"yoy","text":"down mid single digits"},"gross_margin":{"low":-0.0075,"high":-0.005,"mid":-0.00625,"basis":"change","text":"down 50 to 75 basis points, including about 30 basis points from tariffs"},"operating_expenses":{"low":0.01,"high":0.03,"mid":0.02,"basis":"yoy","text":"up low single digits"},"tax_rate":{"low":0.2,"high":0.2,"mid":0.2,"basis":"absolute","text":"around 20%"},"eps":{"low":null,"high":null,"mid":null,"basis":"yoy","text":"not guided: lower, on the revenue decline"},"other":[{"item":"share repurchases","text":"about $1 billion in the quarter"}]}],"quote":"the guidance sentences, verbatim","speaker":"name and title of each person who gave guidance, separated by semicolons"}
+{"periods":[{"period":"Q2","fiscal_year":2027,"revenue":{"low":-0.06,"high":-0.04,"mid":-0.05,"basis":"yoy","measure":"currency-neutral revenue","text":"down mid single digits on a currency-neutral basis"},"gross_margin":{"low":-0.0075,"high":-0.005,"mid":-0.00625,"basis":"change","measure":null,"text":"down 50 to 75 basis points, including about 30 basis points from tariffs"},"operating_expenses":{"low":0.01,"high":0.03,"mid":0.02,"basis":"yoy","measure":null,"text":"up low single digits"},"tax_rate":{"low":0.2,"high":0.2,"mid":0.2,"basis":"absolute","measure":null,"text":"around 20%"},"eps":{"low":null,"high":null,"mid":null,"basis":"yoy","measure":null,"text":"not guided: lower, on the revenue decline"},"other":[{"item":"share repurchases","text":"about $1 billion in the quarter"}]}],"quote":"the guidance sentences, verbatim","speaker":"name and title of each person who gave guidance, separated by semicolons"}
 Rules:
 - Only forward-looking guidance stated by management. Ignore analysts' numbers and past results.
 - The CONTEXT line says which quarter this call reports, so "next quarter", "the second half" and "the full year" can be dated.
 ${GUIDE_LINE_RULES}
-- quote: management's guidance sentences, verbatim, under 1,200 characters; keep every sentence that carries a figure, a period or a condition, and mark omissions with "…".
+- quote: management's guidance sentences, verbatim, under 1,200 characters; company-level sentences first, then every sentence that carries a figure, a period or a condition; mark omissions with "…".
 - If the call has no guidance, return {"periods":[]}.`;
   // The same period a year earlier, as the base for guidance given as growth or a change
   function priorPeriod(A, per, fy) {
@@ -1925,12 +1933,16 @@ ${GUIDE_LINE_RULES}
   // How a figure was read, kept as parts so it shows in whatever language the page is in:
   // conv = growth or a change applied to the year-earlier period; nobase = the same, but that period isn't reported;
   // range = a range on a line with no low/high rows (the midpoint is shown); bound = one-sided (no figure is shown);
-  // level = figures for a line the G column has no input for; raw = a basis that can't be converted.
-  const lvlTxt = (x, u) => (!isNum(x) ? "" : u === "pct" ? (x * 100).toFixed(1) + "%" : u === "eps" ? x.toFixed(2) : u === "num" ? String(+x.toFixed(4)) : big(x));
+  // level = figures for a line the G column has no input for; raw = a basis that can't be converted; measure = growth
+  // in a measure other than the reported one (organic revenue, comparable EPS), which isn't applied to reported figures.
+  const lvlTxt = (x, u) => (!isNum(x) ? "" : x === 0 ? "0" : u === "pct" ? (x * 100).toFixed(1) + "%" : u === "eps" ? x.toFixed(2) : u === "num" ? String(+x.toFixed(4)) : big(x));
   const rateTxt = (x, bp) => (!isNum(x) ? "" : bp ? (x * 10000).toFixed(0) + "bp" : (x * 100).toFixed(1) + "%");
   const BASIS_TXT = { yoy: "vs a year earlier", change: "change on a year earlier", sequential: "vs the previous quarter" };
   // Claude's basis, with the usual synonyms; with none, a fraction on a money or share line is growth, not a level
-  const BASIS_SYN = { level: "absolute", abs: "absolute", "y/y": "yoy", "year-over-year": "yoy", "year over year": "yoy", growth: "yoy", bp: "change", bps: "change", points: "change", "q/q": "sequential", qoq: "sequential" };
+  const BASIS_SYN = { level: "absolute", abs: "absolute", "y/y": "yoy", "year-over-year": "yoy", "year over year": "yoy", growth: "yoy", bp: "change", bps: "change", "basis points": "change", points: "change", pts: "change", "percentage points": "change", "q/q": "sequential", qoq: "sequential" };
+  // a change named in basis points or percentage points: its figures in those units become fractions
+  const BASIS_UNIT = { bp: 1e-4, bps: 1e-4, "basis points": 1e-4, points: 0.01, pts: 0.01, "percentage points": 0.01 };
+  const unitNums = (b, nums) => { const k = BASIS_UNIT[String(b || "").trim().toLowerCase()]; return k && nums.some((x) => isNum(x) && Math.abs(x) >= 1) ? nums.map((x) => (isNum(x) ? x * k : x)) : nums; };
   const normBasis = (b, u, nums) => {
     const x = String(b || "").trim().toLowerCase();
     if (x) return BASIS_SYN[x] || x;
@@ -1942,13 +1954,14 @@ ${GUIDE_LINE_RULES}
     if (!h) return "";
     if (typeof h === "string") return h; // read before this format existed
     // a money or share figure that isn't a level: a fraction is a rate, anything larger an amount (a change in dollars)
-    const abs = h.basis === "absolute", one = (x) => (abs || ((h.u === "money" || h.u === "sh") && Math.abs(x) >= 1) ? lvlTxt(x, h.u) : rateTxt(x, h.bp));
+    const abs = h.basis === "absolute", one = (x) => (abs || ((h.u === "money" || h.u === "sh") && h.basis !== "yoy" && h.basis !== "sequential" && Math.abs(x) >= 1) ? lvlTxt(x, h.u) : rateTxt(x, h.bp));
     const side = !isNum(h.mid) && isNum(h.lo) !== isNum(h.hi);
     const span = side ? (isNum(h.lo) ? tt("at least ") + one(h.lo) : tt("at most ") + one(h.hi)) : isNum(h.lo) && isNum(h.hi) && h.lo !== h.hi ? one(h.lo) + tt(" to ") + one(h.hi) : one(h.mid ?? h.lo ?? h.hi);
     const vs = !abs && h.base ? (h.basis === "change" ? tt(" change on ") : tt(" vs ")) + h.base : "";
     const bTxt = h.basis && !abs ? tt(BASIS_TXT[h.basis] || h.basis) : "";
     // once the cell holds a figure of the user's, a reading that says no figure (or the midpoint) is shown is out of date
     const own = isNum(val);
+    if (h.k === "measure") return span + (bTxt ? " " + bTxt : "") + " (" + h.m + ")" + (own ? "" : tt(", a different measure from the reported figures, so no level is shown"));
     if (h.k === "nobase") return own ? span + " (" + bTxt + ")" : span + (h.basis === "change" ? tt(" change on a year earlier, which isn't reported, so no level is shown") : tt(" growth on a year earlier, which isn't reported, so no level is shown"));
     if (h.k === "range") { const m = isNum(h.mid) ? h.mid : (h.lo + h.hi) / 2; return span + (val === undefined || (own && Math.abs(val - m) <= 1e-9 * Math.max(1, Math.abs(m))) ? tt(", midpoint shown") : ""); }
     if (h.k === "bound") return span + vs + (own ? "" : tt(" (a bound, so no figure is shown)"));
@@ -1966,7 +1979,8 @@ ${GUIDE_LINE_RULES}
       if (isNum(gnum(g))) g = { mid: gnum(g), basis: "absolute" };
       else if (typeof g === "string") g = { text: g };
       if (!g || typeof g !== "object") return;
-      const text = cleanWords(g.text, 400), lo0 = gnum(g.low), hi0 = gnum(g.high), mid0 = gnum(g.mid);
+      const text = cleanWords(g.text, 500), [lo0, hi0, mid0] = unitNums(g.basis, [gnum(g.low), gnum(g.high), gnum(g.mid)]);
+      const measure = cleanWords(typeof g.measure === "string" ? g.measure : "", 80);
       const given = [lo0, hi0, mid0].some(isNum);
       // a basis must fit the line: margins and rates are levels or changes, money, EPS and shares levels or growth
       const basis = normBasis(g.basis, u, [lo0, hi0, mid0]);
@@ -1975,6 +1989,7 @@ ${GUIDE_LINE_RULES}
       let h = null;
       if (!given) h = null;
       else if (!fits) h = { k: "raw", ...P };
+      else if (basis !== "absolute" && measure && input) h = { k: "measure", ...P, m: measure };
       else if (basis !== "absolute" && !isNum(b) && input) h = { k: "nobase", ...P };
       else if (!isNum(mid0) && isNum(lo0) !== isNum(hi0)) h = { k: "bound", ...P };
       else if (!input) h = { k: "level", ...P };
@@ -1996,13 +2011,13 @@ ${GUIDE_LINE_RULES}
     const other = E.other.map((x) => {
       if (!x || typeof x !== "object") return null;
       const item = cleanWords(String(x.item ?? ""), 160);
-      if (x.line === undefined) { const t = cleanWords(x.text, 600) || cleanWords(typeof x.t === "string" ? x.t : "", 600); return t || item ? { item: t ? item : "", t: t || item } : null; }
+      if (x.line === undefined) { const t = cleanWords(x.text, 700) || cleanWords(typeof x.t === "string" ? x.t : "", 700); return t || item ? { item: t ? item : "", t: t || item } : null; }
       const v = x.line, g = isNum(gnum(v)) ? { mid: gnum(v), basis: "absolute" } : typeof v === "string" ? { text: v } : v && typeof v === "object" ? v : null;
       if (!g) return null;
-      const L = GUIDE_LINES.find((Lx) => item.endsWith(Lx[2])), nums = [gnum(g.low), gnum(g.high), gnum(g.mid)];
+      const L = GUIDE_LINES.find((Lx) => item.endsWith(Lx[2])), nums = unitNums(g.basis, [gnum(g.low), gnum(g.high), gnum(g.mid)]);
       const u = L ? L[3] : nums.filter(isNum).every((n) => Math.abs(n) >= 1000) ? "money" : "num";
       const h = nums.some(isNum) ? { k: "raw", lo: nums[0], hi: nums[1], mid: nums[2], basis: normBasis(g.basis, u, nums), u, bp: L ? L[4] : false } : null;
-      const t = cleanWords(g.text, 400);
+      const t = cleanWords(g.text, 500);
       return t || h ? { item, t, h } : null;
     }).filter(Boolean);
     return { o, notes, cmt, other };
@@ -2026,7 +2041,7 @@ ${GUIDE_LINE_RULES}
       Object.entries(p).forEach(([k, v]) => {
         if (k === "period" || k === "fiscal_year" || v == null || v === "") return;
         if (k === "withdrawn") {
-          const w = cleanWords(typeof v === "string" ? v : "", 300) || (v ? "withdrawn" : "");
+          const w = v === true ? "withdrawn" : typeof v === "string" && !/^(no|false|not withdrawn|0)$/i.test(v.trim()) ? cleanWords(v, 400) : "";
           if (w && tag) E.other.push({ item: tag.trim(), text: w }); else if (w) E.withdrawn = w;
           return;
         }
@@ -2133,16 +2148,23 @@ ${GUIDE_LINE_RULES}
       const R = read.release[pk], C = read.call[pk];
       let P = { ...(G.periods[pk] || {}) }, K = { ...(G.cmt[pk] || {}) };
       const add = (f, e) => { (K[f] = K[f] || []).push(e); if (e.t) words = true; };
-      const wd = R?.withdrawn ? { k: "release", d: src.filed, t: R.withdrawn } : C?.withdrawn ? { k: "call", d: src.call.label, t: C.withdrawn } : null;
+      const wd = R?.withdrawn ? { k: "release", d: src.filed, t: R.withdrawn, wd: true } : C?.withdrawn ? { k: "call", d: src.call.label, t: C.withdrawn, wd: true } : null;
+      // guidance given again after a withdrawal: the withdrawal no longer stands
+      if (!wd) Object.keys(K).forEach((f) => { K[f] = K[f].filter((e) => !e.wd); if (!K[f].length) delete K[f]; });
       if (wd) {
         const had = new Set([...Object.keys(P).map(baseOf), ...Object.keys(K).filter((f) => f !== "_other")]);
         P = {}; K = {};
         had.forEach((f) => { if (!R?.cmt[f] && !C?.cmt[f]) add(f, { ...wd }); });
       }
+      const carried = {};
       [...linesOf(R), ...linesOf(C)].forEach((f) => {
         if (wordsOnly(f, R, C)) {
-          // a comment from the documents read now is replaced by what they say now
-          const kept = (K[f] || []).filter((e) => !((R?.cmt[f] && e.k === "release" && e.d === src.filed) || (C?.cmt[f] && e.k === "call" && e.d === src.call?.label)));
+          // a comment from the documents read now is replaced by what they say now; how the kept figure was read
+          // carries over to the new words
+          const same = (e) => (R?.cmt[f] && e.k === "release" && e.d === src.filed) || (C?.cmt[f] && e.k === "call" && e.d === src.call?.label);
+          const h0 = (K[f] || []).find((e) => same(e) && e.h)?.h;
+          if (h0) carried[f] = h0;
+          const kept = (K[f] || []).filter((e) => !same(e));
           if (kept.length) K[f] = kept; else delete K[f];
           return;
         }
@@ -2152,7 +2174,7 @@ ${GUIDE_LINE_RULES}
       const relFig = new Set(Object.keys(R?.o || {}).map(baseOf));
       if (R) {
         Object.assign(P, R.o);
-        Object.entries(R.cmt).forEach(([f, c]) => add(f, { k: "release", d: src.filed, t: c.t, h: c.h }));
+        Object.entries(R.cmt).forEach(([f, c]) => { const h = c.h || carried[f] || null; if (!c.h && h) { delete carried[f]; if (h.k === "conv") src.notes.push({ per: perLabel(pk), f, h }); } add(f, { k: "release", d: src.filed, t: c.t, h }); });
         R.notes.forEach((n) => src.notes.push({ per: perLabel(pk), ...n }));
         fromRel += Object.keys(R.o).length + Object.keys(R.cmt).length + R.other.length;
       }
@@ -2161,7 +2183,8 @@ ${GUIDE_LINE_RULES}
         Object.assign(P, keep);
         Object.entries(C.cmt).forEach(([f, c]) => {
           // where the release's figure is shown, the call's reading of its own figure would describe a number not shown
-          const h = relFig.has(f) && c.h && (c.h.k === "conv" || c.h.k === "range") ? null : c.h;
+          let h = relFig.has(f) && c.h && (c.h.k === "conv" || c.h.k === "range") ? null : c.h;
+          if (!c.h && carried[f]) { h = carried[f]; delete carried[f]; if (h.k === "conv") src.call.notes.push({ per: perLabel(pk), f, h }); }
           if (c.t || h) { add(f, { k: "call", d: src.call.label, t: c.t, h }); fromCall++; }
         });
         C.notes.filter((n) => !relFig.has(n.f)).forEach((n) => src.call.notes.push({ per: perLabel(pk), ...n }));
@@ -2180,7 +2203,7 @@ ${GUIDE_LINE_RULES}
     scheduleSave();
     if (!found.length) return done(TR("No guidance in ") + (src.filed ? TR("the release filed ") + esc(src.filed) : "") + (src.filed && src.call ? TR(" or ") : "") + (src.call ? TR("on the ") + esc(src.call.label) + TR(" call") : "") + TR(". Type it into the G column if management gave it elsewhere."));
     const derived = derivText([...(src.notes || []), ...(src.call?.notes || [])]);
-    done(TR("Guidance for ") + found.map(perLabel).join(", ") + TR(" from ") + esc(guideSrcText(src)) + "." + (derived ? TR(" Growth and margin changes are applied to the same period a year earlier (") + esc(derived) + ")." : "") + (words ? TR(" Guidance given in words is kept as a comment on its cell, and guidance with no line of its own on the column header (both marked in the corner).") : "") + (src.quote ? " “" + esc(src.quote.slice(0, 220)) + "”" : src.call?.quote ? " “" + esc(src.call.quote.slice(0, 220)) + "”" : ""));
+    done(TR("Guidance for ") + found.map(perLabel).join(", ") + TR(" from ") + esc(guideSrcText(src)) + "." + (derived ? TR(" Growth and margin changes are applied to the same period a year earlier (") + esc(derived) + ")." : "") + (words ? TR(" Guidance given in words is kept as a comment on its cell, and guidance with no line of its own on the column header (both marked in the corner).") : "") + (src.quote || src.call?.quote ? " “" + esc(cleanWords(src.quote || src.call.quote, 220)) + "”" : ""));
   }
   // The release's outlook as text for Claude: its prose and outlook tables. Some releases put their guidance in tables
   // the outlook filter doesn't pick, titled in the prose rather than in the table (Coca-Cola's "Full Year Guidance" and
@@ -2827,7 +2850,8 @@ ${GUIDE_LINE_RULES}
   // kana means Japanese; kanji/hanzi alone follow the page's language (a Japanese label is often all kanji), else Chinese
   const pdfScript = (s) => (KANA_RE.test(s) ? "ja" : HAN_RE.test(s) ? (LANG === "ja" ? "ja" : "zh") : null);
   // Wraps text to a width in the document's current font and size: Latin text at spaces, Japanese and Chinese between
-  // characters (closing punctuation never starts a line), and a word longer than the line by characters. Keeps blank
+  // characters (closing punctuation never starts a line: up to two marks hang past the end), and a word longer than the
+  // line by characters. Keeps blank
   // lines and each paragraph's indentation.
   const CJK_CH = "\\u3000-\\u30ff\\u31f0-\\u31ff\\u3400-\\u4dbf\\u4e00-\\u9fff\\uf900-\\ufaff\\uff00-\\uffef";
   const PDF_TOKEN = new RegExp("[" + CJK_CH + "]|[^\\s" + CJK_CH + "]+|\\s+", "g");
@@ -2837,13 +2861,13 @@ ${GUIDE_LINE_RULES}
     String(text ?? "").replace(/\r\n?/g, "\n").split("\n").forEach((para) => {
       if (!para.trim()) { out.push(""); return; }
       const lead = para.match(/^[ \t　]*/)[0], indent = lead.replace(/\t/g, "    "), iw = tw0(indent);
-      let line = indent, w = iw, gap = "";
-      const flush = () => { out.push(line.replace(/\s+$/, "")); line = indent; w = iw; gap = ""; };
+      let line = indent, w = iw, gap = "", hung = 0;
+      const flush = () => { out.push(line.replace(/\s+$/, "")); line = indent; w = iw; gap = ""; hung = 0; };
       for (const tk of para.slice(lead.length).match(PDF_TOKEN) || []) {
         // whitespace between words is kept as typed (tabs as four spaces), so pasted columns stay apart
         if (/^\s+$/.test(tk)) { if (line.length > indent.length) gap += tk.replace(/\t/g, "    "); continue; }
         const tw = tw0(tk), gw = gap ? tw0(gap) : 0;
-        if (w + gw + tw <= width || ([...tk].length === 1 && NO_LINE_START.test(tk) && line.length > indent.length && w <= width)) { line += gap + tk; w += gw + tw; gap = ""; continue; }
+        if (w + gw + tw <= width || ([...tk].length === 1 && NO_LINE_START.test(tk) && line.length > indent.length && hung < 2)) { if (w + gw + tw > width) hung++; line += gap + tk; w += gw + tw; gap = ""; continue; }
         if (line.length > indent.length) flush();
         gap = "";
         if (iw + tw <= width) { line += tk; w += tw; continue; }
@@ -2973,6 +2997,7 @@ ${GUIDE_LINE_RULES}
     const cols = [...hist, ...model, ...guides, ...cons], kinds = cols.map((c) => c.kind);
     const yo = (fn) => cols.map((c) => f(growth(fn(c), fn(c.p || {})), "yoy"));
     const val = (fn, k) => cols.map((c) => f(fn(c), k));
+    const valFY = (fn, k) => cols.map((c) => (c.type === "FY" ? f(fn(c), k) : ""));
     const body = [
       mkRow(TR("Revenue"), cols.map((c) => withMark(f(rev(c), "usd"), c, "rev")), "key"), mkRow(TR("  % yoy"), yo(rev), "sub"),
       mkRow(TR("  high / low (consensus, guidance)"), cols.map((c) => ((c.kind === "C" || c.kind === "G") && isNum(c.i?._revHi) ? f(c.i._revHi, "usd") + " / " + f(c.i._revLo, "usd") : "")), "sub"),
@@ -2987,18 +3012,19 @@ ${GUIDE_LINE_RULES}
       mkRow(TR("Net debt / (net cash)"), val((c) => sub(debt(c), cashST(c)), "usd")),
       mkRow(TR("Return on invested capital"), val((c) => { const t = taxRate(c); const tr = isNum(t) && t >= 0 && t <= 0.5 ? t : 0.21; const ic = sum(debt(c), nn(c.b?.totalStockholdersEquity)); const icn = isNum(ic) && isNum(cashST(c)) ? ic - cashST(c) : null; return isNum(icn) && icn > 0 ? div(ebit(c), icn) * (1 - tr) : null; }, "pct")),
       mkRow(TR("Valuation at today's price"), cols.map(() => ""), "sec"),
-      mkRow("P/E", val((c) => pos(div(mk.price, nn(c.i?.epsDiluted))), "x"), "key"),
-      mkRow(TR("EV / EBITDA"), val((c) => pos(div(mk.ev, ebitda(c))), "x")),
-      mkRow(TR("EV / Sales"), val((c) => pos(div(mk.ev, rev(c))), "x")),
-      mkRow("P/B", val((c) => pos(div(mk.mcap, nn(c.b?.totalStockholdersEquity))), "x")),
-      mkRow(TR("Dividend yield"), val((c) => div(divPaid(c), mk.mcap), "pct")),
-      mkRow(TR("FCF yield"), val((c) => div(fcf(c), mk.mcap), "pct")),
+      // multiples of a full year only (a quarter's sales or earnings against today's value means nothing)
+      mkRow("P/E", valFY((c) => pos(div(mk.price, nn(c.i?.epsDiluted))), "x"), "key"),
+      mkRow(TR("EV / EBITDA"), valFY((c) => pos(div(mk.ev, ebitda(c))), "x")),
+      mkRow(TR("EV / Sales"), valFY((c) => pos(div(mk.ev, rev(c))), "x")),
+      mkRow("P/B", valFY((c) => pos(div(mk.mcap, nn(c.b?.totalStockholdersEquity))), "x")),
+      mkRow(TR("Dividend yield"), valFY((c) => div(divPaid(c), mk.mcap), "pct")),
+      mkRow(TR("FCF yield"), valFY((c) => div(fcf(c), mk.mcap), "pct")),
     ];
     // strip of headline numbers
     doc.setFontSize(8.5); doc.setTextColor(...ink);
     const strip = [[TR("Price"), cur + " " + (isNum(mk.price) ? mk.price.toFixed(2) : "–")], [TR("Market cap"), isNum(mk.mcap) ? big(mk.mcap) : "–"], ["EV", isNum(mk.ev) ? big(mk.ev) : "–"], [TR("DCF / share"), R && isNum(R.perShare) ? R.perShare.toFixed(2) + " (" + (R.basis === "cons" ? TR("consensus") : TR("our forecast")) + ")" : "–"], [TR("Upside"), R && isNum(R.upside) ? FMT.yoy(R.upside).replace(/\u2212/g, "-") : "–"]];
     let x = m; strip.forEach(([k, v]) => { doc.setFont(PF, "normal"); doc.setTextColor(...muted); doc.text(k.toUpperCase(), x, m + 40); doc.setFont(PF, "bold"); doc.setTextColor(...ink); doc.text(v, x, m + 52); x += (W - 2 * m) / strip.length; });
-    table(["", ...cols.map((c) => c.label + " " + c.kind)], body, m + 62, kinds, { fs: cols.length > 11 ? 8 : 8.6, w0: 160 });
+    table(["", ...cols.map((c) => withMark(c.label + " " + c.kind, c, "_other"))], body, m + 62, kinds, { fs: cols.length > 11 ? 8 : 8.6, w0: 160 });
     const GMARK_NOTE = TR("* Guidance given in words, or read from growth or a change: the comments are on the Company guidance page.");
     if (marked) { doc.setFont(PF, "normal"); doc.setFontSize(7); doc.setTextColor(...muted); doc.text(GMARK_NOTE, m, doc.lastAutoTable.finalY + 10); marked = false; }
 
@@ -3041,7 +3067,7 @@ ${GUIDE_LINE_RULES}
     let y = doc.lastAutoTable.finalY + 10;
     const half = (W - 2 * m - 16) / 2;
     // guidance and cost structure side by side
-    const gRows = guidesAll.map((c) => { const o = state.inp.guide.periods[c.gkey] || {}; return [c.label, withMark(f(o.rev, "usd") + (isNum(o.revLo) ? " (" + f(o.revLo, "usd") + "–" + f(o.revHi, "usd") + ")" : ""), c, "rev"), withMark(f(o.gm, "pct"), c, "gm"), withMark(f(o.opex, "usd"), c, "opex"), f(ebit(c), "usd"), withMark(f(o.tax, "pct"), c, "tax"), withMark(f(o.eps, "eps"), c, "eps"), f(growth(rev(c), rev(c.cons || {})), "yoy")]; });
+    const gRows = guidesAll.map((c) => { const o = state.inp.guide.periods[c.gkey] || {}; return [c.label, withMark(f(o.rev, "usd") + (isNum(o.revLo) ? " (" + f(o.revLo, "usd") + "–" + f(o.revHi, "usd") + ")" : ""), c, "rev"), withMark(f(o.gm, "pct"), c, "gm"), withMark(f(o.opex, "usd"), c, "opex"), withMark(f(ebit(c), "usd"), c, ["ebit", "om"].find((k) => gmark(c, k)) || "ebit"), withMark(f(o.tax, "pct"), c, "tax"), withMark(f(o.eps, "eps"), c, "eps"), f(growth(rev(c), rev(c.cons || {})), "yoy")]; });
     if (marked) gRows.push([{ content: GMARK_NOTE, colSpan: 8, styles: { halign: "left", fontSize: 6.4, textColor: muted } }]);
     const gSrc = state.inp.guide?.src;
     const gLab = gSrc ? [gSrc.periods?.length ? TR("release ") + gSrc.filed : "", gSrc.call?.periods?.length ? gSrc.call.label + TR(" call") : ""].filter(Boolean).join(" + ") : "";
