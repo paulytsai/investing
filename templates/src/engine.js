@@ -747,7 +747,10 @@ function runDcf(mdl, mkt, setIn, shift, basis) {
   let s2cDflt = ratio(mdl.fys.slice(2)), s2cSrc = "our forecast, years 3–5";
   if (!isNum(s2cDflt)) { s2cDflt = ratio(mdl.fys); s2cSrc = "our forecast, years 1–5"; }
   const s2cFromModel = isNum(s2cDflt);
-  if (!s2cFromModel) { s2cDflt = clamp(div(revB, icB) ?? 1.5, 0.3, 8); s2cSrc = "revenue ÷ invested capital, since our forecast's reinvestment is not positive"; }
+  if (!s2cFromModel) {
+    s2cDflt = clamp(div(revB, icB) ?? 1.5, 0.3, 8);
+    s2cSrc = isNum(div(revB, icB)) ? "revenue ÷ invested capital, since our forecast's reinvestment is not positive" : "a default, since neither our forecast's reinvestment nor invested capital is positive";
+  }
   const s2c = isNum(s.s2c) ? s.s2c : s2cDflt;
 
   const rows = [];
@@ -785,7 +788,9 @@ function runDcf(mdl, mkt, setIn, shift, basis) {
   const roicDflt = r5 && r5.nopat > 0 && !(r5.icBeg > 0) ? 0.4 : isNum(roic5) ? clamp((roic5 + waccT) / 2, waccT, 0.4) : waccT;
   const roicT = isNum(s.roicT) ? s.roicT : roicDflt;
   // sales-to-capital consistent with the terminal year: reinvestment g / ROIC on revenue growing at g
-  const s2cT = s.mT + lam > 0 && s.tm < 1 && roicT > 0 ? clamp(roicT / ((s.mT + lam) * (1 - s.tm)), 0.3, 8) : s2c;
+  // (none when the target margin or ROIC isn't positive: the ratio then stays at year 5's)
+  const s2cTc = s.mT + lam > 0 && s.tm < 1 && roicT > 0;
+  const s2cT = s2cTc ? clamp(roicT / ((s.mT + lam) * (1 - s.tm)), 0.3, 8) : s2c;
   const l5 = rows[rows.length - 1];
   const g5 = l5.g ?? g, m5 = div(l5.ebit - leaseInt(l5.rev), l5.rev), t5 = l5.tax, sbc5 = div(l5.sbc, l5.rev) ?? 0;
   // fade mode: a typed ratio applies to all five years; by default sales-to-capital moves from our forecast's ratio to
@@ -839,10 +844,10 @@ function runDcf(mdl, mkt, setIn, shift, basis) {
   // what treating stock comp as a cost is worth: PV of the SBC stream on the same timing, per share
   const pvSbc = rows.reduce((a, r) => a + (r.sbc || 0) * r.df, 0) - (ytd && ytd.n > 0 ? (ytd.sbc || 0) * rows[0].df : 0) + (waccT > g ? (sbc5 * revT) / (waccT - g) * last.df : 0);
   return {
-    basis: useCons ? "cons" : "model", s, d0, ke, keT, kdAT, wE, waccCalc, wacc, waccT, g, roicT, roicDflt, s2c, s2cDflt, s2cSrc, s2cT, fadeMode, rr5, rrT, rows,
+    basis: useCons ? "cons" : "model", s, d0, ke, keT, kdAT, wE, waccCalc, wacc, waccT, g, roicT, roicDflt, s2c, s2cDflt, s2cSrc, s2cT, s2cTc, fadeMode, rr5, rrT, rows,
     terminal: { rev: revT, ebit: ebitT, nopat: nopatT, reinvRate: reinvRateT, fcff: fcffT, tv, pvTv, s2c: nopatT * reinvRateT > 0 ? (revT - last.rev) / (nopatT * reinvRateT) : null },
     pvSum, ev, equity, perShare, upside: isNum(perShare) && isNum(mkt.price) ? perShare / mkt.price - 1 : null,
-    tvShare: div(pvTv, ev), debtUsed: Dv, leaseX, leaseOn, icB, ytd: ytd && ytd.n > 0 ? { ...ytd, fcff: ytdF } : null, elapsed,
+    tvShare: div(pvTv, ev), debtUsed: Dv, leaseX, leaseOn, lam, icB, ytd: ytd && ytd.n > 0 ? { ...ytd, fcff: ytdF } : null, elapsed,
     sbcPerShare: div(pvSbc, mkt.shares),
   };
 }
