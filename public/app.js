@@ -447,7 +447,7 @@
       const sens = S ? wrap(`<table class="tbl sens"><thead><tr><th>WACC \\ g</th>${S.gs.map((g) => `<th class="num">${fmtPct(g, 1)}</th>`).join("")}</tr></thead><tbody>${S.grid.map((r, i) => `<tr><th>${fmtPct(S.waccs[i], 1)}</th>${r.map((val, j) => `<td class="num ${i === 1 && j === 1 ? "base" : ""}">${val === null ? NA : "$" + x(val, 0)}</td>`).join("")}</tr>`).join("")}</tbody></table>`) + `<p class="note">${V.sensNote}</p>` : "";
       dcfHtml = head + yrs + `<h4 class="sub">${V.sens}</h4>` + sens + `<details class="method"><summary>${V.method}</summary>${V.methodBody.map((para) => `<p>${esc(para)}</p>`).join("")}</details>`;
     }
-    const T = t("target");
+    const T = t("tp");
     const eps = v.epsNtm || v.epsForward;
     let targetHtml = `<p class="muted">${NA}</p>`;
     if (eps && v.price) {
@@ -475,7 +475,7 @@
       if (!m || m <= 0) { priceEl.textContent = NA; upEl.textContent = ""; return; }
       const tp = m * eps; const up = (tp / v.price - 1) * 100;
       priceEl.textContent = `$${fmtDec(tp, 2)}`;
-      upEl.textContent = `${t("target").upside} ${up >= 0 ? "+" : ""}${fmtDec(up, 1)}%`;
+      upEl.textContent = `${t("tp").upside} ${up >= 0 ? "+" : ""}${fmtDec(up, 1)}%`;
       upEl.className = `tp-up ${up >= 0 ? "up" : "down"}`;
       try { localStorage.setItem(`tpe:${c.b.symbol}`, String(m)); } catch {}
     };
