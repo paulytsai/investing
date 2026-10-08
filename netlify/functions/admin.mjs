@@ -42,13 +42,18 @@ export default handler(async (req, context) => {
     const states = {};
     for (const u of users) { const st = entitlement(u).state; states[st] = (states[st] || 0) + 1; }
     const warm = await jobs.get("warm:last");
+    const coverage = (await jobs.get("warm:coverage")) || {};
+    const universe = warmUniverse();
+    const langs = [...new Set(["en", ...cfg.locales()])];
+    const covCounts = Object.fromEntries(langs.map((l) => [l, universe.filter((sym) => coverage[sym]?.ready?.[l]).length]));
+    const pending = universe.filter((sym) => !langs.every((l) => coverage[sym]?.ready?.[l]));
     return json({
       generatedAt: new Date().toISOString(),
       totals: { users: users.length, states, signups7d: users.filter((u) => now - u.createdAt < 7 * 86400000).length, signups30d: users.filter((u) => now - u.createdAt < 30 * 86400000).length, activeToday: activeIn(86400000), active7d: activeIn(7 * 86400000), active30d: activeIn(30 * 86400000), views30d: series.reduce((a, d) => a + d.views, 0), demo30d: series.reduce((a, d) => a + d.demo, 0), aiGenerations30d: generations, aiTranslations30d: translations, aiCostUsd30d: Math.round(cost * 100) / 100 },
       series,
       topSymbols: Object.entries(bySymbol).sort((a, b) => b[1] - a[1]).slice(0, 25).map(([symbol, views]) => ({ symbol, views })),
       recent: events.slice(0, 60),
-      warm: { universe: warmUniverse().length, perRun: Number(process.env.WARM_PER_RUN || 8), last: warm },
+      warm: { universe: universe.length, perRun: Number(process.env.WARM_PER_RUN || 8), last: warm, langs, coverage: covCounts, pending, current: warm?.running ? warm.current : null },
       users: allUsers.slice(0, 200).map((u) => ({ username: u.username, email: u.email, createdAt: u.createdAt, state: entitlement(u).state, status: u.subscription?.status || null, role: u.role || null, lastSeen: lastSeen[u.username] || null })),
     });
   }

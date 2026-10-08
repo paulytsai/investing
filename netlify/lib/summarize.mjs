@@ -26,10 +26,30 @@ export async function getCachedSummary(symbol, lang, latestTranscriptDate) {
 function client() {
   const apiKey = cfg.anthropicKey();
   if (!apiKey) throw new Error("ANTHROPIC_API_KEY is not set");
-  return new Anthropic({ apiKey, baseURL: cfg.anthropicBaseUrl() || undefined });
+  return new Anthropic({ apiKey, baseURL: cfg.anthropicBaseUrl() || undefined, maxRetries: 3 });
 }
 
-async function runJson({ system, user, schema, effort, maxTokens }) {
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+/** Run fn, waiting out rate limits (HTTP 429 / 529) with growing pauses. */
+async function withRateLimitRetry(fn, waits = [20000, 45000, 90000]) {
+  for (let i = 0; ; i++) {
+    try {
+      return await fn();
+    } catch (e) {
+      const status = e && (e.status || e.statusCode);
+      if ((status === 429 || status === 529) && i < waits.length) { console.warn(`rate limited (${status}); waiting ${waits[i] / 1000}s`); await sleep(waits[i]); continue; }
+      if (status === 429) throw new Error("Rate limited by the AI gateway (HTTP 429) after retries; will retry on the next warm run");
+      throw e;
+    }
+  }
+}
+
+async function runJson(opts) {
+  return withRateLimitRetry(() => runJsonOnce(opts));
+}
+
+async function runJsonOnce({ system, user, schema, effort, maxTokens }) {
   const stream = client().beta.messages.stream({
     model: cfg.summaryModel(),
     max_tokens: maxTokens,
