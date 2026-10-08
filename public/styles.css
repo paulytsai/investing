@@ -506,3 +506,8 @@ table.cons .small { line-height: 1.4; }
 .cp-num { font-size: 22px; font-weight: 700; margin: 2px 0; }
 .cp-move { font-size: 13px; }
 @media (max-width: 720px) { .composite { grid-template-columns: 1fr; } }
+
+/* ---------- plans ---------- */
+.annual-line { font-size: 14px; margin: -4px 0 10px; color: var(--accent); font-weight: 600; }
+.plans { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.plans .small { flex-basis: 100%; margin: 2px 0 0; }

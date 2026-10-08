@@ -15,9 +15,9 @@ export function billingProvider() {
 export const billingEnabled = () => billingProvider() !== null;
 
 /** URL that starts a subscription for this user. */
-export async function checkoutUrl(user) {
+export async function checkoutUrl(user, plan = "monthly") {
   const p = billingProvider();
-  if (p === "stripe") return stripe.createCheckoutSession(user, { siteUrl: cfg.siteUrl() });
+  if (p === "stripe") return stripe.createCheckoutSession(user, { siteUrl: cfg.siteUrl(), plan });
   if (p === "lemonsqueezy") return lemon.checkoutUrl(user);
   return null;
 }

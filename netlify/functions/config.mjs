@@ -10,6 +10,8 @@ export default handler(async () => {
     trialDays: cfg.trialDays(),
     priceLabel: lemon.priceLabel,
     priceCurrency: cfg.price().currency,
+    priceAmount: Number(cfg.price().amount) || null,
+    annual: billingProvider() === "stripe" ? cfg.price().annual : null,
     billingEnabled: billingProvider() !== null,
     billingProvider: billingProvider(),
     summariesEnabled: !!cfg.anthropicKey(),

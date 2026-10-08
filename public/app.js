@@ -16,11 +16,15 @@
     if (typeof v === "string" && v.includes("{brand}")) v = v.split("{brand}").join(brandName());
     if (typeof v === "string" && v.includes("{currency}")) v = v.split("{currency}").join(currencyName());
     if (typeof v === "string" && v.includes("{trial")) { const days = (state.config && state.config.trialDays) || 7; v = v.split("{trialSpan}").join(window.trialSpan(days, state.locale)).split("{trial}").join(window.trialLabel(days, state.locale)); }
+    // Whole blocks (landing, teaser, billing ...) get the same substitutions in every string.
+    if (v && typeof v === "object") { const days = (state.config && state.config.trialDays) || 7; v = JSON.parse(JSON.stringify(v).split("{brand}").join(brandName()).split("{trialSpan}").join(window.trialSpan(days, state.locale)).split("{trial}").join(window.trialLabel(days, state.locale)).split("{currency}").join(currencyName())); }
     return v;
   }
   const brandName = () => (state.config && state.config.brand && state.config.brand.name) || "Kabukaizu";
   const currencyName = () => { const c = (state.config && state.config.priceCurrency) || "USD"; const names = (window.CURRENCY_NAMES || {})[state.locale] || {}; return names[c] || c; };
   // " in Japanese and English" on a two-language site, nothing on a single-language one (English copy only).
+  // Annual plan line: "¥26,550 / year (25% off, ¥2,213 a month)" when the site offers one.
+  const annualInfo = () => { const a = state.config && state.config.annual; const m = state.config && state.config.priceAmount; if (!a || !m) return null; const yearly = Number(a.amount); const pct = Math.round((1 - yearly / (12 * m)) * 100); const sym = String(state.config.priceLabel || "").replace(/[\d.,\s]/g, ""); const perMonth = yearly / 12; const dec = state.config.priceCurrency === "JPY" || state.config.priceCurrency === "TWD" ? 0 : 2; return { label: a.label, pct, perMonth: `${sym}${perMonth.toLocaleString(undefined, { minimumFractionDigits: dec, maximumFractionDigits: dec })}` }; };
   const langsNote = () => { const ls = (state.config && state.config.locales) || []; return ls.length > 1 ? ` in ${ls.map((l) => window.LOCALE_NAMES_EN[l] || l).join(" and ")}` : ""; };
   function applyBrand() {
     const b = (state.config && state.config.brand) || {};
@@ -157,7 +161,8 @@
     stopSummaryPolling(state.stock); stopSummaryPolling(state.demo);
     const price = state.config.priceLabel;
     if (!state.user) {
-      const L = JSON.parse(JSON.stringify(t("landing")).split("{brand}").join(brandName()));
+      const days = (state.config && state.config.trialDays) || 7;
+      const L = JSON.parse(JSON.stringify(t("landing")).split("{brand}").join(brandName()).split("{trialSpan}").join(window.trialSpan(days, state.locale)).split("{trial}").join(window.trialLabel(days, state.locale)));
       app.innerHTML = `
       <section class="hero hero-wave"><img class="hero-seal" src="${esc((state.config.brand && state.config.brand.sealImage) || "/img/seal.png")}" alt="${esc((state.config.brand && state.config.brand.seal) || "株海図")}"><div class="hero-inner"><div class="brand"><span class="brand-text"><span class="brand-name">${esc(brandName())}</span><span class="brand-sub">${esc((state.config.brand && state.config.brand.sub) || "US Stock Almanac")}</span></span></div>
         <h1>${esc(L.heroTitle)}</h1><p class="lead">${esc(L.heroLead)}</p>
@@ -182,9 +187,10 @@
       <section class="land pricing">
         <h2>${esc(L.pricingTitle)}</h2>
         <div class="pricecard"><div class="plan">${esc(L.pricingPlan)}</div><div class="amount">${esc(price)} <span class="per">${esc(t("perMonth"))}</span></div>
+          ${annualInfo() ? `<div class="annual-line">${esc(t("annual.line", { price: annualInfo().label, pct: annualInfo().pct, perMonth: annualInfo().perMonth }))}</div>` : ""}
           <ul>${L.pricingBullets.map((b) => `<li>${esc(b.replace("{langs}", langsNote()))}</li>`).join("")}</ul>
           <a class="btn primary big" href="#/signup">${esc(L.ctaPrimary)}</a>
-          <p class="muted small">${esc(L.pricingNote.split("{currency}").join(currencyName()))}</p></div>
+          <p class="muted small">${esc(L.pricingNote.split("{currency}").join(currencyName()).split("{provider}").join(state.config.billingProvider === "stripe" ? "Stripe" : "Lemon Squeezy"))}</p></div>
       </section>
       <div class="footer center">${esc(L.disclaimer)}<br><a href="#/about">${t("about.link")}</a> · <a href="#/contact">${t("contact.link")}</a></div>`;
       mountDemo(app.querySelector("[data-demo]"));
@@ -368,7 +374,7 @@
     app.innerHTML = `<div class="panel form"><h2>${t("account")}</h2>
       <div class="kv"><div>${t("username")}</div><div>${esc(u.username)}</div><div>${t("email")}</div><div>${esc(u.email)}</div><div>${t("pricing")}</div><div>${statusLine()}</div></div>
       <div id="formError">${location.hash.includes("checkout=success") && !hasSub ? `<div class="pill">${esc(B.checkoutDone)}</div>` : ""}</div>
-      ${canSubscribe ? `<button class="btn primary" id="subscribeBtn">${t("subscribe")} — ${esc(state.config.priceLabel)}</button>` : ""}
+      ${canSubscribe ? subscribeButtons() : ""}
       ${u.builtin ? "" : `<h3 class="billing-h">${t("pw.changeTitle")}</h3><form id="pwForm"><label>${t("pw.current")}<input name="currentPassword" type="password" required autocomplete="current-password"></label><label>${t("pw.newPassword")}<input name="newPassword" type="password" required minlength="8" autocomplete="new-password"></label><label>${t("pw.confirm")}<input name="confirm" type="password" required minlength="8" autocomplete="new-password"></label><button class="btn" type="submit">${t("pw.change")}</button> <span id="pwMsg" class="muted small"></span></form>`}
       <h3 class="billing-h">${B.title}</h3>
       ${hasSub ? `<button class="btn" id="portalBtn">${t("manageBilling")}</button><p class="muted small">${B.portalHint}</p>` : ""}
@@ -440,7 +446,7 @@
     stopSummaryPolling(state.stock); stopSummaryPolling(state.demo);
     app.innerHTML = `<div class="panel form"><h2>${t("paywallTitle")}</h2><p>${t("paywallBody", { price: state.config.priceLabel })}</p>
       <div id="formError"></div>
-      ${state.config.billingEnabled ? `<button class="btn primary" id="subscribeBtn">${t("subscribe")} — ${esc(state.config.priceLabel)}</button>` : `<p class="error">${t("errors.billing_not_configured")}</p>`}
+      ${state.config.billingEnabled ? subscribeButtons() : `<p class="error">${t("errors.billing_not_configured")}</p>`}
       ${state.user && state.user.subscription && state.user.subscription.id ? `<button class="btn" id="portalBtn">${t("manageBilling")}</button>` : ""}</div>`;
     bindBilling();
   }
@@ -456,12 +462,20 @@
     };
     setTimeout(tick, 1500);
   }
+  // One button for the monthly plan, a second for the annual plan when the site offers one.
+  function subscribeButtons() {
+    const a = annualInfo();
+    const monthly = `<button class="btn primary" id="subscribeBtn">${t("subscribe")} — ${esc(state.config.priceLabel)} ${esc(t("perMonth"))}</button>`;
+    if (!a) return monthly;
+    return `<div class="plans">${monthly} <button class="btn primary" id="subscribeAnnualBtn">${esc(t("annual.button", { price: a.label, pct: a.pct }))}</button><p class="muted small">${esc(t("annual.note", { perMonth: a.perMonth }))}</p></div>`;
+  }
   function bindBilling() {
     const go = async (action) => {
       try { const r = await api(`/api/billing/${action}`); window.location.href = r.url; }
       catch (e) { $("#formError").innerHTML = `<div class="error">${esc(t(`errors.${e.code}`) !== `errors.${e.code}` ? t(`errors.${e.code}`) : e.message)}</div>`; }
     };
-    const s = $("#subscribeBtn"); if (s) s.addEventListener("click", () => go("checkout"));
+    const s = $("#subscribeBtn"); if (s) s.addEventListener("click", () => go("checkout?plan=monthly"));
+    const sa = $("#subscribeAnnualBtn"); if (sa) sa.addEventListener("click", () => go("checkout?plan=annual"));
     const p = $("#portalBtn"); if (p) p.addEventListener("click", () => go("portal"));
   }
 

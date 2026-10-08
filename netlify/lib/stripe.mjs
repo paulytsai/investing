@@ -36,17 +36,18 @@ async function call(method, path, body, { idempotencyKey } = {}) {
 }
 
 /** Hosted Checkout for the monthly plan. Returns the URL to send the user to. */
-export async function createCheckoutSession(user, { siteUrl }) {
+export async function createCheckoutSession(user, { siteUrl, plan = "monthly" }) {
   const s = cfg.stripe();
   const base = siteUrl.replace(/\/$/, "");
+  const price = plan === "annual" && s.priceIdAnnual ? s.priceIdAnnual : s.priceId;
   const params = {
     mode: "subscription",
-    line_items: [{ price: s.priceId, quantity: 1 }],
+    line_items: [{ price, quantity: 1 }],
     success_url: `${base}/#/account?checkout=success`,
     cancel_url: `${base}/#/account`,
     client_reference_id: user.id,
-    metadata: { user_id: user.id, username: user.username },
-    subscription_data: { metadata: { user_id: user.id } },
+    metadata: { user_id: user.id, username: user.username, plan },
+    subscription_data: { metadata: { user_id: user.id, plan } },
     allow_promotion_codes: true,
   };
   if (s.managedPayments) params.managed_payments = { enabled: true };

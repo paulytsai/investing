@@ -71,7 +71,12 @@ export const cfg = {
   price() {
     const currency = (env("PRICE_CURRENCY", "USD") || "USD").toUpperCase();
     const amount = env("PRICE_AMOUNT", "10");
-    return { label: env("PRICE_LABEL", "US$10"), amount: String(amount), currency };
+    const annualAmount = env("PRICE_AMOUNT_ANNUAL");
+    return {
+      label: env("PRICE_LABEL", "US$10"), amount: String(amount), currency,
+      // Annual plan (shown only when the Stripe annual price is set): amount per year and its label.
+      annual: annualAmount && env("STRIPE_PRICE_ID_ANNUAL") ? { label: env("PRICE_LABEL_ANNUAL", annualAmount), amount: String(annualAmount) } : null,
+    };
   },
   // Stripe Billing (preferred): the site's monthly price in its own currency; Managed
   // Payments makes Stripe the merchant of record (tax handled) when activated in the dashboard.
@@ -79,6 +84,7 @@ export const cfg = {
     return {
       secretKey: env("STRIPE_SECRET_KEY"),
       priceId: env("STRIPE_PRICE_ID"),
+      priceIdAnnual: env("STRIPE_PRICE_ID_ANNUAL"), // optional yearly price on the same product
       webhookSecret: env("STRIPE_WEBHOOK_SECRET"),
       managedPayments: env("STRIPE_MANAGED_PAYMENTS", "1") !== "0",
     };

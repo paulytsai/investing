@@ -1,4 +1,4 @@
-import { json, handler, param, HttpError } from "../lib/http.mjs";
+import { json, handler, param, query, HttpError } from "../lib/http.mjs";
 import { currentUser } from "../lib/entitlement.mjs";
 import { checkoutUrl, portalUrl } from "../lib/billing.mjs";
 
@@ -8,7 +8,8 @@ export default handler(async (req, context) => {
   const action = param(context, "action");
 
   if (action === "checkout") {
-    const url = await checkoutUrl(user);
+    const plan = query(req).get("plan") === "annual" ? "annual" : "monthly";
+    const url = await checkoutUrl(user, plan);
     if (!url) throw new HttpError(503, "billing_not_configured");
     return json({ url });
   }

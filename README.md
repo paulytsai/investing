@@ -259,7 +259,9 @@ one recurring price per currency, and each site points at its own price.
 4. Settings → Billing → Customer portal: enable it, allow cancellation and payment-method
    updates. The "Manage billing" button opens it.
 5. Set on the site: `STRIPE_SECRET_KEY`, `STRIPE_PRICE_ID`, `STRIPE_WEBHOOK_SECRET`,
-   `PRICE_LABEL`, `PRICE_AMOUNT`, `PRICE_CURRENCY`, then redeploy. Test first with a
+   `PRICE_LABEL`, `PRICE_AMOUNT`, `PRICE_CURRENCY`, then redeploy. An annual plan is
+   offered when `STRIPE_PRICE_ID_ANNUAL`, `PRICE_AMOUNT_ANNUAL` and `PRICE_LABEL_ANNUAL`
+   are set too; the discount shown is computed from the two amounts. Test first with a
    sandbox key, a sandbox price and the card 4242 4242 4242 4242.
 
 The checkout carries the user id; the webhook matches the subscription to the account by
