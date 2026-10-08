@@ -49,6 +49,16 @@ export default handler(async (req, context) => {
     return json({ ok: true }, 200, { "set-cookie": clearCookie() });
   }
 
+  // Beginner ("simple") or full page layout, remembered on the account.
+  if (action === "view" && req.method === "POST") {
+    const user = await currentUser(req);
+    if (!user) throw new HttpError(401, "unauthenticated");
+    const body = await readJson(req);
+    if (!["simple", "full"].includes(body.view)) throw new HttpError(400, "invalid_view");
+    user.view = body.view;
+    await saveUser(user);
+    return json(userResponse(user));
+  }
   if (action === "locale" && req.method === "POST") {
     const user = await currentUser(req);
     if (!user) throw new HttpError(401, "unauthenticated");

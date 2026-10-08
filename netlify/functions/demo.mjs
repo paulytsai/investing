@@ -4,6 +4,7 @@ import { logEvent } from "../lib/events.mjs";
 import { stockBundle, chartSeries, normalizeSymbol } from "../lib/stockdata.mjs";
 import { summaryStatus, deepStatus } from "../lib/summaryjob.mjs";
 import { cfg, SUPPORTED_LOCALES } from "../lib/config.mjs";
+import { ensureSimple } from "../lib/simple.mjs";
 
 const RANGES = ["1m", "3m", "6m", "1y", "3y", "5y", "10y"];
 
@@ -13,12 +14,13 @@ export default handler(async (req) => {
   if (!SUPPORTED_LOCALES.includes(lang)) throw new HttpError(400, "invalid_locale");
   const bundle = await stockBundle(symbol);
   await logEvent("demo_view", { detail: symbol, req });
-  const [charts, summary, deep] = await Promise.all([
+  const [charts, summary, deep, simple] = await Promise.all([
     Promise.all(RANGES.map((r) => chartSeries(symbol, r).then((c) => [r, { points: c.points, ma50: c.ma50, ma200: c.ma200 }]))),
     summaryStatus(symbol, lang, bundle),
     deepStatus(symbol, lang, bundle),
+    cfg.anthropicKey() ? ensureSimple(symbol, lang, bundle).then((r) => (r ? { status: "ready", simple: r } : { status: "pending" })).catch(() => ({ status: "error" })) : { status: "disabled" },
   ]);
-  return json({ bundle, charts: Object.fromEntries(charts), summary, deep }, 200, { "cache-control": "public, max-age=600" });
+  return json({ bundle, charts: Object.fromEntries(charts), summary, deep, simple }, 200, { "cache-control": "public, max-age=600" });
 });
 
 export const config = { path: "/api/demo" };
