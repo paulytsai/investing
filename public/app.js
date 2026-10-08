@@ -612,6 +612,28 @@
       <section class="card">${note}</section>`;
   }
 
+  // ---------- AI summary polling ----------
+  function stopSummaryPolling(c) { if (c && c.timer) clearTimeout(c.timer); if (c) c.timer = null; }
+  function applySummary(c, r, lang) {
+    c.summaryStatus = r.status;
+    if (r.status === "ready") { c.s = r.summary; c.tries = 0; }
+    if (c.root && (c.tab === 0 || c.tab === 2 || c.tab === 3)) renderTab(c);
+    if (r.status === "pending" && c.tries < 40) { c.tries++; c.timer = setTimeout(() => loadSummary(c), 6000); }
+  }
+  async function loadSummary(c) {
+    stopSummaryPolling(c);
+    const symbol = c.b && c.b.symbol; const lang = state.locale;
+    if (!symbol) return;
+    if (!state.config.summariesEnabled) { c.summaryStatus = "disabled"; if (c.root && c.tab === 0) renderTab(c); return; }
+    try {
+      const r = c.demo ? (await api(`/api/demo?lang=${encodeURIComponent(lang)}`)).summary : await api(`/api/summary/${encodeURIComponent(symbol)}?lang=${encodeURIComponent(lang)}`);
+      if (c.b.symbol !== symbol || lang !== state.locale) return;
+      applySummary(c, r, lang);
+    } catch (e) {
+      c.summaryStatus = "error"; if (c.root && c.tab === 0) renderTab(c);
+    }
+  }
+
   function stopDeepPolling(c) { if (c && c.deepTimer) clearTimeout(c.deepTimer); if (c) c.deepTimer = null; }
   function applyDeep(c, r) {
     c.deepStatus = r.status;
