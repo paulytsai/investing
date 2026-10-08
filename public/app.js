@@ -433,9 +433,9 @@
       ${row(t("feature"), feature)}
       ${row(t("segments"), co.segments.length ? co.segments.map((x) => `${esc(x.name)}${x.sharePct ?? "?"}`).join("、") + (co.segmentsFiscalYear ? ` <${co.segmentsFiscalYear}>` : "") : NA)}
       ${row(t("sector"), `${esc(co.sector || "")} / ${esc(co.industry || "")}${co.sicDescription ? `　<span class="muted">${t("sic")}: ${esc(co.sicDescription)} (${esc(co.sicCode)})</span>` : ""}`)}
+      ${row(`<b>${t("story")}</b>`, aiBox(c, "story"))}
       ${row(`<b>${t("longTerm")}</b>`, aiBox(c, "longTerm"))}
       ${row(`<b>${t("recent")}</b>`, aiBox(c, "recent"))}
-      ${row(`<b>${t("story")}</b>`, aiBox(c, "story"))}
       ${row(`<b>${t("bull")}</b>`, aiBox(c, "bull"))}
       ${row(`<b>${t("bear")}</b>`, aiBox(c, "bear"))}
       ${row(t("hq"), esc(co.address || NA))}
