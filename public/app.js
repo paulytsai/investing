@@ -190,7 +190,7 @@
       <section class="hero hero-wave"><img class="hero-seal" src="${esc((state.config.brand && state.config.brand.sealImage) || "/img/seal.png")}" alt="${esc((state.config.brand && state.config.brand.seal) || "株海図")}"><div class="hero-inner"><div class="brand"><span class="brand-text"><span class="brand-name">${esc(brandName())}</span><span class="brand-sub">${esc((state.config.brand && state.config.brand.sub) || "US Stock Almanac")}</span></span></div>
         <h1>${esc(L.heroTitle)}</h1><p class="lead">${esc(L.heroLead)}</p>
         <div class="actions"><a class="btn primary big" href="#/signup">${esc(L.ctaPrimary)}</a><a class="btn big" href="#/login">${esc(L.ctaSecondary)}</a></div>
-        <p class="small">${esc(L.ctaNote.replace("{price}", price))}</p>
+        <p class="small"><span class="pill ok">${esc(L.noCard)}</span> ${esc(L.ctaNote.replace("{price}", price))}</p>
       </div><span class="hero-credit">${esc(t("heroCredit"))}</span></section>
       <section class="land">
         <h2>${esc(L.samplesTitle)}</h2><p class="lead">${esc(L.samplesLead)}</p>
@@ -230,7 +230,7 @@
     stopSummaryPolling(state.stock); stopSummaryPolling(state.demo);
     const isSignup = kind === "signup";
     app.innerHTML = `<div class="panel form"><h2>${t(isSignup ? "signup" : "login")}</h2>
-      ${isSignup ? `<p class="muted">${t("trialNote", { price: state.config.priceLabel })}</p>` : ""}
+      ${isSignup ? `<p class="muted">${t("trialNote", { price: state.config.priceLabel })}</p><p class="nocard"><span class="pill ok">${esc(t("landing.noCard"))}</span> ${esc(t("landing.ctaNote").replace("{price}", state.config.priceLabel))}</p>` : ""}
       <div id="formError"></div>
       <form id="authForm">
         ${isSignup ? `<label>${t("username")}<input name="username" required minlength="3" maxlength="32" autocomplete="username"></label>
@@ -469,7 +469,7 @@
         <form id="logForm" class="coupon-admin"><select name="days"><option value="1">today</option><option value="7" selected>7 days</option><option value="30">30 days</option></select> <input name="user" placeholder="user or visitor id" style="width:12em"> <input name="action" placeholder="action (view, tab, search…)" style="width:14em"> <input name="country" placeholder="CC" maxlength="2" style="width:4em;text-transform:uppercase"> <button class="btn small" type="submit">Load</button> <span id="logMsg" class="muted small"></span></form>
         <div id="logTable"></div>
       </section>
-      <section class="card"><h3 class="sec">Users<span class="sec-extra">click a name for everything that member did</span></h3>${wrap(`<table class="tbl"><thead><tr><th>User</th><th>Email</th><th>Signed up</th><th>Status</th><th>Lang</th><th>Events 30d</th><th>Last seen (JST)</th><th>Location</th></tr></thead><tbody>${d.users.map((u) => `<tr><td><a href="#/admin/user/${esc(encodeURIComponent(u.username))}">${esc(u.username)}</a>${u.role ? ` <span class="pill">${esc(u.role)}</span>` : ""}</td><td>${esc(u.email)}</td><td>${esc(fmtDate(new Date(u.createdAt).toISOString()))}</td><td>${esc(u.state)}${u.status ? ` (${esc(u.status)})` : ""}</td><td>${esc(u.locale || "")}</td><td class="num">${fmtInt(u.events30d || 0)}</td><td>${u.lastSeen ? esc(fmtJst(u.lastSeen)) : "—"}</td><td class="muted">${u.location ? esc(placeOf(u.location)) : ""}</td></tr>`).join("")}</tbody></table>`)}</section>
+      <section class="card"><h3 class="sec">Users <a class="btn small" href="/api/admin/users.xlsx" download>Export to Excel</a><span class="sec-extra">click a name for everything that member did</span></h3>${wrap(`<table class="tbl"><thead><tr><th>User</th><th>Email</th><th>Signed up</th><th>Status</th><th>Lang</th><th>Events 30d</th><th>Last seen (JST)</th><th>Location</th></tr></thead><tbody>${d.users.map((u) => `<tr><td><a href="#/admin/user/${esc(encodeURIComponent(u.username))}">${esc(u.username)}</a>${u.role ? ` <span class="pill">${esc(u.role)}</span>` : ""}</td><td>${esc(u.email)}</td><td>${esc(fmtDate(new Date(u.createdAt).toISOString()))}</td><td>${esc(u.state)}${u.status ? ` (${esc(u.status)})` : ""}</td><td>${esc(u.locale || "")}</td><td class="num">${fmtInt(u.events30d || 0)}</td><td>${u.lastSeen ? esc(fmtJst(u.lastSeen)) : "—"}</td><td class="muted">${u.location ? esc(placeOf(u.location)) : ""}</td></tr>`).join("")}</tbody></table>`)}</section>
       <section class="card"><h3 class="sec">Complimentary member<span class="sec-extra">family, friends, press: full access, never billed</span></h3>
         <form id="memberForm" class="coupon-admin"><input name="username" placeholder="username" required minlength="3" maxlength="32"> <input name="email" type="email" placeholder="email (optional)"> <input name="password" type="password" placeholder="password (8+)" required minlength="8" autocomplete="new-password"> <input name="note" placeholder="note" maxlength="120"> <button class="btn small" type="submit">Create</button> <span id="memberMsg" class="muted small"></span></form>
       </section>

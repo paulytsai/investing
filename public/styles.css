@@ -547,3 +547,8 @@ table.cons .small { line-height: 1.4; }
 .coupon-admin { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 8px; }
 .coupon-admin input { padding: 5px 8px; border: 1px solid var(--border); border-radius: 3px; font-size: 14px; }
 .coupon.applied span { color: var(--accent, #0b5bd3); font-weight: 600; }
+
+/* "no credit card" badge on the hero, the price card and the signup form */
+.pill.ok { background: #e3f3e8; color: #1b6b3a; border: 1px solid #bfe3cb; font-weight: 600; }
+.hero-wave .pill.ok { background: rgba(227,243,232,.92); }
+.form .nocard { margin: -4px 0 12px; font-size: 14px; color: var(--muted); }

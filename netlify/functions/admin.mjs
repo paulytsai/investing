@@ -11,6 +11,7 @@ import { warmUniverse } from "../lib/universe.mjs";
 import { dispatchWarm, warmStatus, warmCoverage, warmSettings } from "../lib/warmer.mjs";
 import { pendingResets } from "../lib/users.mjs";
 import { createAccessCode, listAccessCodes, deactivateAccessCode } from "../lib/coupons.mjs";
+import { xlsx } from "../lib/xlsx.mjs";
 
 async function recentMessages() {
   const store = await openStore("contact");
@@ -175,6 +176,21 @@ export default handler(async (req, context) => {
     const keys = (await store.list("")).filter((k) => { const p = k.split(":"); return p.includes(symbol) && p.includes(lang) && !k.startsWith("sector:"); });
     for (const k of keys) await store.delete(k);
     return json({ symbol, lang, deleted: keys });
+  }
+
+  // GET /api/admin/users.xlsx: every member with status, billing, usage and location, plus access codes.
+  if (action === "users.xlsx") {
+    const [users, events, codes] = await Promise.all([listUsers(), listEvents(90), listAccessCodes()]);
+    const jst = (ts) => ts ? new Intl.DateTimeFormat("ja-JP", { timeZone: "Asia/Tokyo", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false }).format(new Date(ts)) : "";
+    const byUser = {};
+    for (const e of events) { if (!e.user || e.anon) continue; const u = (byUser[e.user] ||= { n: 0, n30: 0, first: e.ts, last: 0, loc: null, days: new Set(), tickers: {} }); u.n++; if (Date.now() - e.ts < 30 * 86400000) u.n30++; u.first = Math.min(u.first, e.ts); if (e.ts > u.last) { u.last = e.ts; u.loc = [e.city, e.region, e.country !== "ZZ" ? e.country : null].filter(Boolean).join(", "); } u.days.add(e.day); if (e.action === "view") u.tickers[e.detail] = (u.tickers[e.detail] || 0) + 1; }
+    const header = ["Username", "Email", "Role", "Plan", "Status", "Signed up (JST)", "Language", "Free until (JST)", "Subscription", "Provider", "Renews", "Ends", "Card", "Cancelled at period end", "Codes used", "Events 90d", "Events 30d", "Days active 90d", "First seen (JST)", "Last seen (JST)", "Last location", "Top tickers", "Note"];
+    const rows = users.map((u) => { const a = byUser[u.username] || {}; const ent = entitlement(u); const sub = u.subscription || {}; const top = Object.entries(a.tickers || {}).sort((x, y) => y[1] - x[1]).slice(0, 5).map(([k, n]) => `${k} ${n}`).join(", ");
+      return [u.username, u.email, u.role || "", u.plan || "", ent.state, jst(u.createdAt), u.locale || "", u.trialEndsAt ? jst(u.trialEndsAt) : "", sub.status || "", sub.provider || "", sub.renewsAt ? jst(Date.parse(sub.renewsAt)) : "", sub.endsAt ? jst(Date.parse(sub.endsAt)) : "", sub.cardBrand ? `${sub.cardBrand} ${sub.cardLastFour || ""}`.trim() : "", sub.status === "cancelled" ? "yes" : "", (u.coupons || []).map((c) => `${c.code} (${c.months}m)`).join(", "), a.n || 0, a.n30 || 0, a.days ? a.days.size : 0, a.first ? jst(a.first) : "", a.last ? jst(a.last) : "", a.loc || "", top, u.note || ""]; });
+    const codeRows = codes.map((c) => [c.code, c.months, c.uses, c.maxUses || "", c.expiresAt ? jst(c.expiresAt) : "", c.active ? "yes" : "no", c.note || "", jst(c.createdAt)]);
+    const buf = xlsx([{ name: "Users", rows: [header, ...rows] }, { name: "Access codes", rows: [["Code", "Months", "Uses", "Max uses", "Expires (JST)", "Active", "Note", "Created (JST)"], ...codeRows] }]);
+    const stamp = new Date().toISOString().slice(0, 10);
+    return new Response(buf, { status: 200, headers: { "content-type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "content-disposition": `attachment; filename="kabukaizu-users-${stamp}.xlsx"`, "cache-control": "no-store" } });
   }
 
   // Create a complimentary member (family, friends, press): never billed, no trial clock.
