@@ -9,7 +9,7 @@ const MAX_TRANSCRIPT_CHARS = 60000; // one call is ~50k chars
 const TRANSCRIPTS_TO_USE = 4;
 
 export function summaryKey(symbol, lang, latestTranscriptDate) {
-  return `v3:${symbol}:${lang}:${latestTranscriptDate || "none"}`;
+  return `v4:${symbol}:${lang}:${latestTranscriptDate || "none"}`;
 }
 
 export async function getCachedSummary(symbol, lang, latestTranscriptDate) {

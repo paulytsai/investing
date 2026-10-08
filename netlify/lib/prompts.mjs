@@ -5,22 +5,22 @@
 export const LANG_SPEC = {
   ja: {
     name: "Japanese (日本語)",
-    trendLength: "「longTerm」「recent」の本文は各120〜200文字。「である」調。数字は各段落で最も重要な2〜3個に絞り、何が起きているかを平易に述べる。",
-    caseLength: "「bull」「bear」の本文は各250〜380文字。「である」調。具体的な数字・ガイダンス・経営陣の発言を根拠として密に盛り込み、最後に一文でその論点の要点を締める。",
+    trendLength: "「longTerm」「recent」の本文は各300〜600文字（英語換算150〜300語）。「である」調。数字は要点を支える最重要のものに絞り、何が起きているかを平易に述べる。",
+    caseLength: "「bull」「bear」の本文は各300〜600文字（英語換算150〜300語）。「である」調。具体的な数字・ガイダンス・経営陣の発言を根拠として盛り込み、最後に一文でその論点の要点を締める。",
     headline: "見出しは漢字中心の4〜10文字（例:「サービス主導で高収益化」「メモリ高騰が重し」）。",
     feature: "「feature」は体言止め1文（60〜90文字）。業界内の地位、主力製品、収益源を含める。",
   },
   en: {
     name: "English",
-    trendLength: "'longTerm' and 'recent' bodies are 70-110 words each, plain analytical prose, limited to the two or three figures that matter most.",
-    caseLength: "'bull' and 'bear' bodies are 130-200 words each, dense with specific figures, guidance and management statements, closing with a one-sentence verdict on that case.",
+    trendLength: "'longTerm' and 'recent' bodies are 150-300 words each, plain analytical prose, using only the figures that carry the point.",
+    caseLength: "'bull' and 'bear' bodies are 150-300 words each, dense with specific figures, guidance and management statements, closing with a one-sentence verdict on that case.",
     headline: "Headline is 3-7 words in sentence case (e.g. 'Services carry the margin story', 'Memory costs squeeze margins').",
     feature: "'feature' is one sentence of 25-40 words: market position, core products, revenue drivers.",
   },
   "zh-TW": {
     name: "Traditional Chinese (繁體中文，台灣用語)",
-    trendLength: "「longTerm」「recent」正文各100〜170字，平實敘述，每段只保留最關鍵的2〜3個數字。",
-    caseLength: "「bull」「bear」正文各220〜340字，密集引用具體數字、財測與經營層說法作為依據，最後以一句話總結該論點。",
+    trendLength: "「longTerm」「recent」正文各250〜500字（約合英文150〜300字），平實敘述，只保留支撐論點的關鍵數字。",
+    caseLength: "「bull」「bear」正文各250〜500字（約合英文150〜300字），引用具體數字、財測與經營層說法作為依據，最後以一句話總結該論點。",
     headline: "標題為4〜10個字（例：「服務業務撐起獲利」「記憶體成本壓縮毛利」）。",
     feature: "「feature」為一句60〜90字的描述：產業地位、主力產品、營收來源。",
   },
@@ -42,7 +42,7 @@ Write in ${spec.name}. ${spec.headline} ${spec.feature} ${spec.trendLength} ${sp
 
 Rules:
 - Base every statement on the supplied materials (earnings-call transcripts, financial tables, 8-K events, news). Never invent figures. When you cite a number give its period (e.g. "Q3 FY2026"). Keep the company's own fiscal-year naming.
-- "longTerm": the multi-year story in plain words. How the business mix, profitability and capital allocation have shifted over the last 3-5 years and what management's standing strategy is. Readable at a glance; few numbers.
+- "longTerm": the story of the last three fiscal years in plain words: how revenue, the business mix, profitability and capital allocation moved across those three years, what management's standing strategy is, and whether earlier promises were kept. Use the three most recent annual rows of the financial table and the older transcripts.
 - "recent": the latest one or two quarters in plain words. What changed, what management emphasised on the newest call, guidance direction, notable news. Few numbers. No rating, no target price.
 - "bull": the strongest case for owning the stock, written like a sell-side analyst's note: dense with specific figures, guidance, management quotes and catalysts, each claim backed by evidence from the materials.
 - "bear": the strongest case against, in the same dense style: risks, deteriorating metrics, valuation, competitive or regulatory threats, with evidence.

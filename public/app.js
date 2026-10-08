@@ -301,7 +301,7 @@
 
   function renderTab(c) {
     const body = c.root && c.root.querySelector("[data-tabbody]"); if (!body) return;
-    body.innerHTML = [tabOverview, tabFinancials, tabHolders, tabValuation][c.tab](c);
+    body.innerHTML = [tabOverview, tabFinancials, tabValuation, tabHolders][c.tab](c);
   }
 
   // ---- small builders ----
@@ -321,6 +321,31 @@
     const s = c.s; if (!s) return "";
     const tr = (s.transcriptsUsed || [])[0];
     return `<p class="note">${esc(t("updatedNote", { period: tr ? tr.period : "—", date: tr ? fmtDate(tr.date) : "—", gen: fmtDate(s.generatedAt) }))}</p>`;
+  }
+
+  function financeBox(f) {
+    if (!f) return "";
+    const F = t("fin");
+    const sgn = (v, d = 1) => (v === null || v === undefined ? NA : `${v > 0 ? "+" : ""}${fmtDec(v, d)}%`);
+    const r = (k, v) => `<tr><th class="rowh">${k}</th><td class="num">${v}</td></tr>`;
+    return `<table class="shk"><tr><th class="rowh"><b>【${t("financials")}】</b></th><th>&lt;${yymm(f.asOf)}&gt; ${t("unitM")}</th></tr>
+      ${r(t("totalAssets"), fmtInt(f.totalAssets))}
+      ${r(F.equityWithRatio, `${fmtInt(f.equity)} <span class="muted">(${fmtPct(f.equityRatioPct)})</span>`)}
+      ${r(F.cash, fmtInt(f.cashAndShortTerm))}
+      ${r(t("debt"), fmtInt(f.totalDebt))}
+      ${r(F.netDebt, fmtInt(f.netDebt))}
+      ${r(F.de, fmtDec(f.debtToEquity, 2))}
+      ${r(F.debtEbitda, `${fmtDec(f.debtToEbitda, 1)}x`)}
+      ${r(F.netDebtEbitda, f.netDebtToEbitda === null ? NA : `${fmtDec(f.netDebtToEbitda, 1)}x`)}
+      ${r(F.interest, fmtInt(f.interestExpense))}
+      ${r(F.coverage, f.interestCoverage === null ? (f.interestExpense === 0 ? "∞" : NA) : `${fmtDec(f.interestCoverage, 1)}x`)}
+      ${r(F.interestBurden, fmtPct(f.interestToEbitPct))}
+      ${r(F.avgRate, fmtPct(f.avgInterestRatePct, 2))}
+      ${r(F.currentRatio, fmtDec(f.currentRatio, 2))}
+      ${r(F.goodwill, `${fmtInt(f.goodwillIntangibles)} <span class="muted">(${fmtPct(f.goodwillPct)})</span>`)}
+      ${r(F.shares, sgn(f.sharesChangePct))}
+      ${r(F.roic, fmtPct(f.roicPct))}
+    </table><p class="note">${esc(F.note.replace("{fy}", f.fiscalYear || ""))}</p>`;
   }
 
   function tabOverview(c) {
@@ -352,14 +377,7 @@
       ${row(t("nextEarnings"), `${fmtDate(b.nextEarnings)}　<span class="muted">${t("analysts")}: ${rating}　${t("target")}: ${target}</span>`)}
     </table>
     ${updatedNote(c)}
-    ${f ? `<table class="shk"><tr><th class="rowh"><b>【${t("financials")}】</b></th><th>&lt;${yymm(f.asOf)}&gt; ${t("unitM")}</th></tr>
-      <tr><th class="rowh">${t("totalAssets")}</th><td class="num">${fmtInt(f.totalAssets)}</td></tr>
-      <tr><th class="rowh">${t("equity")}</th><td class="num">${fmtInt(f.equity)}</td></tr>
-      <tr><th class="rowh">${t("equityRatio")}</th><td class="num">${fmtPct(f.equityRatioPct)}</td></tr>
-      <tr><th class="rowh">${t("commonStock")}</th><td class="num">${fmtInt(f.commonStock)}</td></tr>
-      <tr><th class="rowh">${t("retained")}</th><td class="num">${fmtInt(f.retainedEarnings)}</td></tr>
-      <tr><th class="rowh">${t("debt")}</th><td class="num">${fmtInt(f.totalDebt)}</td></tr>
-      <tr><th class="rowh">${t("cash")}</th><td class="num">${fmtInt(f.cashAndShortTerm)}</td></tr></table>` : ""}`;
+    ${financeBox(f)}`;
   }
 
   function tabFinancials(c) {
@@ -382,10 +400,10 @@
       [t("capex"), pair(ind.capex, ind.capexPrev)], [t("depreciation"), pair(ind.depreciation, ind.depreciationPrev)], [t("rnd"), pair(ind.rnd, ind.rndPrev)],
     ]) + `<p class="note">${t("unitM")} · ( ) = ${isCJK() ? "前期" : "prior year"}</p>`;
     const cfl = cf ? kv([[t("opCF"), pair(cf.operating, cf.operatingPrev)], [t("invCF"), pair(cf.investing, cf.investingPrev)], [t("finCF"), pair(cf.financing, cf.financingPrev)], [t("cashEq"), pair(cf.cash, cf.cashPrev)], [t("fcf"), fmtInt(cf.freeCashFlow)], [t("buyback"), fmtInt(cf.buybacks)], [t("divPaid"), fmtInt(cf.dividendsPaid)]]) + `<p class="note">FY${esc(cf.fiscalYear)} · ${t("unitM")}</p>` : NA;
-    const bal = f ? kv([[t("totalAssets"), fmtInt(f.totalAssets)], [t("equity"), fmtInt(f.equity)], [t("equityRatio"), fmtPct(f.equityRatioPct)], [t("commonStock"), fmtInt(f.commonStock)], [t("retained"), fmtInt(f.retainedEarnings)], [t("debt"), fmtInt(f.totalDebt)], [t("cash"), fmtInt(f.cashAndShortTerm)]]) + `<p class="note">${yymm(f.asOf)} · ${t("unitM")}</p>` : NA;
+    const bal = financeBox(f) || NA;
     return `<div class="grid2">${sec(t("performance"), perf)}${sec(t("dividends"), divs)}</div>
       <div class="grid2b">${sec(t("indicators"), indic, ind.fiscalYear ? `FY${esc(ind.fiscalYear)}` : "")}${sec(t("cashflow"), cfl)}</div>
-      ${sec(t("financials"), bal)}`;
+      ${bal}`;
   }
 
   function tabHolders(c) {

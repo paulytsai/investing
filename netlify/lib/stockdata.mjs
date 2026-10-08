@@ -405,7 +405,14 @@ async function buildBundle(symbol) {
       }
     : null;
 
-  // ---- 財務 ----
+  // ---- 財務 (leverage, interest burden, liquidity, asset quality) ----
+  const ebitdaFY = num(latestFY?.ebitda);
+  const ebitFY = num(latestFY?.operatingIncome);
+  const interestFY = num(latestFY?.interestExpense);
+  const prevDebt = Array.isArray(balanceA) && balanceA[1] ? num(balanceA[1].totalDebt) : null;
+  const avgDebt = bs && num(bs.totalDebt) !== null ? (prevDebt !== null ? (num(bs.totalDebt) + prevDebt) / 2 : num(bs.totalDebt)) : null;
+  const shsNow = num(latestFY?.weightedAverageShsOutDil);
+  const shsPrev = num(prevFY?.weightedAverageShsOutDil);
   const financials = bs
     ? {
         asOf: bs.date,
@@ -413,11 +420,24 @@ async function buildBundle(symbol) {
         totalAssets: mm(bs.totalAssets),
         equity: mm(bs.totalStockholdersEquity),
         equityRatioPct: num(bs.totalAssets) ? pct(num(bs.totalStockholdersEquity) / num(bs.totalAssets)) : null,
-        commonStock: mm(bs.commonStock),
         retainedEarnings: mm(bs.retainedEarnings),
-        totalDebt: mm(bs.totalDebt),
         cashAndShortTerm: mm(bs.cashAndShortTermInvestments),
-        netDebt: mm(bs.netDebt),
+        totalDebt: mm(bs.totalDebt),
+        netDebt: num(bs.totalDebt) !== null ? mm(num(bs.totalDebt) - (num(bs.cashAndShortTermInvestments) || 0)) : null,
+        debtToEquity: num(bs.totalStockholdersEquity) > 0 ? r2(num(bs.totalDebt) / num(bs.totalStockholdersEquity)) : null,
+        debtToEbitda: ebitdaFY > 0 ? r2(num(bs.totalDebt) / ebitdaFY) : null,
+        netDebtToEbitda: ebitdaFY > 0 ? r2((num(bs.totalDebt) - (num(bs.cashAndShortTermInvestments) || 0)) / ebitdaFY) : null,
+        interestExpense: mm(interestFY),
+        interestCoverage: interestFY > 0 && ebitFY !== null ? r2(ebitFY / interestFY) : null,
+        interestToEbitPct: interestFY !== null && ebitFY > 0 ? pct(interestFY / ebitFY) : null,
+        avgInterestRatePct: interestFY !== null && avgDebt > 0 ? pct(interestFY / avgDebt, 2) : null,
+        currentRatio: num(bs.totalCurrentLiabilities) > 0 ? r2(num(bs.totalCurrentAssets) / num(bs.totalCurrentLiabilities)) : null,
+        goodwillIntangibles: mm(bs.goodwillAndIntangibleAssets),
+        goodwillPct: num(bs.totalAssets) ? pct((num(bs.goodwillAndIntangibleAssets) || 0) / num(bs.totalAssets)) : null,
+        sharesChangePct: shsNow && shsPrev ? pct(shsNow / shsPrev - 1) : null,
+        roicPct: pct(kmTTM?.returnOnInvestedCapitalTTM),
+        ebitda: mm(ebitdaFY),
+        fiscalYear: latestFY ? fyLabel(latestFY.date) : null,
       }
     : null;
 
@@ -591,7 +611,7 @@ async function buildBundle(symbol) {
 
 /** Full bundle, cached for 12 hours per symbol. */
 export async function stockBundle(symbol) {
-  return cached(`stock:${symbol}`, 12 * 3600, () => buildBundle(symbol), { version: "5" });
+  return cached(`stock:${symbol}`, 12 * 3600, () => buildBundle(symbol), { version: "6" });
 }
 
 /** Light, frequently refreshed quote (5 minutes). */

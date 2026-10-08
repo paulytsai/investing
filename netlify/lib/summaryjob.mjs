@@ -11,7 +11,7 @@ export async function summaryStatus(symbol, lang, bundle) {
   if (cachedSummary) return { status: "ready", summary: cachedSummary };
 
   const jobs = await openStore("jobs");
-  const jobKey = `summary:v3:${symbol}:${lang}:${bundle.latestTranscriptDate || "none"}`;
+  const jobKey = `summary:v4:${symbol}:${lang}:${bundle.latestTranscriptDate || "none"}`;
   const existing = await jobs.get(jobKey);
   const now = Date.now();
   if (existing && existing.status === "error" && now - existing.updatedAt < 60 * 1000) return { status: "error", message: existing.message };
