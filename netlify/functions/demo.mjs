@@ -1,0 +1,21 @@
+// Public sample page data (no login): one fixed ticker, all chart ranges, cached AI text.
+import { json, handler, query, HttpError } from "../lib/http.mjs";
+import { stockBundle, chartSeries, normalizeSymbol } from "../lib/stockdata.mjs";
+import { summaryStatus } from "../lib/summaryjob.mjs";
+import { cfg, SUPPORTED_LOCALES } from "../lib/config.mjs";
+
+const RANGES = ["1m", "3m", "6m", "1y", "3y", "5y", "10y"];
+
+export default handler(async (req) => {
+  const symbol = normalizeSymbol(process.env.DEMO_SYMBOL || "AAPL");
+  const lang = query(req).get("lang") || cfg.defaultLocale();
+  if (!SUPPORTED_LOCALES.includes(lang)) throw new HttpError(400, "invalid_locale");
+  const bundle = await stockBundle(symbol);
+  const [charts, summary] = await Promise.all([
+    Promise.all(RANGES.map((r) => chartSeries(symbol, r).then((c) => [r, c.points]))),
+    summaryStatus(symbol, lang, bundle),
+  ]);
+  return json({ bundle, charts: Object.fromEntries(charts), summary }, 200, { "cache-control": "public, max-age=600" });
+});
+
+export const config = { path: "/api/demo" };

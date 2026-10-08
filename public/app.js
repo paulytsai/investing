@@ -2,8 +2,7 @@
 (function () {
   const state = {
     config: null, user: null, ent: null, locale: "ja", route: { view: "home" },
-    symbol: null, bundle: null, chartRange: "1y", chartCache: {}, summary: null, summaryStatus: null, tab: 0,
-    summaryTimer: null, summaryTries: 0,
+    symbol: null,
   };
   const $ = (s) => document.querySelector(s);
   const app = $("#app");
@@ -70,6 +69,8 @@
     state.locale = loc;
     document.documentElement.lang = loc;
     document.title = state.symbol && state.route.view === "stock" ? `${state.symbol} | ${t("siteName")}` : t("siteName");
+    if (state.stock.b) { state.stock.s = null; state.stock.summaryStatus = null; }
+    if (state.demo.b) { state.demo.s = null; state.demo.summaryStatus = null; }
     $("#searchInput").placeholder = t("searchPlaceholder");
     $("#searchBtn").textContent = t("search");
     try { localStorage.setItem("locale", loc); } catch {}
@@ -125,7 +126,7 @@
 
   // ---------- views ----------
   function renderHome() {
-    stopSummaryPolling();
+    stopSummaryPolling(state.stock); stopSummaryPolling(state.demo);
     const price = state.config.priceLabel;
     if (!state.user) {
       const L = t("landing");
@@ -137,10 +138,7 @@
       </div><span class="hero-credit">葛飾北斎『神奈川沖浪裏』</span></section>
       <section class="land">
         <h2>${esc(L.samplesTitle)}</h2><p class="lead">${esc(L.samplesLead)}</p>
-        <div class="gallery">
-          <div class="gallery-tabs">${L.samples.map((x, i) => `<button data-sample="${x.key}" class="${i === 0 ? "active" : ""}">${esc(x.label)}</button>`).join("")}</div>
-          <figure class="shotframe"><img id="sampleImg" src="/img/sample-${L.samples[0].key}.jpg" alt="${esc(L.samples[0].label)}" loading="eager"><figcaption id="sampleCap">${esc(L.samples[0].caption)}</figcaption></figure>
-        </div>
+        <div class="demo-frame" data-demo></div>
       </section>
       <section class="land pricing">
         <h2>${esc(L.pricingTitle)}</h2>
@@ -150,11 +148,7 @@
           <p class="muted small">${esc(L.pricingNote)}</p></div>
       </section>
       <div class="footer center">${esc(L.disclaimer)}</div>`;
-      document.querySelectorAll(".gallery-tabs button").forEach((b) => b.addEventListener("click", () => {
-        const x = L.samples.find((y) => y.key === b.dataset.sample);
-        document.querySelectorAll(".gallery-tabs button").forEach((o) => o.classList.toggle("active", o === b));
-        $("#sampleImg").src = `/img/sample-${x.key}.jpg`; $("#sampleImg").alt = x.label; $("#sampleCap").textContent = x.caption;
-      }));
+      mountDemo(app.querySelector("[data-demo]"));
       return;
     }
     let recent = [];
@@ -165,7 +159,7 @@
   }
 
   function renderAuth(kind) {
-    stopSummaryPolling();
+    stopSummaryPolling(state.stock); stopSummaryPolling(state.demo);
     const isSignup = kind === "signup";
     app.innerHTML = `<div class="panel form"><h2>${t(isSignup ? "signup" : "login")}</h2>
       ${isSignup ? `<p class="muted">${t("trialNote", { price: state.config.priceLabel })}</p>` : ""}
@@ -206,7 +200,7 @@
   }
 
   function renderAccount() {
-    stopSummaryPolling();
+    stopSummaryPolling(state.stock); stopSummaryPolling(state.demo);
     const u = state.user; const e = state.ent;
     const canSubscribe = state.config.billingEnabled && !(e && e.state === "subscribed");
     const hasSub = u.subscription && u.subscription.id;
@@ -220,7 +214,7 @@
   }
 
   function renderPaywall() {
-    stopSummaryPolling();
+    stopSummaryPolling(state.stock); stopSummaryPolling(state.demo);
     app.innerHTML = `<div class="panel form"><h2>${t("paywallTitle")}</h2><p>${t("paywallBody", { price: state.config.priceLabel })}</p>
       <div id="formError"></div>
       ${state.config.billingEnabled ? `<button class="btn primary" id="subscribeBtn">${t("subscribe")} — ${esc(state.config.priceLabel)}</button>` : `<p class="error">${t("errors.billing_not_configured")}</p>`}
@@ -238,14 +232,20 @@
   }
 
   // ---------- stock ----------
+  // ---------- stock page component (used by the real page and the landing sample) ----------
+  function newCtx(demo) { return { demo, b: null, s: null, summaryStatus: null, chartRange: "1y", chartCache: {}, tab: 0, root: null, timer: null, tries: 0 }; }
+  state.stock = newCtx(false);
+  state.demo = newCtx(true);
+
   async function loadStock(symbol) {
-    stopSummaryPolling();
-    if (state.symbol !== symbol) { state.bundle = null; state.chartCache = {}; state.summary = null; state.summaryStatus = null; }
+    stopSummaryPolling(state.stock);
+    const c = state.stock;
+    if (state.symbol !== symbol) { c.b = null; c.chartCache = {}; c.s = null; c.summaryStatus = null; c.tab = 0; }
     state.symbol = symbol;
-    if (!state.bundle) {
+    if (!c.b) {
       app.innerHTML = `<div class="panel spinner">${esc(symbol)} …</div>`;
       try {
-        state.bundle = await api(`/api/stock/${encodeURIComponent(symbol)}`);
+        c.b = await api(`/api/stock/${encodeURIComponent(symbol)}`);
       } catch (e) {
         if (e.status === 402) { state.ent = e.data && e.data.entitlement || state.ent; renderUserMenu(); return renderPaywall(); }
         if (e.status === 401) { sessionStorage.setItem("after_login", location.hash); return renderAuth("login"); }
@@ -258,111 +258,112 @@
       } catch {}
     }
     document.title = `${symbol} | ${t("siteName")}`;
-    renderStock();
-    loadChart(state.chartRange);
-    loadSummary();
+    app.innerHTML = `<div data-stock></div><div class="footer">${t("aiNote")}<br>${t("disclaimer")}</div>`;
+    mountStock(app.querySelector("[data-stock]"), c);
+    loadSummary(c);
   }
 
-  function renderStock() {
-    const b = state.bundle; const m = b.market;
+  function mountStock(container, c) {
+    const b = c.b; const m = b.market;
     const chg = m.change ?? 0;
     const cls = chg > 0 ? "up" : chg < 0 ? "down" : "";
     const sign = chg > 0 ? "+" : "";
-    app.innerHTML = `
+    c.root = container;
+    container.innerHTML = `
       <div class="panel">
-        <div class="title-row"><h1><span class="co" data-sym="${esc(b.symbol)}">${esc(b.company.name)}</span><span class="ticker">${esc(b.symbol)}</span><span class="ex">${esc(b.company.exchange)}</span></h1>
+        <div class="title-row"><h1><span class="co" data-sym="${esc(b.symbol)}">${esc(b.company.name)}</span><span class="ex">${esc(b.company.exchange)}</span></h1>
           <div class="price">$${fmtDec(m.price)} <small class="${cls}">${sign}${fmtDec(m.change)} (${sign}${fmtDec(m.changePct)}%)</small></div></div>
         <div class="meta">${t("updated", { date: fmtDate(m.quoteTime || b.asOf) })}</div>
-        <div class="ranges" id="ranges">${Object.keys(t("ranges")).map((r) => `<button data-range="${r}" class="${r === state.chartRange ? "active" : ""}">${t("ranges")[r]}</button>`).join("")}</div>
-        <div class="chart" id="chart"></div>
+        <div class="ranges" data-ranges>${Object.keys(t("ranges")).map((r) => `<button data-range="${r}" class="${r === c.chartRange ? "active" : ""}">${t("ranges")[r]}</button>`).join("")}</div>
+        <div class="chart" data-chart></div>
       </div>
-      <div class="tabs" id="tabs">${t("tabs").map((x, i) => `<button data-tab="${i}" class="${i === state.tab ? "active" : ""}">${esc(x)}</button>`).join("")}</div>
-      <div id="tabBody"></div>
-      <div class="footer">${t("aiNote")}<br>${t("disclaimer")}</div>`;
-    document.querySelectorAll("#ranges button").forEach((btn) => btn.addEventListener("click", () => { state.chartRange = btn.dataset.range; document.querySelectorAll("#ranges button").forEach((x) => x.classList.toggle("active", x === btn)); loadChart(state.chartRange); }));
-    document.querySelectorAll("#tabs button").forEach((btn) => btn.addEventListener("click", () => { state.tab = Number(btn.dataset.tab); document.querySelectorAll("#tabs button").forEach((x) => x.classList.toggle("active", x === btn)); renderTab(); window.scrollTo({ top: document.getElementById("tabs").offsetTop - 8, behavior: "smooth" }); }));
-    renderTab();
+      <div class="tabs" data-tabs>${t("tabs").map((x, i) => `<button data-tab="${i}" class="${i === c.tab ? "active" : ""}">${esc(x)}</button>`).join("")}</div>
+      <div data-tabbody></div>`;
+    container.querySelectorAll("[data-ranges] button").forEach((btn) => btn.addEventListener("click", () => { c.chartRange = btn.dataset.range; container.querySelectorAll("[data-ranges] button").forEach((x) => x.classList.toggle("active", x === btn)); loadChart(c); }));
+    container.querySelectorAll("[data-tabs] button").forEach((btn) => btn.addEventListener("click", () => { c.tab = Number(btn.dataset.tab); container.querySelectorAll("[data-tabs] button").forEach((x) => x.classList.toggle("active", x === btn)); renderTab(c); if (!c.demo) window.scrollTo({ top: container.querySelector("[data-tabs]").offsetTop - 8, behavior: "smooth" }); }));
+    renderTab(c);
+    loadChart(c);
   }
 
-  async function loadChart(range) {
-    const el = $("#chart"); if (!el) return;
-    const key = `${state.symbol}:${range}`;
-    if (!state.chartCache[key]) {
+  async function loadChart(c) {
+    const el = c.root && c.root.querySelector("[data-chart]"); if (!el) return;
+    const range = c.chartRange;
+    const key = `${c.b.symbol}:${range}`;
+    if (!c.chartCache[key]) {
+      if (c.demo) return; // demo has every range preloaded
       el.innerHTML = `<div class="spinner">…</div>`;
-      try { state.chartCache[key] = await api(`/api/chart/${encodeURIComponent(state.symbol)}?range=${range}`); }
+      try { c.chartCache[key] = (await api(`/api/chart/${encodeURIComponent(c.b.symbol)}?range=${range}`)).points; }
       catch (e) { el.innerHTML = `<div class="error">${t("loadError")}</div>`; return; }
     }
-    if (state.chartRange !== range) return;
-    window.renderChart(el, state.chartCache[key].points, { locale: state.locale });
+    if (c.chartRange !== range) return;
+    window.renderChart(el, c.chartCache[key], { locale: state.locale, height: el.clientWidth < 600 ? 280 : 360 });
   }
 
-  function renderTab() {
-    const body = $("#tabBody"); if (!body) return;
-    body.innerHTML = [tabOverview, tabFinancials, tabHolders, tabValuation][state.tab]();
+  function renderTab(c) {
+    const body = c.root && c.root.querySelector("[data-tabbody]"); if (!body) return;
+    body.innerHTML = [tabOverview, tabFinancials, tabHolders, tabValuation][c.tab](c);
   }
 
   // ---- small builders ----
   const sec = (title, inner, extra = "") => `<section class="card"><h3 class="sec">${title}${extra ? `<span class="sec-extra">${extra}</span>` : ""}</h3>${inner}</section>`;
   const kv = (rows) => `<dl class="kv2">${rows.filter((r) => r).map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join("")}</dl>`;
-  const stat = (label, value, sub = "") => `<div class="stat"><div class="stat-l">${label}</div><div class="stat-v">${value}</div>${sub ? `<div class="stat-s">${sub}</div>` : ""}</div>`;
   const wrap = (table) => `<div class="tw">${table}</div>`;
+  const row = (th, td, cls = "") => `<tr class="${cls}"><th class="rowh">${th}</th><td>${td}</td></tr>`;
 
-  function aiBox(part) {
-    const s = state.summary;
-    if (s && s[part]) return `<div class="ai"><div class="hl">${esc(s[part].headline)}</div><p class="body">${esc(s[part].body)}</p></div>`;
-    if (state.summaryStatus === "pending" || state.summaryStatus === null) return `<div class="ai"><span class="spinner">${t("generating")}</span></div>`;
-    if (state.summaryStatus === "disabled") return `<div class="ai"><span class="muted">${t("summaryDisabled")}</span></div>`;
-    return `<div class="ai"><span class="muted">${t("summaryError")}</span></div>`;
+  function aiBox(c, part) {
+    const s = c.s;
+    if (s && s[part]) return `<div class="ai"><span class="hl">${esc(s[part].headline)}</span><span class="body">${esc(s[part].body)}</span></div>`;
+    if (c.summaryStatus === "pending" || c.summaryStatus === null) return `<span class="spinner">${t("generating")}</span>`;
+    if (c.summaryStatus === "disabled") return `<span class="muted">${t("summaryDisabled")}</span>`;
+    return `<span class="muted">${t("summaryError")}</span>`;
   }
-  function updatedNote() {
-    const s = state.summary; if (!s) return "";
+  function updatedNote(c) {
+    const s = c.s; if (!s) return "";
     const tr = (s.transcriptsUsed || [])[0];
-    return `<p class="muted small">${esc(t("updatedNote", { period: tr ? tr.period : "—", date: tr ? fmtDate(tr.date) : "—", gen: fmtDate(s.generatedAt) }))}</p>`;
+    return `<p class="note">${esc(t("updatedNote", { period: tr ? tr.period : "—", date: tr ? fmtDate(tr.date) : "—", gen: fmtDate(s.generatedAt) }))}</p>`;
   }
 
-  function tabOverview() {
-    const b = state.bundle; const c = b.company; const m = b.market; const v = b.valuation || {};
-    const sg = (b.growth.salesGrowth || []).map((x) => `<span class="sg"><span class="muted">${esc(x.label)}</span> ${x.pct !== null ? (x.pct >= 0 ? "+" : "") + fmtDec(x.pct, 1) + "%" : NA}</span>`).join(" ");
-    const stats = `<div class="stats">
-      ${stat(t("marketCap"), fmtBig(m.marketCapM))}
-      ${stat(t("val.peFwd"), fmtDec(v.peForward, 1), `${t("val.pe")} ${fmtDec(v.pe, 1)}`)}
-      ${stat(t("val.divYield"), fmtPct(m.dividendYieldPct, 2), `${t("val.pb")} ${fmtDec(v.pb, 1)}`)}
-      ${stat(t("opMargin"), fmtPct(b.growth.operatingMarginPct), b.indicators.fiscalYear ? `FY${esc(b.indicators.fiscalYear)}` : "")}
-      ${stat(t("salesGrowth3y"), sg || NA)}
-      ${stat(t("val.range52"), `$${fmtDec(m.yearLow)} – $${fmtDec(m.yearHigh)}`)}
-    </div>`;
-    const feature = state.summary ? esc(state.summary.feature) : esc((c.businessSummary || c.description || "").slice(0, 240));
-    const rating = m.analystRating ? `${esc(m.analystRating.consensus)} (Buy ${m.analystRating.buy} / Hold ${m.analystRating.hold ?? 0} / Sell ${m.analystRating.sell})` : NA;
-    const target = m.analystTarget ? `$${fmtDec(m.analystTarget.consensus)} ($${fmtDec(m.analystTarget.low)}–$${fmtDec(m.analystTarget.high)})` : NA;
-    const facts = kv([
-      [t("sector"), `${esc(c.sector || "")} / ${esc(c.industry || "")}`],
-      [t("ceo"), esc(c.ceo || NA)],
-      [t("fiscalYear"), monthName(c.fiscalYearEndMonth)],
-      [t("ipo"), `${fmtDate(c.ipoDate, { month: "numeric", day: undefined })}${c.stateOfIncorporation ? ` · ${t("incorporation")}: ${esc(c.stateOfIncorporation)}` : ""}`],
-      [t("hq"), esc(c.address || NA)],
-      [t("employees"), c.employees ? `${fmtInt(c.employees)}${c.employeesAsOf ? ` <span class="muted">(${yymm(c.employeesAsOf)})</span>` : ""}` : NA],
-      [t("exchange"), esc(c.exchangeFullName || c.exchange)],
-      [t("url"), c.website ? `<a href="${esc(c.website)}" target="_blank" rel="noopener">${esc(c.website)}</a>` : NA],
-      [t("shares"), `${fmtInt(m.sharesOutstandingM)}${t("millionShares")} · ${t("freeFloat")} ${fmtPct(m.freeFloatPct)}`],
-      [t("segments"), c.segments.length ? c.segments.map((s) => `${esc(s.name)} ${s.sharePct ?? "?"}%`).join(" · ") + (c.segmentsFiscalYear ? ` <span class="muted">(FY${c.segmentsFiscalYear})</span>` : "") : NA],
-      [t("nextEarnings"), fmtDate(b.nextEarnings)],
-      [t("analysts"), `${rating} · ${t("target")} ${target}`],
-    ]);
-    const compList = state.summary && state.summary.competitors && state.summary.competitors.length ? state.summary.competitors : c.competitors;
-    const comps = compList && compList.length
-      ? wrap(`<table class="tbl"><thead><tr><th>Ticker</th><th></th><th class="num">${t("marketCap")}</th><th class="num">${t("val.market")}</th></tr></thead><tbody>${compList.map((x) => `<tr><td><a href="#/s/${esc(x.symbol)}">${esc(x.symbol)}</a></td><td>${esc(x.name || "")}</td><td class="num">${fmtBig(x.marketCapM)}</td><td class="num">$${fmtDec(x.price)} <span class="${x.changePct > 0 ? "up" : x.changePct < 0 ? "down" : ""}">${x.changePct !== null ? (x.changePct >= 0 ? "+" : "") + fmtDec(x.changePct, 2) + "%" : ""}</span></td></tr>`).join("")}</tbody></table>`)
-      : `<p class="muted">${NA}</p>`;
-    return `${stats}
-      ${sec(t("feature"), `<p class="feature">${feature}</p>`)}
-      <div class="grid2b">${sec(t("longTerm"), aiBox("longTerm"))}${sec(t("recent"), aiBox("recent"))}</div>
-      <div class="grid2b">${sec(t("bull"), aiBox("bull"))}${sec(t("bear"), aiBox("bear"))}</div>
-      ${updatedNote()}
-      ${sec(t("companyInfo"), facts)}
-      ${sec(t("competitors"), comps)}`;
+  function tabOverview(c) {
+    const b = c.b; const co = b.company; const m = b.market; const v = b.valuation || {}; const f = b.financials;
+    const feature = c.s ? esc(c.s.feature) : esc((co.businessSummary || co.description || "").slice(0, 240));
+    const rating = m.analystRating ? `${esc(m.analystRating.consensus)}（Buy ${m.analystRating.buy} / Hold ${m.analystRating.hold ?? 0} / Sell ${m.analystRating.sell}）` : NA;
+    const target = m.analystTarget ? `$${fmtDec(m.analystTarget.consensus)}（$${fmtDec(m.analystTarget.low)}〜$${fmtDec(m.analystTarget.high)}）` : NA;
+    const sg = (b.growth.salesGrowth || []).map((x) => `${esc(x.label)} ${x.pct !== null ? (x.pct >= 0 ? "+" : "") + fmtDec(x.pct, 1) + "%" : NA}`).join("　");
+    const compList = c.s && c.s.competitors && c.s.competitors.length ? c.s.competitors : co.competitors;
+    const comps = compList && compList.length ? compList.map((x) => `<a href="#/s/${esc(x.symbol)}">${esc(x.symbol)}</a> ${esc(x.name || "")}<span class="muted">（${fmtBig(x.marketCapM)}）</span>`).join("、") : NA;
+    return `<table class="shk">
+      ${row(t("name"), `${esc(co.name)}${co.ceo ? `<span class="muted">　${t("ceo")}: ${esc(co.ceo)}</span>` : ""}`)}
+      ${row(t("fiscalYear"), monthName(co.fiscalYearEndMonth))}
+      ${row(t("ipo"), `${fmtDate(co.ipoDate, { month: "numeric", day: undefined })}${co.stateOfIncorporation ? `　<span class="muted">${t("incorporation")}: ${esc(co.stateOfIncorporation)}</span>` : ""}`)}
+      ${row(t("feature"), feature)}
+      ${row(t("segments"), co.segments.length ? co.segments.map((x) => `${esc(x.name)}${x.sharePct ?? "?"}`).join("、") + (co.segmentsFiscalYear ? ` <${co.segmentsFiscalYear}>` : "") : NA)}
+      ${row(t("sector"), `${esc(co.sector || "")} / ${esc(co.industry || "")}${co.sicDescription ? `　<span class="muted">${t("sic")}: ${esc(co.sicDescription)} (${esc(co.sicCode)})</span>` : ""}`)}
+      ${row(`<b>${t("longTerm")}</b>`, aiBox(c, "longTerm"))}
+      ${row(`<b>${t("recent")}</b>`, aiBox(c, "recent"))}
+      ${row(`<b>${t("bull")}</b>`, aiBox(c, "bull"))}
+      ${row(`<b>${t("bear")}</b>`, aiBox(c, "bear"))}
+      ${row(t("hq"), esc(co.address || NA))}
+      ${row(t("employees"), co.employees ? `${fmtInt(co.employees)}${isCJK() ? "名" : ""}${co.employeesAsOf ? ` <${yymm(co.employeesAsOf)}>` : ""}` : NA)}
+      ${row(t("exchange"), `${esc(co.exchangeFullName || co.exchange)}${co.filerCategory ? `　<span class="muted">${esc(co.filerCategory)}</span>` : ""}`)}
+      ${row(t("url"), co.website ? `<a href="${esc(co.website)}" target="_blank" rel="noopener">${esc(co.website)}</a>` : NA)}
+      ${row(t("shares"), `${t("sharesOut")} ${fmtInt(m.sharesOutstandingM)}${t("millionShares")}　${t("marketCap")} ${fmtBig(m.marketCapM)}　${t("val.peFwd")} ${fmtDec(v.peForward, 1)}　${t("per")} ${fmtDec(m.per, 1)}　${t("pbr")} ${fmtDec(m.pbr, 1)}　${t("val.divYield")} ${fmtPct(m.dividendYieldPct, 2)}`)}
+      ${row(t("opMargin"), `${fmtPct(b.growth.operatingMarginPct)}${b.growth.operatingMarginPrevPct !== null ? `(${b.growth.operatingMarginPct - b.growth.operatingMarginPrevPct >= 0 ? "+" : ""}${fmtDec(b.growth.operatingMarginPct - b.growth.operatingMarginPrevPct, 1)}pt)` : ""}　<span class="muted">${t("salesGrowth3y")}:</span> ${sg || NA}`)}
+      ${row(t("competitors"), comps)}
+      ${row(t("nextEarnings"), `${fmtDate(b.nextEarnings)}　<span class="muted">${t("analysts")}: ${rating}　${t("target")}: ${target}</span>`)}
+    </table>
+    ${updatedNote(c)}
+    ${f ? `<table class="shk"><tr><th class="rowh"><b>【${t("financials")}】</b></th><th>&lt;${yymm(f.asOf)}&gt; ${t("unitM")}</th></tr>
+      <tr><th class="rowh">${t("totalAssets")}</th><td class="num">${fmtInt(f.totalAssets)}</td></tr>
+      <tr><th class="rowh">${t("equity")}</th><td class="num">${fmtInt(f.equity)}</td></tr>
+      <tr><th class="rowh">${t("equityRatio")}</th><td class="num">${fmtPct(f.equityRatioPct)}</td></tr>
+      <tr><th class="rowh">${t("commonStock")}</th><td class="num">${fmtInt(f.commonStock)}</td></tr>
+      <tr><th class="rowh">${t("retained")}</th><td class="num">${fmtInt(f.retainedEarnings)}</td></tr>
+      <tr><th class="rowh">${t("debt")}</th><td class="num">${fmtInt(f.totalDebt)}</td></tr>
+      <tr><th class="rowh">${t("cash")}</th><td class="num">${fmtInt(f.cashAndShortTerm)}</td></tr></table>` : ""}`;
   }
 
-  function tabFinancials() {
-    const b = state.bundle;
+  function tabFinancials(c) {
+    const b = c.b;
     const rows = b.performance.map((r, i, arr) => {
       const prefix = r.kind === "annual" ? "FY" : r.kind === "estimate" ? `${t("estimate")} ` : "";
       const cls = r.kind === "estimate" ? "est" : r.kind === "quarter" ? "quarter" : "";
@@ -387,26 +388,26 @@
       ${sec(t("financials"), bal)}`;
   }
 
-  function tabHolders() {
-    const b = state.bundle; const h = b.holders; const p = b.prices;
+  function tabHolders(c) {
+    const b = c.b; const h = b.holders; const p = b.prices;
     const holders = wrap(`<table class="tbl"><thead><tr><th>${t("holderName")}</th><th class="num">${t("holderShares")}</th></tr></thead><tbody>${h.holders.length ? h.holders.map((x) => `<tr><td>${esc(x.name)}</td><td class="num">${fmtDec(x.sharesM, 1)} (${fmtDec(x.ownershipPct, 1)}%)</td></tr>`).join("") : `<tr><td colspan="2" class="c">${NA}</td></tr>`}</tbody></table>`)
       + `<p class="note">${h.asOf ? t("holdersAsOf", { date: h.asOf }) : ""}${h.summary ? ` · ${t("investorsHolding")} ${fmtInt(h.summary.investorsHolding)} · ${t("instOwnership")} ${fmtPct(h.summary.ownershipPct)}` : ""} · ${t("freeFloat")} ${fmtPct(b.market.freeFloatPct)} · ${t("insiders")}: ${b.insider ? t("insiderNote", { b: b.insider.purchases ?? 0, s: b.insider.sales ?? 0 }) : NA}</p>`;
     const officers = b.officers.length ? `<ul class="officers">${b.officers.map((o) => `<li><b>${esc(o.name)}</b><span class="muted">${esc(o.title)}</span></li>`).join("")}</ul>` : NA;
-    const caps = b.capitalChanges.filter((c) => c.date >= new Date(Date.now() - 10 * 366 * 86400000).toISOString().slice(0, 10));
-    const capRows = caps.length ? caps.map((c) => `<tr><th>${yymm(c.date)}</th><td>${c.numerator >= c.denominator ? t("split", { a: c.denominator, b: c.numerator }) : t("reverseSplit", { a: c.denominator, b: c.numerator })}</td></tr>`).join("") : `<tr><td colspan="2" class="muted">${t("noSplits")}</td></tr>`;
+    const caps = b.capitalChanges.filter((x) => x.date >= new Date(Date.now() - 10 * 366 * 86400000).toISOString().slice(0, 10));
+    const capRows = caps.length ? caps.map((x) => `<tr><th>${yymm(x.date)}</th><td>${x.numerator >= x.denominator ? t("split", { a: x.denominator, b: x.numerator }) : t("reverseSplit", { a: x.denominator, b: x.numerator })}</td></tr>`).join("") : `<tr><td colspan="2" class="muted">${t("noSplits")}</td></tr>`;
     const yearly = p.yearly.map((r) => `<tr><th>${esc(r.label)}</th><td class="num">${fmtDec(r.high)} <span class="muted">(${esc(r.highNote)})</span></td><td class="num">${fmtDec(r.low)} <span class="muted">(${esc(r.lowNote)})</span></td></tr>`).join("");
     const monthly = p.monthly.map((r) => `<tr><th>${r.partial ? "#" : ""}${esc(r.label)}</th><td class="num">${fmtDec(r.high)}</td><td class="num">${fmtDec(r.low)}</td><td class="num">${fmtInt(r.volumeM)}</td></tr>`).join("");
     const prices = wrap(`<table class="tbl"><thead><tr><th></th><th class="num">${t("high")}</th><th class="num">${t("low")}</th></tr></thead><tbody>${yearly}</tbody></table>`) + `<p class="note">${t("priceNote1")}</p>` +
       wrap(`<table class="tbl"><thead><tr><th></th><th class="num">${t("high")}</th><th class="num">${t("low")}</th><th class="num">${t("volume")}</th></tr></thead><tbody>${monthly}</tbody></table>`);
-    const filings = b.filings.map((f) => `<tr><th>${esc(f.filingDate)}</th><td><a href="${esc(f.url)}" target="_blank" rel="noopener">${esc(f.form)}</a> <span class="muted">${esc(f.description || "")}</span></td></tr>`).join("");
+    const filings = b.filings.map((x) => `<tr><th>${esc(x.filingDate)}</th><td><a href="${esc(x.url)}" target="_blank" rel="noopener">${esc(x.form)}</a> <span class="muted">${esc(x.description || "")}</span></td></tr>`).join("");
     const events = b.materialEvents.map((e) => `<tr><th>${esc(e.filingDate)}</th><td>${esc(e.form)} · ${esc(e.items.join(", "))}</td></tr>`).join("");
     return `<div class="grid2">${sec(t("holders"), holders)}${sec(t("officers"), officers)}</div>
       <div class="grid2b">${sec(t("capitalChanges"), wrap(`<table class="tbl"><tbody>${capRows}</tbody></table>`) + prices)}
       ${sec(t("filings"), wrap(`<table class="tbl"><tbody>${filings || `<tr><td class="c">${NA}</td></tr>`}</tbody></table>`)) + (events ? sec(t("events"), wrap(`<table class="tbl"><tbody>${events}</tbody></table>`)) : "")}</div>`;
   }
 
-  function tabValuation() {
-    const b = state.bundle; const v = b.valuation; const d = b.dcf; const V = t("val");
+  function tabValuation(c) {
+    const b = c.b; const v = b.valuation; const d = b.dcf; const V = t("val");
     if (!v) return `<p class="muted">${NA}</p>`;
     const x = (n, dgt = 1) => fmtDec(n, dgt);
     const groups = [
@@ -425,33 +426,50 @@
         ${kv([[V.evLabel, fmtBig(d.enterpriseValue / 1e6)], [V.equity, fmtBig(d.equityValue / 1e6)], [V.terminalShare, fmtPct(d.terminalShare * 100, 0)], [V.wacc, fmtPct(I.wacc, 2)], [V.g, fmtPct(I.g, 2)], [V.costEquity, `${fmtPct(I.costEquity, 2)} <span class="muted">(${V.rf} ${fmtPct(I.riskFree, 2)} + β ${x(I.beta, 2)} × ${V.erp} ${fmtPct(I.erp, 1)})</span>`], [V.costDebt, `${fmtPct(I.costDebt, 2)} <span class="muted">(${fmtPct(I.weightDebt * 100, 1)} ${isCJK() ? "ウェイト" : "weight"})</span>`], [V.s2c, x(I.salesToCapital, 2)], [V.tax, `${fmtPct(I.taxRate)} → ${fmtPct(I.marginalTax, 0)}`]])}</div>`;
       const yrs = wrap(`<table class="tbl"><thead><tr><th>${V.year}</th><th class="num">${V.rev}</th><th class="num">${V.ebit}</th><th class="num">${V.margin}</th><th class="num">${V.reinvest}</th><th class="num">${V.fcff}</th><th class="num">${V.pv}</th></tr></thead><tbody>${d.years.map((y) => `<tr class="${y.source === "consensus" ? "est" : ""}"><th>FY${esc(y.label)} <span class="muted small">${y.source === "consensus" ? V.consensus : V.extrap}</span></th><td class="num">${fmtInt(y.revenue / 1e6)}</td><td class="num">${fmtInt(y.ebit / 1e6)}</td><td class="num">${fmtPct(y.margin * 100)}</td><td class="num">${fmtInt(y.reinvestment / 1e6)}</td><td class="num">${fmtInt(y.fcff / 1e6)}</td><td class="num">${fmtInt(y.pv / 1e6)}</td></tr>`).join("")}<tr class="sep"><th>${V.terminal}</th><td colspan="5" class="num muted">${fmtInt(d.terminalValue / 1e6)}</td><td class="num">${fmtInt(d.pvTerminal / 1e6)}</td></tr></tbody></table>`) + `<p class="note">${t("unitM")}</p>`;
       const S = d.sensitivity;
-      const sens = S ? wrap(`<table class="tbl sens"><thead><tr><th>WACC \\ g</th>${S.gs.map((g) => `<th class="num">${fmtPct(g, 1)}</th>`).join("")}</tr></thead><tbody>${S.grid.map((row, i) => `<tr><th>${fmtPct(S.waccs[i], 1)}</th>${row.map((val, j) => `<td class="num ${i === 1 && j === 1 ? "base" : ""}">${val === null ? NA : "$" + x(val, 0)}</td>`).join("")}</tr>`).join("")}</tbody></table>`) + `<p class="note">${V.sensNote}</p>` : "";
+      const sens = S ? wrap(`<table class="tbl sens"><thead><tr><th>WACC \\ g</th>${S.gs.map((g) => `<th class="num">${fmtPct(g, 1)}</th>`).join("")}</tr></thead><tbody>${S.grid.map((r, i) => `<tr><th>${fmtPct(S.waccs[i], 1)}</th>${r.map((val, j) => `<td class="num ${i === 1 && j === 1 ? "base" : ""}">${val === null ? NA : "$" + x(val, 0)}</td>`).join("")}</tr>`).join("")}</tbody></table>`) + `<p class="note">${V.sensNote}</p>` : "";
       dcfHtml = head + yrs + `<h4 class="sub">${V.sens}</h4>` + sens + `<details class="method"><summary>${V.method}</summary>${V.methodBody.map((para) => `<p>${esc(para)}</p>`).join("")}</details>`;
     }
     return `${sec(V.dcfTitle, dcfHtml, d && d.riskFreeDate ? `${V.rf}: ${fmtPct(d.inputs.riskFree, 2)} (${esc(d.riskFreeDate)})` : "")}<h3 class="sec plain">${V.title}</h3>${metrics}`;
   }
 
   // ---------- AI summary polling ----------
-  function stopSummaryPolling() { if (state.summaryTimer) clearTimeout(state.summaryTimer); state.summaryTimer = null; }
-  async function loadSummary() {
-    stopSummaryPolling();
-    const symbol = state.symbol; const lang = state.locale;
-    if (!state.config.summariesEnabled) { state.summaryStatus = "disabled"; refreshAiBoxes(); return; }
+  function stopSummaryPolling(c) { if (c && c.timer) clearTimeout(c.timer); if (c) c.timer = null; }
+  function applySummary(c, r, lang) {
+    c.summaryStatus = r.status;
+    if (r.status === "ready") { c.s = r.summary; c.tries = 0; }
+    if (c.root && c.tab === 0) renderTab(c);
+    if (r.status === "pending" && c.tries < 40) { c.tries++; c.timer = setTimeout(() => loadSummary(c), 6000); }
+  }
+  async function loadSummary(c) {
+    stopSummaryPolling(c);
+    const symbol = c.b && c.b.symbol; const lang = state.locale;
+    if (!symbol) return;
+    if (!state.config.summariesEnabled) { c.summaryStatus = "disabled"; if (c.root && c.tab === 0) renderTab(c); return; }
     try {
-      const r = await api(`/api/summary/${encodeURIComponent(symbol)}?lang=${encodeURIComponent(lang)}`);
-      if (symbol !== state.symbol || lang !== state.locale) return;
-      state.summaryStatus = r.status;
-      if (r.status === "ready") { state.summary = r.summary; state.summaryTries = 0; refreshAiBoxes(); return; }
-      if (r.status === "pending" && state.summaryTries < 40) {
-        state.summaryTries++;
-        state.summaryTimer = setTimeout(loadSummary, 6000);
-      }
-      refreshAiBoxes();
+      const r = c.demo ? (await api(`/api/demo?lang=${encodeURIComponent(lang)}`)).summary : await api(`/api/summary/${encodeURIComponent(symbol)}?lang=${encodeURIComponent(lang)}`);
+      if (c.b.symbol !== symbol || lang !== state.locale) return;
+      applySummary(c, r, lang);
     } catch (e) {
-      state.summaryStatus = "error"; refreshAiBoxes();
+      c.summaryStatus = "error"; if (c.root && c.tab === 0) renderTab(c);
     }
   }
-  function refreshAiBoxes() { if (state.route.view === "stock" && state.tab === 0 && $("#tabBody")) renderTab(); }
+
+  // ---------- landing sample (live page, no login) ----------
+  async function mountDemo(container) {
+    const c = state.demo;
+    stopSummaryPolling(c);
+    container.innerHTML = `<div class="spinner">…</div>`;
+    try {
+      const r = await api(`/api/demo?lang=${encodeURIComponent(state.locale)}`);
+      c.b = r.bundle; c.s = null; c.summaryStatus = null; c.tab = 0;
+      c.chartCache = Object.fromEntries(Object.entries(r.charts).map(([k, pts]) => [`${r.bundle.symbol}:${k}`, pts]));
+      if (!document.body.contains(container)) return;
+      mountStock(container, c);
+      applySummary(c, r.summary, state.locale);
+    } catch (e) {
+      container.innerHTML = `<div class="error">${t("loadError")}</div>`;
+    }
+  }
 
   // ---------- search ----------
   const input = $("#searchInput"); const suggest = $("#suggest");

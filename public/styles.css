@@ -317,3 +317,14 @@ table.sens td.base { background: #eef3fa; }
 .title-row h1 .co::before { content: "【" attr(data-sym) "】"; }
 .title-row h1 .ticker { display: none; }
 @media (max-width: 720px) { .stat { border-right: 0; border-bottom: 1px solid var(--border); } .stat:nth-child(odd) { border-right: 1px solid var(--border); } .kv2 dt { border-right: 0; } }
+/* ---------- live sample on the landing ---------- */
+.demo-frame { text-align: left; border: 1px solid var(--border); background: var(--bg); padding: 12px; margin-top: 12px; }
+.demo-frame .panel { margin-bottom: 12px; }
+.demo-frame .tabs button { padding: 10px 16px; font-size: 15px; }
+table.shk { font-size: 15px; }
+table.shk th, table.shk td { padding: 5px 9px; }
+table.shk th.rowh { width: 8.5em; }
+.ai .hl { font-size: 16px; margin-right: .6em; }
+.ai .body { font-size: 15px; line-height: 1.8; }
+.chart { min-height: 0; }
+@media (max-width: 640px) { table.shk { font-size: 13.5px; } table.shk th.rowh { width: 5.5em; } }
