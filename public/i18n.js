@@ -95,7 +95,7 @@ window.I18N = {
     language: "言語",
     landing: {
       heroTitle: "米国株という大海原の、あなたの水先案内人。",
-      bio: { title: "作った人", name: "ポール・サイ（Paul Tsai）", role: "元フィデリティ投信 調査部長・個人投資家", paragraphs: ["台湾生まれ、米国育ち。UCLA機械工学部卒、東京大学工学部留学、カーネギーメロン大学MBA。投資経験30年。フィデリティ投信で12年、株式アナリストとして上海オフィスの立ち上げ、中国株調査責任者、日本株調査責任者を務めた。", "2017年に独立し、42歳でFIREを達成。シアトル在住で、米国株と不動産を中心に自己資金を運用しながら、ダイヤモンド・ザイの連載、メルマガ、Tokyo MX2「WORLD MARKETZ」のコメンテーターとして個人投資家に情報を発信している。", "{brand}は、調査部で毎日使っていた「企業を1ページで把握する」仕事の道具を、個人投資家がそのまま使える形にしたもの。"], book: "著書『台湾系アメリカ人が教える 米国株で一生安心のお金をつくる方法！』（ダイヤモンド社、2024年）" },
+      bio: { title: "作った人", name: "ポール・サイ（Paul Tsai）", role: "元フィデリティ投信 調査部長・個人投資家", paragraphs: ["台湾生まれ、米国育ち。UCLA機械工学部卒、東京大学工学部留学、カーネギーメロン大学MBA。投資経験30年。フィデリティ投信で12年、株式アナリストとして上海オフィスの立ち上げ、中国株調査責任者、日本株調査責任者を務めた。", "2017年に独立し、42歳でFIREを達成。シアトル在住で、米国株と不動産を中心に自己資金を運用しながら、ダイヤモンド・ザイの連載、メルマガ、Tokyo MX2「WORLD MARKETZ」のコメンテーターとして個人投資家に情報を発信している。", "{brand}は、調査部で毎日使っていた仕事の道具を、個人投資家がそのまま使える形にしたもの。まず1ページで企業の全体像をつかみ、気になったら業績・バリュエーション・テクニカル・株主、そして深掘り分析へと、知りたいだけ深く掘り下げられる。"], book: "著書『台湾系アメリカ人が教える 米国株で一生安心のお金をつくる方法！』（ダイヤモンド社、2024年）" },
       heroLead: "{brand}は、米国上場企業の業績・財務・株主・役員を1ページに収めた米国株アルマナック。EDGARに公開された財務情報と決算説明会のトランスクリプトをAIが読み込み、長期トレンド・直近動向・強気／弱気シナリオを日本語でまとめます。",
       ctaPrimary: "{trial}無料で試す",
       ctaSecondary: "ログイン",
@@ -213,7 +213,7 @@ window.I18N = {
     language: "Language",
     landing: {
       heroTitle: "Your pilot guide for the blue ocean of US stocks.",
-      bio: { title: "Who built this", name: "Paul Tsai", role: "Former head of research, Fidelity Investments Japan · independent investor", paragraphs: ["Born in Taiwan and raised in the United States. Mechanical engineering at UCLA, an exchange year at the University of Tokyo, and an MBA from Carnegie Mellon. Thirty years of investment experience, including 12 years at Fidelity Investments Japan, where he helped launch the Shanghai office and ran both China and Japan equity research.", "Independent since 2017, financially independent at 42. Based in Seattle, he manages his own money in US stocks and real estate and writes for individual investors through a Diamond ZAi column, a newsletter and regular market commentary on Tokyo MX2's WORLD MARKETZ.", "{brand} turns the one-page company sheet his research team used every day into a tool any investor can use."], book: "Author of a 2024 Diamond Inc. book on building lifelong wealth with US stocks" },
+      bio: { title: "Who built this", name: "Paul Tsai", role: "Former head of research, Fidelity Investments Japan · independent investor", paragraphs: ["Born in Taiwan and raised in the United States. Mechanical engineering at UCLA, an exchange year at the University of Tokyo, and an MBA from Carnegie Mellon. Thirty years of investment experience, including 12 years at Fidelity Investments Japan, where he helped launch the Shanghai office and ran both China and Japan equity research.", "Independent since 2017, financially independent at 42. Based in Seattle, he manages his own money in US stocks and real estate and writes for individual investors through a Diamond ZAi column, a newsletter and regular market commentary on Tokyo MX2's WORLD MARKETZ.", "{brand} turns the tools his research team used every day into something any investor can use: one page to grasp a company at a glance, then as deep as you want to go, from results and valuation to the technical read, the holders and the full deep dive."], book: "Author of a 2024 Diamond Inc. book on building lifelong wealth with US stocks" },
       heroLead: "{brand} puts any US-listed company on one page: results, financials, holders and officers. It is built on the public financials filed with EDGAR and on earnings-call transcripts, processed by AI into the long-term trend, the recent quarters and the bull and bear cases.",
       ctaPrimary: "Start {trial} free trial",
       ctaSecondary: "Log in",
@@ -331,7 +331,7 @@ window.I18N = {
     language: "語言",
     landing: {
       heroTitle: "引領您航向美股藍海的領航指南。",
-      bio: { title: "關於作者", name: "Paul Tsai（蔡）", role: "前富達投信研究部主管・獨立投資人", paragraphs: ["生於台灣，成長於美國。UCLA 機械工程學士、東京大學工學部交換、卡內基美隆大學 MBA。投資經驗 30 年，其中在富達投信 12 年，參與上海辦公室的設立，並先後擔任中國股票與日本股票研究主管。", "2017 年獨立，42 歲達成財務自由。現居西雅圖，以美股與不動產管理自有資金，並透過 Diamond ZAi 專欄、電子報與 Tokyo MX2「WORLD MARKETZ」節目向個人投資人分享觀點。", "{brand} 把研究部每天使用的「一頁看懂一家公司」工作表，變成每位投資人都能使用的工具。"], book: "著有《台湾系アメリカ人が教える 米国株で一生安心のお金をつくる方法！》（Diamond 社，2024）" },
+      bio: { title: "關於作者", name: "Paul Tsai（蔡）", role: "前富達投信研究部主管・獨立投資人", paragraphs: ["生於台灣，成長於美國。UCLA 機械工程學士、東京大學工學部交換、卡內基美隆大學 MBA。投資經驗 30 年，其中在富達投信 12 年，參與上海辦公室的設立，並先後擔任中國股票與日本股票研究主管。", "2017 年獨立，42 歲達成財務自由。現居西雅圖，以美股與不動產管理自有資金，並透過 Diamond ZAi 專欄、電子報與 Tokyo MX2「WORLD MARKETZ」節目向個人投資人分享觀點。", "{brand} 把研究部每天使用的工作工具，變成每位投資人都能使用的東西：先用一頁掌握公司全貌，想深入時再往下挖，從業績、估值、技術面、股東，一路到完整的深度分析。"], book: "著有《台湾系アメリカ人が教える 米国株で一生安心のお金をつくる方法！》（Diamond 社，2024）" },
       heroLead: "{brand} 是美股年鑑：任何美國上市公司的業績、財務、股東與經營層，一頁看完。以 EDGAR 公開的財務資料與財報電話會議逐字稿為基礎，由 AI 整理出長期趨勢、近期動態與多空論點。",
       ctaPrimary: "免費試用{trial}",
       ctaSecondary: "登入",
