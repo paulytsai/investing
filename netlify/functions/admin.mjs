@@ -84,6 +84,19 @@ export default handler(async (req, context) => {
     return json({ symbol, reportingCurrency: bundle.company.reportingCurrency, fxToUsd: bundle.company.fxToUsd, peForward: bundle.valuation.peForward, deleted: keys });
   }
 
+  // Drop one sector's AI report (every language, this period) so the next entitled view regenerates it.
+  if (action === "sector-rebuild" && req.method === "POST") {
+    const id = String(query(req).get("id") || "").toLowerCase();
+    if (!id) throw new HttpError(400, "id required");
+    const summaries = await openStore("summaries");
+    const keys = (await summaries.list("sector:")).filter((k) => k.includes(`:${id}:`));
+    for (const k of keys) await summaries.delete(k);
+    const jobs = await openStore("jobs");
+    const jobKeys = (await jobs.list("job:sector:")).filter((k) => k.includes(`:${id}:`));
+    for (const k of jobKeys) await jobs.delete(k);
+    return json({ id, deleted: keys, jobsCleared: jobKeys });
+  }
+
   throw new HttpError(404, "not_found");
 });
 
