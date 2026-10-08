@@ -7,8 +7,10 @@ export const SP100 = [
   "QCOM", "RTX", "SBUX", "SCHW", "SO", "SPG", "T", "TGT", "TMO", "TMUS", "TSLA", "TXN", "UBER", "UNH", "UNP", "UPS", "USB", "V", "VZ", "WFC", "WMT", "XOM",
 ];
 
+import { sectorSymbols } from "./sectors.mjs";
+
 export function warmUniverse() {
   const extra = String(process.env.WARM_SYMBOLS || "").split(",").map((s) => s.trim().toUpperCase()).filter(Boolean);
   if (process.env.WARM_ONLY_EXTRA === "1") return extra; // testing: restrict to WARM_SYMBOLS
-  return [...new Set([...extra, ...SP100])];
+  return [...new Set([...extra, ...SP100, ...sectorSymbols()])];
 }

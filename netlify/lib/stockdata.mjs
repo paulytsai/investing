@@ -657,8 +657,8 @@ export async function indexMembership(symbol) {
   try { const t = await indexTables(); return t[String(symbol).toUpperCase().replace(/\./g, "-")] || []; } catch { return []; }
 }
 
-export async function stockBundle(symbol, { force = false } = {}) {
-  return cached(`stock:${symbol}`, 12 * 3600, () => buildBundle(symbol), { version: "11", force });
+export async function stockBundle(symbol, { force = false, peek = false } = {}) {
+  return cached(`stock:${symbol}`, 12 * 3600, () => buildBundle(symbol), { version: "11", force, peek });
 }
 
 /** Newest earnings-call transcript date FMP lists for a symbol (one light request). */

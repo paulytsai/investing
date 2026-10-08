@@ -37,7 +37,7 @@ async function loadFunctions() {
     const mod = await import(pathToFileURL(path.join(dir, file)).href);
     const name = file.replace(/\.mjs$/, "");
     const paths = [`/.netlify/functions/${name}`];
-    if (mod.config?.path) paths.push(mod.config.path);
+    if (mod.config?.path) paths.push(...[].concat(mod.config.path));
     for (const p of paths) routes.push({ ...compilePath(p), handler: mod.default, background: name.endsWith("-background"), name });
   }
   return routes;

@@ -137,11 +137,12 @@ export async function openStore(name) {
  * Cached JSON helper. `ttlSeconds` controls freshness; stale entries are returned
  * when the producer throws so one upstream outage does not blank the page.
  */
-export async function cached(key, ttlSeconds, producer, { storeName = "cache", version = "1", force = false } = {}) {
+export async function cached(key, ttlSeconds, producer, { storeName = "cache", version = "1", force = false, peek = false } = {}) {
   const store = await openStore(storeName);
   const now = Date.now();
   const fullKey = `v${version}:${key}`;
   const hit = await store.getWithMetadata(fullKey);
+  if (peek) return hit ? hit.data : undefined; // whatever is there (even stale), never build
   if (!force && hit && hit.metadata?.expiresAt && Number(hit.metadata.expiresAt) > now) {
     return hit.data;
   }

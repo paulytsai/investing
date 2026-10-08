@@ -99,7 +99,7 @@
     } else {
       right = `<a href="#/login">${t("login")}</a><a class="btn small primary" href="#/signup">${t("signup")}</a>`;
     }
-    $("#userMenu").innerHTML = langs + right;
+    $("#userMenu").innerHTML = `<a class="btn small sectors-btn" href="#/sectors">${t("sectors.button")}</a>` + langs + right;
     document.querySelectorAll("#userMenu [data-lang]").forEach((b) => b.addEventListener("click", () => setLocale(b.dataset.lang)));
     const lo = $("#logoutBtn");
     if (lo) lo.addEventListener("click", async () => { await api("/api/auth/logout", { method: "POST" }); state.user = null; state.ent = null; location.hash = "#/"; renderUserMenu(); render(); });
@@ -123,6 +123,8 @@
     const [a, b] = h.split("/");
     if (a === "s" && b) return { view: "stock", symbol: decodeURIComponent(b).toUpperCase() };
     if (a === "reset" && b) return { view: "reset", token: b };
+    if (a === "sector" && b) return { view: "sector", id: decodeURIComponent(b) };
+    if (a === "sectors") return { view: "sectors" };
     if (["login", "signup", "account", "subscribe", "admin", "forgot", "contact", "about"].includes(a)) return { view: a };
     return { view: "home" };
   }
@@ -135,6 +137,8 @@
     if (r.view === "forgot") return renderForgot();
     if (r.view === "contact") return renderContact();
     if (r.view === "about") return renderAbout();
+    if (r.view === "sectors") return renderSectors();
+    if (r.view === "sector") return renderSector(r.id);
     if (r.view === "reset") return renderReset(r.token);
     if (r.view === "account") return state.user ? renderAccount() : renderAuth("login");
     if (r.view === "subscribe") return renderPaywall();
@@ -249,6 +253,46 @@
       <div class="footer">${t("aiNote")}<br>${t("disclaimer")}<br><a href="#/about">${t("about.link")}</a> · <a href="#/contact">${t("contact.link")}</a></div>`;
   }
   const kv2 = (rows) => `<dl class="kv2">${rows.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join("")}</dl>`;
+  async function renderSectors() {
+    stopSummaryPolling(state.stock); stopSummaryPolling(state.demo);
+    const X = t("sectors");
+    document.title = `${X.title} | ${t("siteName")}`;
+    app.innerHTML = `<div class="panel spinner">…</div>`;
+    let r; try { r = await api("/api/sectors"); } catch (e) { app.innerHTML = `<div class="panel"><div class="error">${t("loadError")}</div></div>`; return; }
+    const name = (o) => o[state.locale] || o.en;
+    const card = (sx) => `<a class="sector-card" href="#/sector/${esc(sx.id)}"><div class="sc-name">${esc(name(sx.name))}</div>${sx.desc ? `<div class="sc-desc muted">${esc(name(sx.desc))}</div>` : ""}<div class="sc-members muted small">${sx.members.length} ${X.names}: ${sx.members.slice(0, 12).map(esc).join(" ")}${sx.members.length > 12 ? " …" : ""}</div></a>`;
+    const ai = r.sectors.filter((x) => x.group === "ai"), gics = r.sectors.filter((x) => x.group === "gics");
+    app.innerHTML = `<section class="land sectors"><h2>${esc(X.title)}</h2><p class="lead">${esc(X.lead)}</p>
+      <h3 class="sub">${esc(X.aiGroup)}</h3><div class="sector-grid">${ai.map(card).join("")}</div>
+      <h3 class="sub">${esc(X.gicsGroup)}</h3><div class="sector-grid">${gics.map(card).join("")}</div>
+      <p class="note">${esc(X.note)}</p></section>
+      <div class="footer">${t("disclaimer")}<br><a href="#/about">${t("about.link")}</a> · <a href="#/contact">${t("contact.link")}</a></div>`;
+  }
+  async function renderSector(id) {
+    stopSummaryPolling(state.stock); stopSummaryPolling(state.demo);
+    const X = t("sectors"); const D = t("deep");
+    app.innerHTML = `<div class="panel spinner">…</div>`;
+    let r; try { r = await api(`/api/sector/${encodeURIComponent(id)}?lang=${encodeURIComponent(state.locale)}`); } catch (e) { app.innerHTML = `<div class="panel"><div class="error">${t(e.status === 404 ? "notFound" : "loadError")}</div></div>`; return; }
+    if (state.route.view !== "sector" || state.route.id !== id) return;
+    const name = (o) => o[state.locale] || o.en; const sx = r.sector;
+    document.title = `${name(sx.name)} | ${t("siteName")}`;
+    const rows = r.constituents.filter((c) => !c.error).sort((a, b) => (b.marketCapM || 0) - (a.marketCapM || 0));
+    const table = wrap(`<table class="tbl cons"><thead><tr><th>${X.symbol}</th><th>${X.company}</th><th class="num">${t("marketCap")}</th><th class="num">${t("val.peFwd")}</th><th class="num">${X.opMargin}</th><th class="num">${X.revGrowth}</th><th class="num">${t("val.roic")}</th>${sx.layers ? `<th>${X.layers}</th>` : ""}</tr></thead><tbody>${rows.map((c) => `<tr><th><a href="#/s/${esc(c.symbol)}">${esc(c.symbol)}</a></th><td>${esc(c.name)}${c.country && c.country !== "US" ? ` <span class="muted">(${esc(c.country)})</span>` : ""}${c.feature ? `<div class="muted small">${esc(c.feature)}</div>` : ""}</td><td class="num">${fmtBig(c.marketCapM)}</td><td class="num">${fmtDec(c.peForward, 1)}</td><td class="num">${fmtPct(c.opMarginPct)}</td><td class="num">${c.revenueGrowthPct == null ? NA : (c.revenueGrowthPct >= 0 ? "+" : "") + fmtDec(c.revenueGrowthPct, 1) + "%"}</td><td class="num">${fmtPct(c.roicPct)}</td>${sx.layers ? `<td>${(c.layers || []).map((l) => `<span class="tag">${l}</span>`).join(" ")}</td>` : ""}</tr>`).join("")}</tbody></table>`);
+    const layers = sx.layers ? `<p class="muted small" style="margin:0 8px 8px">${sx.layers.map((l) => `<b>${l.layer}</b> ${esc(name(l.name))}`).join("　")}</p>` : "";
+    const A = r.analysis || {};
+    let analysis;
+    const names = { quality: X.fq, trajectory: X.ft, valuation: X.fv };
+    if (A.status === "ready") analysis = researchHtml(A.summary, D, { findingNames: names, storyTitle: X.storyTitle, battlefieldsTitle: sx.layers ? X.layersTable : X.chainTable, updated: esc(t("updated", { date: fmtDate(A.summary.generatedAt) })) });
+    else if (A.status === "locked") analysis = `<section class="card"><div class="teaser-lock"><p>${esc(X.locked)}</p><a class="btn primary big" href="#/signup">${t("teaser").cta}</a> <a class="btn" href="#/login">${t("login")}</a></div></section>`;
+    else if (A.status === "pending" || A.status === null || A.status === undefined) { analysis = `<section class="card"><p style="margin:8px"><span class="spinner">${esc(X.generating)}</span></p></section>`; setTimeout(() => { if (state.route.view === "sector" && state.route.id === id) renderSector(id); }, 8000); }
+    else if (A.status === "disabled") analysis = `<section class="card"><p class="muted" style="margin:8px">${t("summaryDisabled")}</p></section>`;
+    else analysis = `<section class="card"><p class="muted" style="margin:8px">${t("summaryError")}${A.message ? ` <span class="small">(${esc(A.message)})</span>` : ""}</p></section>`;
+    app.innerHTML = `<div class="panel"><div class="title-row"><h1>${esc(name(sx.name))}</h1><a class="btn small" href="#/sectors">← ${esc(X.title)}</a></div>${sx.desc ? `<p class="muted">${esc(name(sx.desc))}</p>` : ""}${layers}</div>
+      ${sec(X.constituents, table + `<p class="note">${esc(X.tableNote)}</p>`)}
+      ${sec(X.reportTitle, `<p class="muted deep-intro">${esc(X.reportIntro)}</p>`)}
+      ${analysis}
+      <div class="footer">${t("aiNote")}<br>${t("disclaimer")}<br><a href="#/about">${t("about.link")}</a> · <a href="#/contact">${t("contact.link")}</a></div>`;
+  }
   function renderAbout() {
     stopSummaryPolling(state.stock); stopSummaryPolling(state.demo);
     const A = t("about"); const B = JSON.parse(JSON.stringify(t("landing.bio")).split("{brand}").join(brandName()));
@@ -703,14 +747,11 @@
     if (ch.ma200) series.push({ points: ch.ma200, color: "#6b4fbb", label: K.ma200 });
     window.renderChart(el, ch.points, { locale: state.locale, height: el.clientWidth < 600 ? 320 : 420, levels, bands, series, current: v.price });
   }
-  function tabDeep(c) {
-    const D = t("deep"); const d = c.d;
-    if (!d) {
-      const msg = c.deepStatus === "disabled" ? t("summaryDisabled") : c.deepStatus === "error" ? t("summaryError") : `<span class="spinner">${D.generating}</span>`;
-      return `<section class="card"><h3 class="sec"><span class="sec-t">${D.title}</span></h3><p class="muted" style="margin:8px">${esc(D.intro)}</p><p style="margin:8px">${msg}</p></section>`;
-    }
+  // Shared renderer for the company deep dive and the sector reports (same report shape).
+  function researchHtml(d, D, opts = {}) {
     const F = d.findings || {};
-    const card = (key, f) => f ? `<div class="finding"><div class="f-head"><span class="f-title">${D.f[key]}</span><span class="pill asm ${esc(String(f.assessment).toLowerCase()).replace(/[^a-z]/g, "")}">${esc(D.asm[String(f.assessment).toLowerCase()] || f.assessment)}</span><span class="muted small">${D.conf[String(f.confidence).toLowerCase()] || esc(f.confidence)}</span></div>
+    const names = opts.findingNames || D.f;
+    const card = (key, f) => f ? `<div class="finding"><div class="f-head"><span class="f-title">${names[key]}</span><span class="pill asm ${esc(String(f.assessment).toLowerCase()).replace(/[^a-z]/g, "")}">${esc(D.asm[String(f.assessment).toLowerCase()] || f.assessment)}</span><span class="muted small">${D.conf[String(f.confidence).toLowerCase()] || esc(f.confidence)}</span></div>
       <p class="f-mech">${esc(f.mechanism)}</p>
       <p><b>${D.evidence}:</b> ${esc(f.evidence)}</p><p><b>${D.counter}:</b> ${esc(f.counterevidence)}</p><p class="f-dec"><b>${D.decisive}:</b> ${esc(f.decisive)}</p></div>` : "";
     const findings = `<div class="findings">${card("quality", F.quality)}${card("trajectory", F.trajectory)}${card("valuation", F.valuation)}</div>${F.divergences ? `<p class="divergences"><b>${D.divergences}:</b> ${esc(F.divergences)}</p>` : ""}`;
@@ -719,19 +760,28 @@
     const secs = Object.fromEntries((d.sections || []).map((x) => [x.key, x]));
     const piece = (k) => secs[k] ? `<div class="ai"><span class="hl">${esc(secs[k].headline)}</span><span class="body">${esc(secs[k].body)}</span></div>` : "";
     const rows = ["history", "detective", "moat", "outlook", "cycle", "management", "valuationDetail", "consensus"].filter((k) => secs[k]).map((k) => row(`<b>${D[k]}</b>`, piece(k))).join("");
+    const cons = d.constituents && d.constituents.length ? sec(D.constituentReads, wrap(`<table class="tbl"><thead><tr><th>${D.symbol}</th><th>${D.role}</th><th>${D.read}</th></tr></thead><tbody>${d.constituents.map((x) => `<tr><th><a href="#/s/${esc(x.symbol)}">${esc(x.symbol)}</a></th><td>${esc(x.role)}</td><td>${esc(x.read)}</td></tr>`).join("")}</tbody></table>`)) : "";
     const risks = wrap(`<table class="tbl"><thead><tr><th>${D.risk}</th><th>${D.indicator}</th><th>${D.affects}</th></tr></thead><tbody>${(d.risks || []).map((r) => `<tr><td>${esc(r.risk)}</td><td>${esc(r.indicator)}</td><td class="c"><span class="tag">${esc(r.finding)}</span></td></tr>`).join("")}</tbody></table>`);
     const qs = `<ol class="imps">${(d.questions || []).map((q) => `<li>${esc(q)}</li>`).join("")}</ol>`;
     const cps = wrap(`<table class="tbl cps"><thead><tr><th>${D.premise}</th><th>${D.kpi}</th><th>${D.latest}</th><th>${D.failure}</th><th>${D.next}</th></tr></thead><tbody>${(d.checkpoints || []).map((x) => `<tr><td>${esc(x.premise)} <span class="tag">${esc(x.finding)}</span></td><td>${esc(x.kpi)}</td><td>${esc(x.latest)}</td><td>${esc(x.failure)}</td><td>${esc(x.next)}</td></tr>`).join("")}</tbody></table>`);
-    const tr = (d.transcriptsUsed || [])[0];
-    const note = `<p class="note"><b>${D.caveats}:</b> ${esc(d.caveats)}</p><p class="note">${esc(t("updatedNote", { period: tr ? tr.period : "—", date: tr ? fmtDate(tr.date) : "—", gen: fmtDate(d.generatedAt) }))} ${esc(D.noAdvice)}</p>`;
-    return `${sec(D.title, `<p class="muted deep-intro">${esc(D.intro)} <b>${esc(D.readTime)}</b></p>`)}
-      ${sec(D.findingsTitle, findings)}
-      ${sec(D.storyTitle, story + `<h4 class="sub">${D.battlefields}</h4>` + bf)}
+    const note = `<p class="note"><b>${D.caveats}:</b> ${esc(d.caveats)}</p><p class="note">${opts.updated || ""} ${esc(D.noAdvice)}</p>`;
+    return `${sec(D.findingsTitle, findings)}
+      ${sec(opts.storyTitle || D.storyTitle, story + `<h4 class="sub">${opts.battlefieldsTitle || D.battlefields}</h4>` + bf)}
       <table class="shk ov">${rows}</table>
+      ${cons}
       ${sec(D.risks, risks)}
       ${sec(D.questions, qs)}
       ${sec(D.checkpoints, cps)}
       <section class="card">${note}</section>`;
+  }
+  function tabDeep(c) {
+    const D = t("deep"); const d = c.d;
+    if (!d) {
+      const msg = c.deepStatus === "disabled" ? t("summaryDisabled") : c.deepStatus === "error" ? t("summaryError") : `<span class="spinner">${D.generating}</span>`;
+      return `<section class="card"><h3 class="sec"><span class="sec-t">${D.title}</span></h3><p class="muted" style="margin:8px">${esc(D.intro)}</p><p style="margin:8px">${msg}</p></section>`;
+    }
+    const tr = (d.transcriptsUsed || [])[0];
+    return `${sec(D.title, `<p class="muted deep-intro">${esc(D.intro)} <b>${esc(D.readTime)}</b></p>`)}` + researchHtml(d, D, { updated: esc(t("updatedNote", { period: tr ? tr.period : "—", date: tr ? fmtDate(tr.date) : "—", gen: fmtDate(d.generatedAt) })) });
   }
   function stopSummaryPolling(c) { if (c && c.timer) clearTimeout(c.timer); if (c) c.timer = null; }
   function applySummary(c, r, lang) {

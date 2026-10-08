@@ -480,3 +480,15 @@ details.dcf-card[open] > summary.sec .sec-t::before { content: "▾ 【"; }
 .divergences { margin: 4px 8px 8px; line-height: 1.75; }
 table.cps td { vertical-align: top; font-size: 13.5px; }
 @media (max-width: 900px) { .findings { grid-template-columns: 1fr; } }
+
+/* ---------- sectors ---------- */
+.sectors-btn { white-space: nowrap; }
+.sector-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; text-align: left; margin: 6px 0 16px; }
+.sector-card { display: block; border: 1px solid var(--border); background: var(--panel); padding: 12px 14px; color: var(--text); text-decoration: none; }
+.sector-card:hover { border-color: var(--accent); box-shadow: 0 2px 8px rgba(11,61,107,.12); }
+.sc-name { font-weight: 700; font-size: 16px; margin-bottom: 4px; }
+.sc-desc { font-size: 13.5px; margin-bottom: 6px; }
+.sc-members { line-height: 1.5; }
+.sectors h3.sub { text-align: left; margin: 18px 0 6px; }
+table.cons .small { line-height: 1.4; }
+@media (max-width: 900px) { .sector-grid { grid-template-columns: 1fr; } }

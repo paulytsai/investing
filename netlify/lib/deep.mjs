@@ -143,9 +143,10 @@ export async function generateDeepEnglish(symbol, bundle) {
   const request = (extra) => runJson({
     system: deepSystemPrompt(),
     user: `Apply the research specification to ${bundle.company.name} (${symbol}) as of ${bundle.asOf}. Return JSON only.${extra}\n\n${materials}`,
-    schema: DEEP_SCHEMA, effort: "high", maxTokens: 16000,
+    schema: DEEP_SCHEMA, effort: "high", maxTokens: 32000,
   });
-  let { parsed, message } = await request("");
+  // A long-winded first draft hits the token cap on some names: ask for the word budget once.
+  let { parsed, message } = await request("").catch((e) => { if (!/truncated/.test(e.message)) throw e; console.warn(`deep analysis for ${symbol} truncated; retrying with a word budget`); return request(" Keep the whole report within 1,400 words; every string must respect its word range."); });
   if (!isDeepComplete(parsed)) {
     console.warn(`incomplete deep analysis for ${symbol} (${deepIncompleteReason(parsed)}); retrying`);
     ({ parsed, message } = await request(" Every field must be filled in full with substantive text; empty or placeholder strings are not acceptable."));
@@ -171,7 +172,7 @@ export async function translateDeep(en, lang, bundle) {
   const { parsed, message } = await runJson({
     system: translateDeepPrompt(lang),
     user: `Translate this JSON. Return JSON only.\n\n${JSON.stringify(source)}`,
-    schema: DEEP_SCHEMA, effort: "medium", maxTokens: 16000,
+    schema: DEEP_SCHEMA, effort: "medium", maxTokens: 32000,
   });
   if (!isDeepComplete(parsed, lang)) throw new Error(`Translation to ${lang} came back incomplete`);
   const record = { ...en, ...parsed, lang, translatedFrom: "en", model: message.model, generatedAt: new Date().toISOString(), usage: { input: message.usage?.input_tokens, output: message.usage?.output_tokens } };
