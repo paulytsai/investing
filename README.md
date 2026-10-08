@@ -238,19 +238,30 @@ npm test
 
 ### Lemon Squeezy setup
 
-1. Create a **subscription product** billed monthly at US$10. In store settings
-   enable *localized pricing* so the checkout shows a rounded local-currency
-   price (e.g. ¥2,300, NT$480) — the app itself only shows `PRICE_LABEL`.
-2. Copy the product variant id into `LEMONSQUEEZY_VARIANT_ID` and the store
+Each edition charges in its own currency, and Lemon Squeezy charges in the
+**store's** currency (it only *displays* other currencies, converting at the
+mid-market rate), so run **one store per currency**: a JPY store for Kabukaizu,
+a TWD store for Guhaitu, a USD store for US Stock Almanac. Per site:
+
+1. Create the store with its currency (Settings → General), then a
+   **subscription product** billed monthly at the local price (for example
+   ¥1,500, NT$300, US$10).
+2. Set `PRICE_LABEL` (the amount as shown, without the period, e.g. `¥1,500`), `PRICE_AMOUNT`
+   (`1500`) and `PRICE_CURRENCY` (`JPY`) on that site. The structured data, the
+   pricing card and the "billed in …" notes follow these three values.
+3. Copy the product variant id into `LEMONSQUEEZY_VARIANT_ID` and the store
    subdomain into `LEMONSQUEEZY_STORE` (or paste a full buy link into
    `LEMONSQUEEZY_CHECKOUT_URL`).
-3. Settings → Webhooks → add `https://<your-site>/api/webhooks/lemonsqueezy`,
+4. Settings → Webhooks → add `https://<that-site>/api/webhooks/lemonsqueezy`,
    choose a signing secret (`LEMONSQUEEZY_WEBHOOK_SECRET`) and subscribe to all
    `subscription_*` events (created, updated, cancelled, resumed, expired,
    paused, unpaused, payment_success, payment_failed, payment_recovered).
-4. Optional: an API key in `LEMONSQUEEZY_API_KEY` lets the "Manage billing"
+5. Optional: an API key in `LEMONSQUEEZY_API_KEY` lets the "Manage billing"
    button mint a fresh customer-portal link; without it the link from the last
    webhook is used (those expire after 24 h).
+
+Subscribers are matched to accounts by the webhook, so a store per site keeps
+each edition's customers, payouts and tax reporting separate.
 
 Test mode works the same way — use test-mode keys and a test-mode webhook.
 

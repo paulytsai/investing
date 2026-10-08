@@ -14,9 +14,11 @@
     if (v === undefined) v = key.split(".").reduce((o, k) => (o ? o[k] : undefined), window.I18N.en) ?? key;
     if (typeof v === "string" && vars) for (const k in vars) v = v.replace(`{${k}}`, vars[k]);
     if (typeof v === "string" && v.includes("{brand}")) v = v.split("{brand}").join(brandName());
+    if (typeof v === "string" && v.includes("{currency}")) v = v.split("{currency}").join(currencyName());
     return v;
   }
   const brandName = () => (state.config && state.config.brand && state.config.brand.name) || "Kabukaizu";
+  const currencyName = () => { const c = (state.config && state.config.priceCurrency) || "USD"; const names = (window.CURRENCY_NAMES || {})[state.locale] || {}; return names[c] || c; };
   // " in Japanese and English" on a two-language site, nothing on a single-language one (English copy only).
   const langsNote = () => { const ls = (state.config && state.config.locales) || []; return ls.length > 1 ? ` in ${ls.map((l) => window.LOCALE_NAMES_EN[l] || l).join(" and ")}` : ""; };
   function applyBrand() {
@@ -178,10 +180,10 @@
       </section>
       <section class="land pricing">
         <h2>${esc(L.pricingTitle)}</h2>
-        <div class="pricecard"><div class="plan">${esc(L.pricingPlan)}</div><div class="amount">${esc(price)}</div>
+        <div class="pricecard"><div class="plan">${esc(L.pricingPlan)}</div><div class="amount">${esc(price)} <span class="per">${esc(t("perMonth"))}</span></div>
           <ul>${L.pricingBullets.map((b) => `<li>${esc(b.replace("{langs}", langsNote()))}</li>`).join("")}</ul>
           <a class="btn primary big" href="#/signup">${esc(L.ctaPrimary)}</a>
-          <p class="muted small">${esc(L.pricingNote)}</p></div>
+          <p class="muted small">${esc(L.pricingNote.split("{currency}").join(currencyName()))}</p></div>
       </section>
       <div class="footer center">${esc(L.disclaimer)}<br><a href="#/about">${t("about.link")}</a> · <a href="#/contact">${t("contact.link")}</a></div>`;
       mountDemo(app.querySelector("[data-demo]"));
@@ -891,7 +893,7 @@
 
   // ---------- boot ----------
   async function init() {
-    try { state.config = await api("/api/config"); } catch { state.config = { locales: ["ja", "en"], defaultLocale: "ja", trialDays: 7, priceLabel: "US$10 / month", billingEnabled: false, summariesEnabled: false }; }
+    try { state.config = await api("/api/config"); } catch { state.config = { locales: ["ja", "en"], defaultLocale: "ja", trialDays: 7, priceLabel: "US$10", billingEnabled: false, summariesEnabled: false }; }
     try { const me = await api("/api/auth/me"); state.user = me.user; state.ent = me.entitlement; } catch {}
     let loc = null;
     try { loc = localStorage.getItem("locale"); } catch {}

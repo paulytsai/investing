@@ -8,6 +8,7 @@ export default handler(async () => {
     defaultLocale: cfg.defaultLocale(),
     trialDays: cfg.trialDays(),
     priceLabel: lemon.priceLabel,
+    priceCurrency: cfg.price().currency,
     billingEnabled: !!(lemon.checkoutUrl || (lemon.store && lemon.variantId)),
     summariesEnabled: !!cfg.anthropicKey(),
     brand: cfg.brand(),

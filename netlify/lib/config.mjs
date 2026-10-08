@@ -63,8 +63,15 @@ export const cfg = {
       checkoutUrl: env("LEMONSQUEEZY_CHECKOUT_URL"), // optional full buy link override
       webhookSecret: env("LEMONSQUEEZY_WEBHOOK_SECRET"),
       apiKey: env("LEMONSQUEEZY_API_KEY"),
-      priceLabel: env("PRICE_LABEL", "US$10 / month"),
+      priceLabel: env("PRICE_LABEL", "US$10"),
     };
+  },
+  // The plan's price as shown on the site and in structured data. Each edition has its own
+  // Lemon Squeezy store in its own currency (JPY, TWD, USD), so the three values are per site.
+  price() {
+    const currency = (env("PRICE_CURRENCY", "USD") || "USD").toUpperCase();
+    const amount = env("PRICE_AMOUNT", "10");
+    return { label: env("PRICE_LABEL", "US$10"), amount: String(amount), currency };
   },
   internalSecret() {
     return env("INTERNAL_SECRET") || cfg.authSecret();

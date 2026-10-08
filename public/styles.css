@@ -496,3 +496,5 @@ table.cons .small { line-height: 1.4; }
 /* ---------- research specification ---------- */
 .land.spec .spec-list { text-align: left; max-width: 820px; margin: 10px auto 0; padding-left: 22px; line-height: 1.6; }
 .land.spec .spec-list li { margin: 6px 0; }
+
+.pricecard .amount .per { font-size: 14px; font-weight: 400; color: var(--muted); }

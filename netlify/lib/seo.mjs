@@ -24,7 +24,7 @@ export function siteMeta(locale) {
 export function siteJsonLd(m) {
   return [
     { "@context": "https://schema.org", "@type": "WebSite", name: m.brand.name, alternateName: m.brand.id === "usstockalmanac" ? "usstockalmanac.com" : `${m.brand.name} US Stock Almanac`, url: m.url, inLanguage: m.locales, description: m.description },
-    { "@context": "https://schema.org", "@type": "SoftwareApplication", name: m.brand.name, applicationCategory: "FinanceApplication", operatingSystem: "Web", url: m.url, description: m.description, image: m.ogImage, offers: { "@type": "Offer", price: "10", priceCurrency: "USD", description: "Monthly subscription, 7-day free trial" }, author: { "@type": "Person", name: CREATOR.name, url: CREATOR.url } },
+    { "@context": "https://schema.org", "@type": "SoftwareApplication", name: m.brand.name, applicationCategory: "FinanceApplication", operatingSystem: "Web", url: m.url, description: m.description, image: m.ogImage, offers: { "@type": "Offer", price: cfg.price().amount, priceCurrency: cfg.price().currency, description: "Monthly subscription, 7-day free trial" }, author: { "@type": "Person", name: CREATOR.name, url: CREATOR.url } },
     { "@context": "https://schema.org", "@type": "Person", name: CREATOR.name, alternateName: CREATOR.nameJa, url: CREATOR.url, image: `${m.url}${CREATOR.image}`, jobTitle: CREATOR.jobTitle[m.locale] || CREATOR.jobTitle.en, sameAs: CREATOR.sameAs, alumniOf: ["University of California, Los Angeles", "Carnegie Mellon University"], worksFor: { "@type": "Organization", name: m.brand.name, url: m.url } },
   ];
 }
