@@ -61,9 +61,9 @@ Two kinds share the same box under the subscribe buttons and the same `?coupon=C
 
 **Access codes (free months, no card)** are created in the admin panel (code, months, optional
 max uses, expiry and note) or with `POST /api/admin/coupon?code=FREE6&months=6&max=100`.
-Redeeming one extends the member's card-free period by that many months, counted from today
-or from the current free-period end, whichever is later; Stripe asks for the card only when the
-member subscribes afterwards. Each member can use a code once. This is the kind to use for
+Redeeming one sets the member's card-free period to that many months from today (it replaces
+the remaining trial rather than adding to it; a longer existing free period is kept). Stripe
+asks for the card only when the member subscribes afterwards. Each member can use a code once. This is the kind to use for
 "6 months free" and "12 months free".
 
 **Discount codes** are Stripe promotion codes. Create them in the Stripe Dashboard (Product catalog →

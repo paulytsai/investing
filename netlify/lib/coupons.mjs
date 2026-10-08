@@ -53,15 +53,18 @@ export function accessCodeProblem(rec, user, now = Date.now()) {
   return null;
 }
 
-/** Add the code's months to the user's free period, counting from today or from the current end, whichever is later. */
+/**
+ * Set the user's free period to the code's months counted from today. It replaces the
+ * remaining trial rather than adding to it: FREE6 on a fresh signup gives 6 months, not 9. A
+ * member whose free period already runs longer keeps it.
+ */
 export async function redeemAccessCode(user, code) {
   const rec = await getAccessCode(code);
   const problem = accessCodeProblem(rec, user);
   if (problem) throw new HttpError(problem === "coupon_used" ? 409 : 404, problem);
   const now = Date.now();
-  const from = new Date(Math.max(now, user.trialEndsAt || 0));
-  const until = new Date(from); until.setUTCMonth(until.getUTCMonth() + rec.months);
-  user.trialEndsAt = until.getTime();
+  const until = new Date(now); until.setUTCMonth(until.getUTCMonth() + rec.months);
+  user.trialEndsAt = Math.max(until.getTime(), user.trialEndsAt || 0);
   user.coupons = [...(user.coupons || []), { code: rec.code, months: rec.months, at: now }];
   await saveUser(user);
   const store = await openStore("users");
