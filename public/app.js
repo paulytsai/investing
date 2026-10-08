@@ -196,16 +196,10 @@
         <h2>${esc(L.samplesTitle)}</h2><p class="lead">${esc(L.samplesLead)}</p>
         <div class="demo-frame" data-demo></div>
       </section>
+      <div class="land-row">
       <section class="land spec">
         <h2>${esc(L.spec.title)}</h2><p class="lead">${esc(L.spec.lead)}</p>
         <ul class="spec-list">${L.spec.bullets.map((b) => `<li>${esc(b)}</li>`).join("")}</ul>
-      </section>
-      <section class="land bio">
-        <h2>${esc(L.bio.title)}</h2>
-        <div class="bio-row"><img class="bio-photo" src="/img/paul-tsai.jpg" alt="${esc(L.bio.name)}" loading="lazy" width="240" height="320">
-          <div class="bio-text"><h3>${esc(L.bio.name)} <span class="muted">${esc(L.bio.role)}</span></h3>
-          ${L.bio.paragraphs.map((p) => `<p>${esc(p)}</p>`).join("")}
-          <p class="muted small">${esc(L.bio.book)} · <a href="https://paultsai.net" target="_blank" rel="noopener">paultsai.net</a></p></div></div>
       </section>
       <section class="land pricing">
         <h2>${esc(L.pricingTitle)}</h2>
@@ -214,6 +208,14 @@
           <ul>${L.pricingBullets.map((b) => `<li>${esc(b.replace("{langs}", langsNote()))}</li>`).join("")}</ul>
           <a class="btn primary big" href="#/signup">${esc(L.ctaPrimary)}</a>
           <p class="muted small">${esc(L.pricingNote.split("{currency}").join(currencyName()).split("{provider}").join(state.config.billingProvider === "stripe" ? "Stripe" : "Lemon Squeezy"))}</p></div>
+      </section>
+      </div>
+      <section class="land bio">
+        <h2>${esc(L.bio.title)}</h2>
+        <div class="bio-row"><img class="bio-photo" src="/img/paul-tsai.jpg" alt="${esc(L.bio.name)}" loading="lazy" width="240" height="320">
+          <div class="bio-text"><h3>${esc(L.bio.name)} <span class="muted">${esc(L.bio.role)}</span></h3>
+          ${L.bio.paragraphs.map((p) => `<p>${esc(p)}</p>`).join("")}
+          <p class="muted small">${esc(L.bio.book)} · <a href="https://paultsai.net" target="_blank" rel="noopener">paultsai.net</a></p></div></div>
       </section>
       <div class="footer center">${esc(L.disclaimer)}<br><a href="#/about">${t("about.link")}</a> · <a href="#/contact">${t("contact.link")}</a></div>`;
       mountDemo(app.querySelector("[data-demo]"));
