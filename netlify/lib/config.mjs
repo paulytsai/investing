@@ -58,7 +58,7 @@ export const cfg = {
   },
   // Translations only carry the English text across, so a cheaper model does them.
   translationModel() {
-    return env("TRANSLATION_MODEL", "claude-sonnet-5-5");
+    return env("TRANSLATION_MODEL", "claude-opus-5-5");
   },
   lemon() {
     return {

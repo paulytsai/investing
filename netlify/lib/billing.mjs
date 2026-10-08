@@ -15,9 +15,15 @@ export function billingProvider() {
 export const billingEnabled = () => billingProvider() !== null;
 
 /** URL that starts a subscription for this user. */
-export async function checkoutUrl(user, plan = "monthly") {
+/** Validate a coupon code typed on the site; null when the provider has no such active code. */
+export async function lookupCoupon(code) {
+  if (billingProvider() !== "stripe") return null;
+  return stripe.findPromotionCode(code);
+}
+
+export async function checkoutUrl(user, plan = "monthly", promotionCode = null) {
   const p = billingProvider();
-  if (p === "stripe") return stripe.createCheckoutSession(user, { siteUrl: cfg.siteUrl(), plan });
+  if (p === "stripe") return stripe.createCheckoutSession(user, { siteUrl: cfg.siteUrl(), plan, promotionCode });
   if (p === "lemonsqueezy") return lemon.checkoutUrl(user);
   return null;
 }

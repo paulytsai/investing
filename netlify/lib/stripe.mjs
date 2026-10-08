@@ -37,7 +37,23 @@ async function call(method, path, body, { idempotencyKey } = {}) {
 
 /** Hosted Checkout for the monthly plan. Returns the URL to send the user to. */
 const CHECKOUT_LOCALES = { ja: "ja", en: "en", "zh-TW": "zh-TW" };
-export async function createCheckoutSession(user, { siteUrl, plan = "monthly" }) {
+/**
+ * Look up an active promotion code (the customer-facing string of a Stripe coupon, created in
+ * the Dashboard under Product catalog → Coupons). Returns null when it does not exist, is
+ * inactive, expired or used up.
+ */
+export async function findPromotionCode(code) {
+  const c = String(code || "").trim();
+  if (!c || c.length > 40) return null;
+  const r = await call("GET", `promotion_codes?code=${encodeURIComponent(c)}&active=true&limit=1`);
+  const p = r.data && r.data[0];
+  if (!p || !p.active || !p.coupon || !p.coupon.valid) return null;
+  if (p.expires_at && p.expires_at * 1000 < Date.now()) return null;
+  if (p.max_redemptions && p.times_redeemed >= p.max_redemptions) return null;
+  return { id: p.id, code: p.code, percentOff: p.coupon.percent_off || null, amountOff: p.coupon.amount_off || null, currency: p.coupon.currency || null, duration: p.coupon.duration, months: p.coupon.duration_in_months || null, name: p.coupon.name || null, firstTimeOnly: !!(p.restrictions && p.restrictions.first_time_transaction) };
+}
+
+export async function createCheckoutSession(user, { siteUrl, plan = "monthly", promotionCode = null }) {
   const s = cfg.stripe();
   const base = siteUrl.replace(/\/$/, "");
   const price = plan === "annual" && s.priceIdAnnual ? s.priceIdAnnual : s.priceId;
@@ -49,12 +65,14 @@ export async function createCheckoutSession(user, { siteUrl, plan = "monthly" })
     client_reference_id: user.id,
     metadata: { user_id: user.id, username: user.username, plan },
     subscription_data: { metadata: { user_id: user.id, plan } },
-    allow_promotion_codes: true,
     // Managed Payments requires adaptive pricing: the price is set in the site's currency and
     // visitors abroad see their own currency with a selector to switch back.
     locale: CHECKOUT_LOCALES[user.locale] || "auto",
   };
   if (s.managedPayments) params.managed_payments = { enabled: true };
+  // A code applied on the site is pre-filled; otherwise Checkout shows its own promotion-code
+  // field (Stripe allows one or the other, not both).
+  if (promotionCode) params.discounts = [{ promotion_code: promotionCode }]; else params.allow_promotion_codes = true;
   const existing = user.subscription && user.subscription.provider === "stripe" && user.subscription.customerId;
   if (existing) params.customer = existing; else params.customer_email = user.email;
   const session = await call("POST", "checkout/sessions", params, { idempotencyKey: `checkout:${user.id}:${Date.now()}` });
