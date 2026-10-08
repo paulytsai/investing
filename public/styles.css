@@ -432,3 +432,11 @@ table.deep-bf tbody th { white-space: normal; font-weight: 600; }
 .lg.res { border-color: #c93c37; } .lg.sup { border-color: #1a7f37; } .lg.ma50 { border-color: #d08c1a; border-top-style: dotted; } .lg.ma200 { border-color: #6b4fbb; border-top-style: dotted; } .lg.px { border-color: #1f2328; border-top-style: solid; }
 .lvl { font-weight: 600; } .lvl.res { color: #c93c37; } .lvl.sup { color: #1a7f37; }
 [data-techranges] { margin: 8px 8px 4px; }
+
+/* ---------- DCF: collapsed by default at the bottom of the valuation tab ---------- */
+details.dcf-card { margin-top: 12px; }
+details.dcf-card > summary.sec { cursor: pointer; list-style: none; margin: 0; }
+details.dcf-card > summary.sec::-webkit-details-marker { display: none; }
+details.dcf-card > summary.sec .sec-t::before { content: "▸ 【"; }
+details.dcf-card[open] > summary.sec { margin-bottom: 8px; }
+details.dcf-card[open] > summary.sec .sec-t::before { content: "▾ 【"; }

@@ -541,7 +541,9 @@
         <dt><label for="tpe-${esc(b.symbol)}">${T.multiple}</label></dt><dd><input id="tpe-${esc(b.symbol)}" class="tpe" type="number" min="1" max="500" step="0.5" value="${def}" inputmode="decimal"> <span class="muted small">${T.presets}: ${refs}</span></dd>
         <dt>${T.price}</dt><dd><b class="tp-price"></b> <span class="tp-up"></span></dd></dl><p class="note">${esc(T.note)}</p></div>`;
     }
-    return `${sec(T.title, targetHtml)}${sec(V.dcfTitle, dcfHtml, d && d.riskFreeDate ? `${V.rf}: ${fmtPct(d.inputs.riskFree, 2)} (${esc(d.riskFreeDate)})` : "")}<h3 class="sec plain">${V.title}</h3>${metrics}`;
+    const dcfExtra = d && d.riskFreeDate ? `<span class="sec-extra">${V.rf}: ${fmtPct(d.inputs.riskFree, 2)} (${esc(d.riskFreeDate)})</span>` : "";
+    const dcfCard = `<details class="card dcf-card"><summary class="sec"><span class="sec-t">${V.dcfTitle}</span>${dcfExtra} <span class="muted small">${V.dcfHint}</span></summary>${dcfHtml}</details>`;
+    return `${sec(T.title, targetHtml)}<h3 class="sec plain">${V.title}</h3>${metrics}${dcfCard}`;
   }
   function bindTarget(c) {
     const root = c.root; if (!root) return;
