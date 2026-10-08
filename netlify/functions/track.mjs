@@ -4,7 +4,7 @@ import { json, handler, HttpError } from "../lib/http.mjs";
 import { currentUser } from "../lib/entitlement.mjs";
 import { logEvent } from "../lib/events.mjs";
 
-const ACTIONS = new Set(["page", "tab", "range", "techrange", "target", "deep_open", "cta", "sector_report", "lang"]);
+const ACTIONS = new Set(["page", "tab", "range", "techrange", "target", "deep_open", "cta", "sector_report", "lang", "view", "help"]);
 
 export default handler(async (req) => {
   if (req.method !== "POST") throw new HttpError(405, "method_not_allowed");

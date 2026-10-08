@@ -112,6 +112,14 @@
     if (view !== "stock") track("page", view); // stock pages are logged by the data request itself
   }
 
+  // ---------- beginner ("simple") or full layout ----------
+  function viewMode() { if (state.user && state.user.view) return state.user.view; try { return localStorage.getItem("view") || "simple"; } catch { return "simple"; } }
+  function setViewMode(v) {
+    try { localStorage.setItem("view", v); } catch {}
+    if (state.user) { state.user.view = v; api("/api/auth/view", { method: "POST", body: { view: v } }).catch(() => {}); }
+    track("view", v); renderUserMenu(); render();
+  }
+
   // ---------- user menu ----------
   function renderUserMenu() {
     const langs = state.config.locales.length > 1
@@ -123,7 +131,9 @@
     } else {
       right = `<a href="#/login">${t("login")}</a><a class="btn small primary" href="#/signup">${t("signup")}</a>`;
     }
-    $("#userMenu").innerHTML = langs + right;
+    const viewBtn = `<button class="btn small viewbtn" id="viewBtn" title="${esc(t("view.hint"))}">${esc(viewMode() === "simple" ? t("view.toFull") : t("view.toSimple"))}</button>`;
+    $("#userMenu").innerHTML = viewBtn + langs + right;
+    const vb = $("#viewBtn"); if (vb) vb.addEventListener("click", () => setViewMode(viewMode() === "simple" ? "full" : "simple"));
     document.querySelectorAll("#userMenu [data-lang]").forEach((b) => b.addEventListener("click", () => setLocale(b.dataset.lang)));
     const lo = $("#logoutBtn");
     if (lo) lo.addEventListener("click", async () => { await api("/api/auth/logout", { method: "POST" }); state.user = null; state.ent = null; location.hash = "#/"; renderUserMenu(); render(); });
@@ -150,7 +160,7 @@
     if (a === "reset" && b) return { view: "reset", token: b };
     if (a === "sector" && b) return { view: "sector", id: decodeURIComponent(b) };
     if (a === "sectors") return { view: "sectors" };
-    if (["login", "signup", "account", "subscribe", "admin", "forgot", "contact", "about"].includes(a)) return { view: a };
+    if (["login", "signup", "account", "subscribe", "admin", "forgot", "contact", "about", "guide"].includes(a)) return { view: a };
     return { view: "home" };
   }
   window.addEventListener("hashchange", () => { state.route = parseRoute(); render(); });
@@ -169,6 +179,7 @@
     if (r.view === "forgot") return renderForgot();
     if (r.view === "contact") return renderContact();
     if (r.view === "about") return renderAbout();
+    if (r.view === "guide") return renderGuide();
     if (r.view === "sectors") return renderSectors();
     if (r.view === "sector") return renderSector(r.id);
     if (r.view === "reset") return renderReset(r.token);
@@ -192,6 +203,11 @@
         <div class="actions"><a class="btn primary big" href="#/signup">${esc(L.ctaPrimary)}</a><a class="btn big" href="#/login">${esc(L.ctaSecondary)}</a></div>
         <p class="small"><span class="pill ok">${esc(L.noCard)}</span> ${esc(L.ctaAfter.replace("{price}", price))}</p>
       </div><span class="hero-credit">${esc(t("heroCredit"))}</span></section>
+      <section class="doors">
+        <div class="door"><h3>${esc(L.doors.famous)}</h3><p class="muted">${esc(L.doors.famousLead)}</p><div class="door-chips">${["AAPL", "NVDA", "MSFT", "AMZN", "TSLA", "GOOGL"].map((x) => `<a class="btn small" href="#/s/${x}">${x}</a>`).join("")}</div></div>
+        <div class="door"><h3>${esc(L.doors.sectors)}</h3><p class="muted">${esc(L.doors.sectorsLead)}</p><a class="btn small" href="#/sectors">${esc(t("sectors.button"))} →</a></div>
+        <div class="door"><h3>${esc(L.doors.own)}</h3><p class="muted">${esc(L.doors.ownLead)}</p><button class="btn small" type="button" data-focus-search>${esc(L.doors.ownButton)}</button></div>
+      </section>
       <section class="land">
         <h2>${esc(L.samplesTitle)}</h2>
         <div class="sample-links"><span class="btn small active">${esc(L.sampleStock)}</span> <a class="btn small" href="#/sector/${esc(state.config.sampleSector || "ai-chips")}">${esc(L.sampleSector)} →</a></div>
@@ -219,8 +235,9 @@
           ${L.bio.paragraphs.map((p) => `<p>${esc(p)}</p>`).join("")}
           <p class="muted small">${esc(L.bio.book)} · <a href="https://paultsai.net" target="_blank" rel="noopener">paultsai.net</a></p></div></div>
       </section>
-      <div class="footer center">${esc(L.disclaimer)}<br><a href="#/about">${t("about.link")}</a> · <a href="#/contact">${t("contact.link")}</a></div>`;
+      <div class="footer center">${esc(L.disclaimer)}<br><a href="#/about">${t("about.link")}</a> · <a href="#/guide">${t("guide.link")}</a> · <a href="#/contact">${t("contact.link")}</a></div>`;
       mountDemo(app.querySelector("[data-demo]"));
+      const fs = app.querySelector("[data-focus-search]"); if (fs) fs.addEventListener("click", () => { window.scrollTo({ top: 0, behavior: "smooth" }); $("#searchInput").focus(); track("cta", "own_stock"); });
       return;
     }
     // Logged-in home: open the default ticker.
@@ -644,7 +661,7 @@
       } catch {}
     }
     document.title = `${symbol} | ${t("siteName")}`;
-    app.innerHTML = `<div data-stock></div><div class="footer">${t("aiNote")}<br>${t("disclaimer")}<br><a href="#/about">${t("about.link")}</a> · <a href="#/contact">${t("contact.link")}</a></div>`;
+    app.innerHTML = `<div data-stock></div><div class="footer">${t("aiNote")}<br>${t("disclaimer")}<br><a href="#/about">${t("about.link")}</a> · <a href="#/guide">${t("guide.link")}</a> · <a href="#/contact">${t("contact.link")}</a></div>`;
     mountStock(app.querySelector("[data-stock]"), c);
     loadSummary(c);
   }
@@ -663,12 +680,88 @@
         <div class="ranges" data-ranges>${Object.keys(t("ranges")).map((r) => `<button data-range="${r}" class="${r === c.chartRange ? "active" : ""}">${t("ranges")[r]}</button>`).join("")}</div>
         <div class="chart" data-chart></div>
       </div>
-      <div class="tabs" data-tabs>${t("tabs").map((x, i) => `<button data-tab="${i}" class="${i === c.tab ? "active" : ""}">${esc(x)}</button>`).join("")}</div>
-      <div data-tabbody></div>`;
+      <div data-simple></div>
+      ${viewMode() === "simple" ? sectionsHtml(c) : `<div class="tabs" data-tabs>${t("tabs").map((x, i) => `<button data-tab="${i}" class="${i === c.tab ? "active" : ""}">${esc(x)}</button>`).join("")}</div>
+      <div data-tabbody></div>`}`;
+    renderSimple(c);
+    container.querySelectorAll("details.dsec").forEach((d) => d.addEventListener("toggle", () => { if (d.open) { const i = Number(d.dataset.dsec); if (!d.dataset.rendered) { d.dataset.rendered = "1"; renderPanel(c, i); } if (!c.demo) track("tab", `${state.symbol}_${TAB_KEYS[i] || i}`); } }));
     container.querySelectorAll("[data-ranges] button").forEach((btn) => btn.addEventListener("click", () => { c.chartRange = btn.dataset.range; if (!c.demo) track("range", `${state.symbol}_${c.chartRange}`); container.querySelectorAll("[data-ranges] button").forEach((x) => x.classList.toggle("active", x === btn)); loadChart(c); }));
     container.querySelectorAll("[data-tabs] button").forEach((btn) => btn.addEventListener("click", () => { c.tab = Number(btn.dataset.tab); if (!c.demo) track("tab", `${state.symbol}_${TAB_KEYS[c.tab] || c.tab}`); container.querySelectorAll("[data-tabs] button").forEach((x) => x.classList.toggle("active", x === btn)); renderTab(c); if (!c.demo) window.scrollTo({ top: container.querySelector("[data-tabs]").offsetTop - 8, behavior: "smooth" }); }));
-    renderTab(c);
+    if (viewMode() === "simple") { const first = container.querySelector('details.dsec[open]'); if (first) { first.dataset.rendered = "1"; renderPanel(c, Number(first.dataset.dsec)); } } else renderTab(c);
     loadChart(c);
+    if (!c.demo) { loadSimple(c); loadDeepPeek(c); }
+  }
+
+  // ---- simple view: stacked sections with a one-line takeaway each ----
+  function sectionsHtml(c) {
+    const tabs = t("tabs");
+    return `<div class="dsecs" data-sections>${tabs.map((name, i) => `<details class="dsec" data-dsec="${i}"${i === 0 ? " open" : ""}><summary><span class="d-title">${esc(name)}</span><span class="d-take">${takeaway(c, i)}</span></summary><div class="d-body" data-tabpanel="${i}"></div></details>`).join("")}</div>`;
+  }
+  function refreshTakeaways(c) {
+    if (!c.root) return;
+    c.root.querySelectorAll("details.dsec").forEach((d) => { const el = d.querySelector(".d-take"); if (el) el.innerHTML = takeaway(c, Number(d.dataset.dsec)); });
+  }
+  const sgnPct = (v, d = 1) => (v === null || v === undefined ? NA : `${v > 0 ? "+" : ""}${fmtDec(v, d)}%`);
+  function rangePos(r, S) {
+    if (!r || r.now === null || r.now === undefined) return "";
+    if (r.now < r.low) return S.posBelow; if (r.now > r.high) return S.posAbove;
+    const p = r.percentile; return p === null || p === undefined ? S.posInside : p <= 33 ? S.posLow : p >= 67 ? S.posHigh : S.posMid;
+  }
+  function takeaway(c, i) {
+    const b = c.b; if (!b) return ""; const v = b.valuation || {}, g = b.growth || {}, m = b.market || {}; const S = t("simpleUi");
+    switch (i) {
+      case 0: return c.s && c.s.longTerm ? esc(c.s.longTerm.headline) : "";
+      case 1: { const sg = (g.salesGrowth || []).slice(-1)[0]; return sg && sg.pct !== null ? esc(S.takeFin.replace("{g}", sgnPct(sg.pct)).replace("{fy}", sg.label).replace("{m}", fmtDec(g.operatingMarginPct, 1))) : ""; }
+      case 2: { const r = v.history && v.history.range5 && v.history.range5.pe; return v.pe !== null && v.pe !== undefined ? esc(S.takeVal.replace("{pe}", fmtDec(v.pe, 1)).replace("{range}", r ? `${fmtDec(r.low, 1)}〜${fmtDec(r.high, 1)}` : "–").replace("{pos}", r ? rangePos(r, S) : "")) : ""; }
+      case 3: { const p = m.price, a50 = m.priceAvg50, a200 = m.priceAvg200; return p && a50 && a200 ? esc(S.takeTech.replace("{m50}", p >= a50 ? S.above : S.below).replace("{m200}", p >= a200 ? S.above : S.below)) : ""; }
+      case 4: { const h = b.holders && b.holders.summary; return h && h.ownershipPct !== null && h.ownershipPct !== undefined ? esc(S.takeHold.replace("{pct}", fmtDec(h.ownershipPct, 0))) : ""; }
+      case 5: return c.d ? chipsHtml(c, true) : `<span class="muted">${esc(S.takeDeep)}</span>`;
+    }
+    return "";
+  }
+
+  // ---- the plain-language read and the three finding chips, under the chart ----
+  const CHIP_TONE = { strong: "good", improving: "good", undemanding: "good", adequate: "mid", stable: "mid", moderate: "mid", weak: "bad", deteriorating: "bad", demanding: "bad" };
+  function chipsHtml(c, inline = false) {
+    const D = t("deep"); const F = c.d && c.d.findings; const S = t("simpleUi");
+    if (!F) return inline ? "" : (c.deepStatus === "pending" ? `<p class="chips muted small"><span class="spinner">${esc(D.generating)}</span></p>` : `<p class="chips muted small"><a href="#" data-opendeep>${esc(S.noDeep)}</a></p>`);
+    const chip = (k) => { const f = F[k]; if (!f) return ""; const a = String(f.assessment).toLowerCase(); return `<span class="chip ${CHIP_TONE[a] || "na"}" title="${esc(f.decisive || "")}"><span class="chip-k">${esc(D.f[k])}</span><span class="chip-v">${esc(D.asm[a] || f.assessment)}</span></span>`; };
+    return `<${inline ? "span" : "div"} class="chips">${chip("quality")}${chip("trajectory")}${chip("valuation")}</${inline ? "span" : "div"}>`;
+  }
+  function renderSimple(c) {
+    const el = c.root && c.root.querySelector("[data-simple]"); if (!el) return;
+    const S = t("simpleUi"); const r = c.simple; const st = c.simpleStatus;
+    const body = r ? `<dl class="sr-list">${["what", "growth", "profit", "price", "watch"].map((k) => `<div class="sr-row"><dt>${esc(S.labels[k])}${k === "price" ? helpBtn("pe") : ""}</dt><dd>${esc(r[k])}</dd></div>`).join("")}</dl>`
+      : st === "disabled" ? `<p class="muted">${t("summaryDisabled")}</p>` : st === "error" ? `<p class="muted">${t("summaryError")}</p>` : `<p><span class="spinner">${esc(S.generating)}</span></p>`;
+    el.innerHTML = `<section class="card simple-read"><h3 class="sec"><span class="sec-t">${esc(S.title)}</span><span class="sec-extra">${esc(S.sub)}</span></h3>${chipsHtml(c)}${body}<p class="sr-links"><a href="#/guide">${esc(S.guideLink)}</a>${viewMode() === "simple" ? ` · <a href="#" data-fullview>${esc(S.fullLink)}</a>` : ` · <a href="#" data-simpleview>${esc(S.simpleLink)}</a>`}</p></section>`;
+    const fv = el.querySelector("[data-fullview]"); if (fv) fv.addEventListener("click", (ev) => { ev.preventDefault(); setViewMode("full"); });
+    const sv = el.querySelector("[data-simpleview]"); if (sv) sv.addEventListener("click", (ev) => { ev.preventDefault(); setViewMode("simple"); });
+    const od = el.querySelector("[data-opendeep]"); if (od) od.addEventListener("click", (ev) => { ev.preventDefault(); openTab(c, 5); });
+  }
+  function openTab(c, i) {
+    if (!c.root) return;
+    const d = c.root.querySelector(`details.dsec[data-dsec="${i}"]`);
+    if (d) { d.open = true; d.scrollIntoView({ behavior: "smooth", block: "start" }); return; }
+    const btn = c.root.querySelector(`[data-tabs] button[data-tab="${i}"]`); if (btn) { btn.click(); btn.scrollIntoView({ behavior: "smooth", block: "start" }); }
+  }
+  function applySimple(c, r) {
+    c.simpleStatus = r.status;
+    if (r.status === "ready") { c.simple = r.simple; c.simpleTries = 0; }
+    renderSimple(c);
+    if (r.status === "pending" && (c.simpleTries || 0) < 40) { c.simpleTries = (c.simpleTries || 0) + 1; c.simpleTimer = setTimeout(() => loadSimple(c), 6000); }
+  }
+  async function loadSimple(c) {
+    if (c.simpleTimer) clearTimeout(c.simpleTimer); c.simpleTimer = null;
+    const symbol = c.b && c.b.symbol; const lang = state.locale; if (!symbol) return;
+    if (!state.config.summariesEnabled) { c.simpleStatus = "disabled"; renderSimple(c); return; }
+    try { const r = c.demo ? (await api(`/api/demo?lang=${encodeURIComponent(lang)}`)).simple : await api(`/api/simple/${encodeURIComponent(symbol)}?lang=${encodeURIComponent(lang)}`); if (c.b.symbol !== symbol || lang !== state.locale) return; applySimple(c, r || { status: "error" }); }
+    catch { c.simpleStatus = "error"; renderSimple(c); }
+  }
+  async function loadDeepPeek(c) {
+    if (c.d) return;
+    const symbol = c.b && c.b.symbol; const lang = state.locale; if (!symbol) return;
+    try { const r = await api(`/api/deep/${encodeURIComponent(symbol)}?lang=${encodeURIComponent(lang)}&peek=1`); if (c.b.symbol !== symbol || lang !== state.locale) return; if (r.status === "ready") { c.d = r.summary; c.deepStatus = "ready"; renderSimple(c); refreshTakeaways(c); refreshTabs(c, [5]); } else if (!c.deepStatus) { c.deepStatus = "none"; renderSimple(c); } }
+    catch {}
   }
 
   async function loadChart(c) {
@@ -689,13 +782,81 @@
   function markScrollable(root) {
     (root || document).querySelectorAll(".tw").forEach((el) => el.classList.toggle("scrolls", el.scrollWidth > el.clientWidth + 2));
   }
+  function tabHtml(c, i) { return [tabOverview, tabFinancials, tabValuation, tabTechnical, tabHolders, tabDeep][i](c); }
+  function bindTabBody(c, i, body) {
+    if (i === 2) bindTarget(c);
+    if (i === 3) { body.querySelectorAll("[data-techranges] button").forEach((btn) => btn.addEventListener("click", () => { c.techRange = btn.dataset.range; if (!c.demo) track("techrange", `${state.symbol}_${c.techRange}`); body.querySelectorAll("[data-techranges] button").forEach((x) => x.classList.toggle("active", x === btn)); loadTechChart(c); })); loadTechChart(c); }
+    if (i === 5 && !c.d && c.deepStatus !== "pending" && c.deepStatus !== "disabled") loadDeep(c);
+    if (i === 0 || i === 1 || i === 2) addHelp(body);
+    markScrollable(body);
+  }
   function renderTab(c) {
     const body = c.root && c.root.querySelector("[data-tabbody]"); if (!body) return;
-    body.innerHTML = [tabOverview, tabFinancials, tabValuation, tabTechnical, tabHolders, tabDeep][c.tab](c);
-    if (c.tab === 2) bindTarget(c);
-    if (c.tab === 3) { body.querySelectorAll("[data-techranges] button").forEach((btn) => btn.addEventListener("click", () => { c.techRange = btn.dataset.range; if (!c.demo) track("techrange", `${state.symbol}_${c.techRange}`); body.querySelectorAll("[data-techranges] button").forEach((x) => x.classList.toggle("active", x === btn)); loadTechChart(c); })); loadTechChart(c); }
-    if (c.tab === 5 && !c.d && c.deepStatus !== "pending" && c.deepStatus !== "disabled") loadDeep(c);
-    markScrollable(body);
+    body.innerHTML = tabHtml(c, c.tab); bindTabBody(c, c.tab, body);
+  }
+  function renderPanel(c, i) {
+    const body = c.root && c.root.querySelector(`[data-tabpanel="${i}"]`); if (!body) return;
+    body.innerHTML = tabHtml(c, i); bindTabBody(c, i, body);
+  }
+  /** Re-render whichever of these tabs is currently visible (the active tab, or the open sections in the simple layout). */
+  function refreshTabs(c, tabs) {
+    if (!c.root) return;
+    if (c.root.querySelector("[data-tabbody]")) { if (tabs.includes(c.tab)) renderTab(c); return; }
+    for (const i of tabs) { const d = c.root.querySelector(`details.dsec[data-dsec="${i}"]`); if (d && d.open) { d.dataset.rendered = "1"; renderPanel(c, i); } }
+    refreshTakeaways(c);
+  }
+
+  // ---- glossary: "?" buttons on metric labels, with a plain explanation and this company's reading ----
+  const helpBtn = (key) => ` <button type="button" class="help" data-help="${key}" aria-label="?">?</button>`;
+  function glossaryLabelMap() {
+    const V = t("val"), F = t("fin");
+    return new Map([[V.pe, "pe"], [V.peFwd, "peFwd"], [V.pb, "pb"], [t("pbr"), "pb"], [V.ps, "ps"], [V.pfcf, "pfcf"], [V.evEbitda, "evEbitda"], [V.divYield, "divYield"], [V.fcfYield, "fcfYield"], [V.roic, "roic"], [F.roic, "roic"], [V.roe, "roe"], [V.beta, "beta"], [V.marketCap, "marketCap"], [t("marketCap"), "marketCap"], [V.ndEbitda, "netDebtEbitda"], [F.netDebtEbitda, "netDebtEbitda"], [V.cov, "coverage"], [F.coverage, "coverage"], [V.cr, "currentRatio"], [F.currentRatio, "currentRatio"], [F.goodwill, "goodwill"], [t("opMargin"), "opMargin"], [V.om, "opMargin"], [V.gm, "grossMargin"], [V.epsTTM, "eps"], [V.epsFwd, "eps"], [V.peg, "peg"], [t("shares"), "shares"]].filter(([k]) => k));
+  }
+  function addHelp(root) {
+    const map = glossaryLabelMap(); const G = t("glossary");
+    root.querySelectorAll("dt, th.rowh").forEach((el) => { if (el.querySelector(".help")) return; const key = map.get(el.textContent.replace(/\s+/g, " ").trim()); if (key && G[key]) el.insertAdjacentHTML("beforeend", helpBtn(key)); });
+  }
+  function glossaryReading(key, b) {
+    if (!b) return ""; const S = t("simpleUi"); const v = b.valuation || {}, h = v.history && v.history.range5;
+    const rng = (k, now) => (h && h[k] && now !== null && now !== undefined ? S.reading.replace("{now}", fmtDec(now, 1)).replace("{low}", fmtDec(h[k].low, 1)).replace("{high}", fmtDec(h[k].high, 1)).replace("{pos}", rangePos(h[k], S)) : "");
+    switch (key) {
+      case "pe": return rng("pe", v.pe); case "pb": return rng("pb", v.pb); case "ps": return rng("ps", v.ps); case "pfcf": return rng("pfcf", v.pfcf); case "evEbitda": return rng("evEbitda", v.evEbitda);
+      case "roic": return v.roicPct !== null && v.roicPct !== undefined && b.dcf && b.dcf.inputs ? S.readingRoic.replace("{roic}", fmtDec(v.roicPct, 1)).replace("{wacc}", fmtDec(b.dcf.inputs.wacc, 1)) : "";
+      case "netDebtEbitda": return v.netDebtEbitda !== null && v.netDebtEbitda !== undefined ? S.readingNd.replace("{x}", fmtDec(v.netDebtEbitda, 1)) : "";
+      case "divYield": return v.dividendYieldPct !== null && v.dividendYieldPct !== undefined ? S.readingDiv.replace("{y}", fmtDec(v.dividendYieldPct, 2)) : "";
+      default: return "";
+    }
+  }
+  document.addEventListener("click", (ev) => {
+    const btn = ev.target.closest(".help");
+    const pop = $("#helpPop");
+    if (!btn) { if (pop && !ev.target.closest("#helpPop")) pop.remove(); return; }
+    ev.preventDefault(); ev.stopPropagation();
+    if (pop) pop.remove();
+    const key = btn.dataset.help; const G = t("glossary")[key]; if (!G) return;
+    const b = (state.route.view === "stock" ? state.stock.b : null) || (state.demo && state.demo.b) || null;
+    const reading = glossaryReading(key, b);
+    const div = document.createElement("div"); div.id = "helpPop"; div.className = "help-pop";
+    div.innerHTML = `<div class="hp-term">${esc(G.term)}</div><p>${esc(G.text)}</p>${reading ? `<p class="hp-read">${esc(reading)}</p>` : ""}<p class="hp-more"><a href="#/guide">${esc(t("guide.link"))}</a></p>`;
+    document.body.appendChild(div);
+    const r = btn.getBoundingClientRect(); const w = Math.min(360, window.innerWidth - 24);
+    div.style.width = `${w}px`; div.style.left = `${Math.max(12, Math.min(r.left, window.innerWidth - w - 12)) + window.scrollX}px`; div.style.top = `${r.bottom + 8 + window.scrollY}px`;
+    track("help", key);
+  });
+  document.addEventListener("keydown", (ev) => { if (ev.key === "Escape") { const pop = $("#helpPop"); if (pop) pop.remove(); } });
+
+  // ---- reading guide page ----
+  function renderGuide() {
+    stopSummaryPolling(state.stock); stopSummaryPolling(state.demo);
+    const Gd = t("guide"); document.title = `${Gd.title} | ${t("siteName")}`;
+    app.innerHTML = `<section class="land guide-page"><h2>${esc(Gd.title)}</h2><p class="lead">${esc(Gd.lead)}</p>
+      <div class="guide-body">
+        <h3>${esc(Gd.howTitle)}</h3><ol class="guide-steps">${Gd.steps.map((x) => `<li><b>${esc(x.h)}</b> ${esc(x.p)}</li>`).join("")}</ol>
+        ${Gd.sections.map((x) => `<h3 id="g-${esc(x.id || "")}">${esc(x.h)}</h3>${x.p.map((p) => `<p>${esc(p)}</p>`).join("")}`).join("")}
+        <h3>${esc(Gd.glossaryTitle)}</h3><dl class="guide-gloss">${Object.entries(t("glossary")).map(([k, g]) => `<div><dt>${esc(g.term)}</dt><dd>${esc(g.text)}</dd></div>`).join("")}</dl>
+      </div>
+      <p class="center"><a class="btn primary" href="${state.user ? "#/s/AAPL" : "#/signup"}">${esc(Gd.cta)}</a></p></section>
+      <div class="footer">${t("disclaimer")}<br><a href="#/about">${t("about.link")}</a> · <a href="#/guide">${t("guide.link")}</a> · <a href="#/contact">${t("contact.link")}</a></div>`;
   }
 
   // ---- small builders ----
@@ -948,27 +1109,31 @@
   function researchHtml(d, D, opts = {}) {
     const F = d.findings || {};
     const names = opts.findingNames || D.f;
-    const card = (key, f) => f ? `<div class="finding"><div class="f-head"><span class="f-title">${names[key]}</span><span class="pill asm ${esc(String(f.assessment).toLowerCase()).replace(/[^a-z]/g, "")}">${esc(D.asm[String(f.assessment).toLowerCase()] || f.assessment)}</span><span class="muted small">${D.conf[String(f.confidence).toLowerCase()] || esc(f.confidence)}</span></div>
+    const open = viewMode() !== "simple" ? " open" : "";
+    const letter = (x) => ({ Q: names.quality, T: names.trajectory, V: names.valuation }[String(x || "").toUpperCase()] || x);
+    const card = (key, f) => f ? `<details class="finding"${open}><summary class="f-head"><span class="f-title">${names[key]}</span><span class="pill asm ${esc(String(f.assessment).toLowerCase()).replace(/[^a-z]/g, "")}">${esc(D.asm[String(f.assessment).toLowerCase()] || f.assessment)}</span><span class="muted small">${D.conf[String(f.confidence).toLowerCase()] || esc(f.confidence)}</span></summary>
       <p class="f-mech">${esc(f.mechanism)}</p>
-      <p><b>${D.evidence}:</b> ${esc(f.evidence)}</p><p><b>${D.counter}:</b> ${esc(f.counterevidence)}</p><p class="f-dec"><b>${D.decisive}:</b> ${esc(f.decisive)}</p></div>` : "";
+      <p><b>${D.evidence}:</b> ${esc(f.evidence)}</p><p><b>${D.counter}:</b> ${esc(f.counterevidence)}</p><p class="f-dec"><b>${D.decisive}:</b> ${esc(f.decisive)}</p></details>` : "";
     const findings = `<div class="findings">${card("quality", F.quality)}${card("trajectory", F.trajectory)}${card("valuation", F.valuation)}</div>${F.divergences ? `<p class="divergences"><b>${D.divergences}:</b> ${esc(F.divergences)}</p>` : ""}`;
     const bf = wrap(`<table class="tbl deep-bf"><thead><tr><th>${D.segment}</th><th>${D.revenueShare}</th><th>${D.competitors}</th><th>${D.purchaseCriteria}</th><th>${D.position}</th></tr></thead><tbody>${(d.battlefields || []).map((b) => `<tr><th>${esc(b.segment)}</th><td data-l="${D.revenueShare}">${esc(b.revenueShare)}</td><td data-l="${D.competitors}">${esc(b.competitors)}</td><td data-l="${D.purchaseCriteria}">${esc(b.purchaseCriteria)}</td><td data-l="${D.position}">${esc(b.position)}</td></tr>`).join("")}</tbody></table>`);
     const story = d.story ? `<div class="deep-story"><div class="hl">${esc(d.story.headline)}</div><p>${esc(d.story.body)}</p></div>` : "";
     const secs = Object.fromEntries((d.sections || []).map((x) => [x.key, x]));
     const piece = (k) => secs[k] ? `<div class="ai"><span class="hl">${esc(secs[k].headline)}</span><span class="body">${esc(secs[k].body)}</span></div>` : "";
-    const rows = ["history", "detective", "moat", "outlook", "cycle", "management", "valuationDetail", "consensus"].filter((k) => secs[k]).map((k) => row(`<b>${D[k]}</b>`, piece(k))).join("");
-    const cons = d.constituents && d.constituents.length ? sec(D.constituentReads, wrap(`<table class="tbl"><thead><tr><th>${D.symbol}</th><th>${D.role}</th><th>${D.read}</th></tr></thead><tbody>${d.constituents.map((x) => `<tr><th><a href="#/s/${esc(x.symbol)}">${esc(x.symbol)}</a></th><td>${esc(x.role)}</td><td>${esc(x.read)}</td></tr>`).join("")}</tbody></table>`)) : "";
-    const risks = wrap(`<table class="tbl"><thead><tr><th>${D.risk}</th><th>${D.indicator}</th><th>${D.affects}</th></tr></thead><tbody>${(d.risks || []).map((r) => `<tr><td>${esc(r.risk)}</td><td>${esc(r.indicator)}</td><td class="c"><span class="tag">${esc(r.finding)}</span></td></tr>`).join("")}</tbody></table>`);
+    const rows = ["history", "detective", "moat", "outlook", "cycle", "management", "valuationDetail", "consensus"].filter((k) => secs[k]).map((k) => `<details class="dd-sec"${open}><summary><b>${D[k]}</b><span class="hl">${esc(secs[k].headline)}</span></summary><p class="body">${esc(secs[k].body)}</p></details>`).join("");
+    const cons = d.constituents && d.constituents.length ? (wrap(`<table class="tbl"><thead><tr><th>${D.symbol}</th><th>${D.role}</th><th>${D.read}</th></tr></thead><tbody>${d.constituents.map((x) => `<tr><th><a href="#/s/${esc(x.symbol)}">${esc(x.symbol)}</a></th><td>${esc(x.role)}</td><td>${esc(x.read)}</td></tr>`).join("")}</tbody></table>`)) : "";
+    const risks = wrap(`<table class="tbl"><thead><tr><th>${D.risk}</th><th>${D.indicator}</th><th>${D.affects}</th></tr></thead><tbody>${(d.risks || []).map((r) => `<tr><td>${esc(r.risk)}</td><td>${esc(r.indicator)}</td><td class="c"><span class="tag">${esc(letter(r.finding))}</span></td></tr>`).join("")}</tbody></table>`);
     const qs = `<ol class="imps">${(d.questions || []).map((q) => `<li>${esc(q)}</li>`).join("")}</ol>`;
-    const cps = wrap(`<table class="tbl cps"><thead><tr><th>${D.premise}</th><th>${D.kpi}</th><th>${D.latest}</th><th>${D.failure}</th><th>${D.next}</th></tr></thead><tbody>${(d.checkpoints || []).map((x) => `<tr><td>${esc(x.premise)} <span class="tag">${esc(x.finding)}</span></td><td>${esc(x.kpi)}</td><td>${esc(x.latest)}</td><td>${esc(x.failure)}</td><td>${esc(x.next)}</td></tr>`).join("")}</tbody></table>`);
+    const cps = wrap(`<table class="tbl cps"><thead><tr><th>${D.premise}</th><th>${D.kpi}</th><th>${D.latest}</th><th>${D.failure}</th><th>${D.next}</th></tr></thead><tbody>${(d.checkpoints || []).map((x) => `<tr><td>${esc(x.premise)} <span class="tag">${esc(letter(x.finding))}</span></td><td>${esc(x.kpi)}</td><td>${esc(x.latest)}</td><td>${esc(x.failure)}</td><td>${esc(x.next)}</td></tr>`).join("")}</tbody></table>`);
     const note = `<p class="note"><b>${D.caveats}:</b> ${esc(d.caveats)}</p><p class="note">${opts.updated || ""} ${esc(D.noAdvice)}</p>`;
-    return `${sec(opts.storyTitle || D.storyTitle, story + `<h4 class="sub">${opts.battlefieldsTitle || D.battlefields}</h4>` + bf)}
+    const dd = (title, inner, isOpen = open) => `<details class="dd"${isOpen}><summary class="sec"><span class="sec-t">${title}</span></summary>${inner}</details>`;
+    return `${sec(opts.storyTitle || D.storyTitle, story)}
+      ${dd(opts.battlefieldsTitle || D.battlefields, bf)}
       ${sec(D.findingsTitle, findings)}
-      <table class="shk ov">${rows}</table>
-      ${cons}
-      ${sec(D.risks, risks)}
-      ${sec(D.questions, qs)}
-      ${sec(D.checkpoints, cps)}
+      ${dd(D.analysisTitle || "", `<div class="dd-secs">${rows}</div>`, " open")}
+      ${cons ? dd(D.constituentReads, cons) : ""}
+      ${dd(D.risks, risks)}
+      ${dd(D.questions, qs)}
+      ${dd(D.checkpoints, cps)}
       <section class="card">${note}</section>`;
   }
   function tabDeep(c) {
@@ -984,41 +1149,43 @@
   function applySummary(c, r, lang) {
     c.summaryStatus = r.status;
     if (r.status === "ready") { c.s = r.summary; c.tries = 0; }
-    if (c.root && (c.tab === 0 || c.tab === 2 || c.tab === 3)) renderTab(c);
+    refreshTabs(c, [0, 2, 3]);
     if (r.status === "pending" && c.tries < 40) { c.tries++; c.timer = setTimeout(() => loadSummary(c), 6000); }
   }
   async function loadSummary(c) {
     stopSummaryPolling(c);
     const symbol = c.b && c.b.symbol; const lang = state.locale;
     if (!symbol) return;
-    if (!state.config.summariesEnabled) { c.summaryStatus = "disabled"; if (c.root && c.tab === 0) renderTab(c); return; }
+    if (!state.config.summariesEnabled) { c.summaryStatus = "disabled"; refreshTabs(c, [0]); return; }
     try {
-      const r = c.demo ? (await api(`/api/demo?lang=${encodeURIComponent(lang)}`)).summary : await api(`/api/summary/${encodeURIComponent(symbol)}?lang=${encodeURIComponent(lang)}`);
+      let r;
+      if (c.demo) { const demo = await api(`/api/demo?lang=${encodeURIComponent(lang)}`); r = demo.summary; if (demo.simple) applySimple(c, demo.simple); if (demo.deep && demo.deep.status === "ready" && !c.d) { c.d = demo.deep.summary; c.deepStatus = "ready"; renderSimple(c); refreshTakeaways(c); } }
+      else r = await api(`/api/summary/${encodeURIComponent(symbol)}?lang=${encodeURIComponent(lang)}`);
       if (c.b.symbol !== symbol || lang !== state.locale) return;
       applySummary(c, r, lang);
     } catch (e) {
-      c.summaryStatus = "error"; if (c.root && c.tab === 0) renderTab(c);
+      c.summaryStatus = "error"; refreshTabs(c, [0]);
     }
   }
 
   function stopDeepPolling(c) { if (c && c.deepTimer) clearTimeout(c.deepTimer); if (c) c.deepTimer = null; }
   function applyDeep(c, r) {
     c.deepStatus = r.status;
-    if (r.status === "ready") { c.d = r.summary; c.deepTries = 0; }
-    if (c.root && c.tab === 5) renderTab(c);
+    if (r.status === "ready") { c.d = r.summary; c.deepTries = 0; renderSimple(c); }
+    refreshTabs(c, [5]);
     if (r.status === "pending" && (c.deepTries || 0) < 40) { c.deepTries = (c.deepTries || 0) + 1; c.deepTimer = setTimeout(() => loadDeep(c), 6000); }
   }
   async function loadDeep(c) {
     stopDeepPolling(c);
     const symbol = c.b && c.b.symbol; const lang = state.locale;
     if (!symbol) return;
-    if (!state.config.summariesEnabled) { c.deepStatus = "disabled"; if (c.root && c.tab === 5) renderTab(c); return; }
+    if (!state.config.summariesEnabled) { c.deepStatus = "disabled"; refreshTabs(c, [5]); return; }
     try {
       const r = c.demo ? (await api(`/api/demo?lang=${encodeURIComponent(lang)}`)).deep : await api(`/api/deep/${encodeURIComponent(symbol)}?lang=${encodeURIComponent(lang)}`);
       if (c.b.symbol !== symbol || lang !== state.locale) return;
       applyDeep(c, r || { status: "error" });
     } catch (e) {
-      c.deepStatus = "error"; if (c.root && c.tab === 5) renderTab(c);
+      c.deepStatus = "error"; refreshTabs(c, [5]);
     }
   }
 
