@@ -459,6 +459,22 @@ details.dcf-card[open] > summary.sec .sec-t::before { content: "▾ 【"; }
 .land-row .land { margin-bottom: 0; }
 .land-row .pricecard { max-width: 440px; }
 .land-row .land.spec .spec-list { max-width: none; }
+/* about 15% larger type inside the two boxes so they fill the row */
+.land-row .land h2 { font-size: 27px; }
+.land-row .land.spec .lead { font-size: 19.5px; max-width: none; }
+.land-row .land.spec .spec-list { font-size: 18.4px; line-height: 1.65; }
+.land-row .pricecard { max-width: 480px; padding: 22px 26px; }
+.land-row .pricecard .plan { font-size: 15px; }
+.land-row .pricecard .amount { font-size: 41px; }
+.land-row .pricecard ul, .land-row .pricecard .annual-line { font-size: 18.4px; }
+.land-row .pricecard .btn.big { font-size: 18px; }
+.land-row .pricecard .muted.small { font-size: 14.5px; }
+/* "Who built this" uses the full width */
+.land.bio .bio-row { max-width: none; gap: 32px; }
+.land.bio .bio-photo { width: 260px; }
+.land.bio .bio-text p { font-size: 17.8px; line-height: 1.8; }
+.land.bio .bio-text h3 { font-size: 20.5px; }
+@media (max-width: 640px) { .land-row .land h2 { font-size: 22px; } .land-row .land.spec .lead, .land-row .land.spec .spec-list, .land-row .pricecard ul, .land-row .pricecard .annual-line, .land.bio .bio-text p { font-size: 16px; } .land-row .pricecard .amount { font-size: 34px; } .land.bio .bio-photo { width: 180px; } }
 @media (max-width: 900px) { .land-row { grid-template-columns: 1fr; } .land-row .land { margin-bottom: 14px; } .land-row { margin-bottom: 0; } }
 .bio-row { display: flex; gap: 24px; align-items: flex-start; text-align: left; max-width: 900px; margin: 8px auto 0; }
 .bio-photo { width: 220px; height: auto; flex: none; border: 1px solid var(--border); box-shadow: 0 6px 20px rgba(11,61,107,.15); }
