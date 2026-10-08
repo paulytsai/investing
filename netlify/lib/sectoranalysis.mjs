@@ -6,7 +6,7 @@ import { cfg } from "./config.mjs";
 import { logEvent } from "./events.mjs";
 import { stockBundle, liveQuote } from "./stockdata.mjs";
 import { getCachedSummary, runJson } from "./summarize.mjs";
-import { DEEP_SCHEMA, DEEP_SECTION_KEYS, DEEP_ASSESSMENTS, LANG_NAMES } from "./prompts.mjs";
+import { DEEP_SCHEMA, DEEP_SECTION_KEYS, LANG_NAMES, normalizeAssessment } from "./prompts.mjs";
 import { sectorById, AI_LAYERS } from "./sectors.mjs";
 import { deepIncompleteReason } from "./deep.mjs";
 
@@ -100,7 +100,7 @@ Then a divergences paragraph.
 Evidence discipline: give material numbers their period; separate reported data, consensus, management assertions (from the digests) and your own reading; say "indeterminate" where evidence is thin; never fabricate. Terse plain prose with concrete numbers and causal reasoning; no bullet points or markdown inside strings. About 1,200-1,500 words in total.
 
 Return JSON with:
-- "findings": "quality", "trajectory", "valuation" (each: "assessment"; "mechanism" 60-90 words; "evidence" 40-70 words, dated; "counterevidence" 30-60 words; "confidence" high/medium/low; "decisive" one sentence naming the decisive variable and the observation that would change the conclusion) and "divergences" (40-80 words).
+- "findings": "quality", "trajectory", "valuation" (each: "assessment" exactly one label from the list above and nothing else, qualifications go in the mechanism; "mechanism" 60-90 words; "evidence" 40-70 words, dated; "counterevidence" 30-60 words; "confidence" high/medium/low; "decisive" one sentence naming the decisive variable and the observation that would change the conclusion) and "divergences" (40-80 words).
 - "story": headline (3-7 words) + body (110-150 words): what the sector sells and to whom, the value chain and where profit is captured, the reachable opportunity and the competitive structure, ending with the two-minute falsifiable story.
 - "battlefields": 3-6 rows, one per value-chain stage or sub-segment (for the AI stack, one per layer): "segment", "revenueShare" (share of the sector's profit pool or revenue, or "n/a" with the reason), "competitors" (the main listed and private players), "purchaseCriteria" (what decides the sale), "position" (who captures the profit and why, 15-25 words).
 - "sections": exactly 8 items in this order, each {"key", "headline", "body"}: "history" (70-100 words: phases of the sector's development, the events behind the big moves, what is unexplained), "detective" (70-100 words: what the aggregate numbers say versus the sector narrative: margins, returns, cash conversion, capital intensity, dispersion between leaders and laggards), "moat" (70-100 words: where durable advantages sit in the chain, toll-booth versus commodity layers, pricing evidence, bypass risk), "outlook" (70-100 words: demand driver equations, capacity and reinvestment, base and alternative scenarios, maturation), "cycle" (50-80 words: cycle position, supply response, capex timeline, confirming and reversing indicators), "management" (50-80 words: capital allocation patterns across the group: capex, M&A, buybacks, dilution, governance issues), "valuationDetail" (70-100 words: group multiples versus history and other sectors, dispersion, what the price requires, sensitivities), "consensus" (50-80 words: consensus, revisions, the optimistic and sceptical narratives and what distinguishes them).
@@ -129,7 +129,7 @@ export async function generateSectorEnglish(id) {
     ({ parsed, message } = await request(" Every field must be filled in full with substantive text."));
     if (!isSectorComplete(parsed, "en")) throw new Error(`Model returned an incomplete sector report (${sectorIncompleteReason(parsed, "en")})`);
   }
-  for (const k of ["quality", "trajectory", "valuation"]) { const x = parsed.findings[k]; x.assessment = String(x.assessment).toLowerCase().replace(/\s+/g, ""); x.confidence = String(x.confidence).toLowerCase(); }
+  for (const k of ["quality", "trajectory", "valuation"]) { const x = parsed.findings[k]; x.assessment = normalizeAssessment(k, x.assessment); x.confidence = String(x.confidence).toLowerCase(); }
   for (const r of parsed.risks) r.finding = String(r.finding).toUpperCase();
   for (const c of parsed.checkpoints) c.finding = String(c.finding).toUpperCase();
   const record = { id, lang: "en", period: sectorPeriod(), ...parsed, model: message.model, generatedAt: new Date().toISOString(), usage: { input: message.usage?.input_tokens, output: message.usage?.output_tokens } };

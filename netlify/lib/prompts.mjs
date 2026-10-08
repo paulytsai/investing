@@ -78,7 +78,7 @@ Then a divergences paragraph explaining tensions among Q, T and V without resolv
 Evidence discipline: give every material number its period; label management assertions as such; separate reported fact, calculated result, consensus expectation and analyst judgement in wording ("management says", "consensus expects", "our reading"); where evidence is thin say so and use "indeterminate" rather than inventing precision; never fabricate figures. An "analyst assumption" must be labelled. Write terse, plain prose with concrete numbers and causal reasoning; no bullet points or markdown inside strings. Target 1,100-1,400 words in total, readable in six to eight minutes.
 
 Return JSON with:
-- "findings": object with "quality", "trajectory", "valuation" (each: "assessment" enum as above; "mechanism" 60-90 words explaining the conclusion and its economic mechanism; "evidence" 40-70 words of supporting dated evidence; "counterevidence" 30-60 words; "confidence" high/medium/low; "decisive" one sentence naming the decisive variable and the observation that would change the conclusion) and "divergences" (40-80 words).
+- "findings": object with "quality", "trajectory", "valuation" (each: "assessment" exactly one label from the list above, nothing else (qualifications belong in the mechanism); "mechanism" 60-90 words explaining the conclusion and its economic mechanism; "evidence" 40-70 words of supporting dated evidence; "counterevidence" 30-60 words; "confidence" high/medium/low; "decisive" one sentence naming the decisive variable and the observation that would change the conclusion) and "divergences" (40-80 words).
 - "story": headline (3-7 words) + body (110-150 words): the company's business model, segments, customers, value-chain economics, reachable opportunity and competition, ending with the two-minute falsifiable story (what has to be true). Narrative prose with at most four figures.
 - "battlefields": 2-4 rows, one per strategic segment: "segment", "revenueShare" (with period), "competitors" (3-6 names), "purchaseCriteria" (2-3 criteria), "position" ("dominant", "critical mass", "sub-scale" or "high growth, no entrenched competitor" plus a 10-20 word reason).
 - "sections": exactly 8 items in this order, each {"key", "headline" (3-7 words), "body"}:
@@ -121,4 +121,16 @@ export const DEEP_SCHEMA = {
   },
 };
 export const DEEP_SECTION_KEYS = ["history", "detective", "moat", "outlook", "cycle", "management", "valuationDetail", "consensus"];
+/** Coerce a model-written assessment ("improving (observed); mixed beyond 2027") to one of the labels. */
+export function normalizeAssessment(kind, raw) {
+  const labels = DEEP_ASSESSMENTS[kind] || [];
+  const s = String(raw || "").toLowerCase().trim();
+  const compact = s.replace(/\s+/g, "");
+  if (labels.includes(compact)) return compact;
+  const lead = labels.find((l) => s.startsWith(l.split("/")[0]));
+  if (lead) return lead;
+  if (kind === "trajectory" && /mixed|uncertain/.test(s)) return "mixed/uncertain";
+  const hit = labels.find((l) => s.includes(l.split("/")[0]));
+  return hit || compact;
+}
 export const DEEP_ASSESSMENTS = { quality: ["strong", "adequate", "weak", "mixed", "uncertain"], trajectory: ["improving", "stable", "deteriorating", "mixed/uncertain"], valuation: ["demanding", "moderate", "undemanding", "indeterminate"] };

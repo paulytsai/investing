@@ -4,7 +4,7 @@ import { fmpSoft } from "./fmp.mjs";
 import { openStore } from "./store.mjs";
 import { logEvent } from "./events.mjs";
 import { runJson, fetchTranscripts, financialDigest, newsDigest, getCachedSummary } from "./summarize.mjs";
-import { deepSystemPrompt, translateDeepPrompt, DEEP_SCHEMA, DEEP_SECTION_KEYS, DEEP_ASSESSMENTS } from "./prompts.mjs";
+import { deepSystemPrompt, translateDeepPrompt, DEEP_SCHEMA, DEEP_SECTION_KEYS, DEEP_ASSESSMENTS, normalizeAssessment } from "./prompts.mjs";
 
 const VERSION = "d3";
 const TRANSLATION_VERSION = "1";
@@ -24,7 +24,7 @@ export function deepIncompleteReason(rec, lang) {
   for (const k of ["quality", "trajectory", "valuation"]) {
     const x = rec.findings[k];
     if (!x) return `findings.${k} missing`;
-    if (!DEEP_ASSESSMENTS[k].includes(String(x.assessment).toLowerCase().replace(/\s+/g, ""))) return `findings.${k}.assessment=${x.assessment}`;
+    if (!DEEP_ASSESSMENTS[k].includes(normalizeAssessment(k, x.assessment))) return `findings.${k}.assessment=${x.assessment}`;
     if (!filled(x.mechanism, 100 * f)) return `findings.${k}.mechanism short`;
     if (!filled(x.evidence, 60 * f)) return `findings.${k}.evidence short`;
     if (!filled(x.counterevidence, 40 * f)) return `findings.${k}.counterevidence short`;
@@ -152,7 +152,7 @@ export async function generateDeepEnglish(symbol, bundle) {
     ({ parsed, message } = await request(" Every field must be filled in full with substantive text; empty or placeholder strings are not acceptable."));
     if (!isDeepComplete(parsed)) throw new Error(`Model returned an incomplete analysis (${deepIncompleteReason(parsed)})`);
   }
-  for (const k of ["quality", "trajectory", "valuation"]) { const x = parsed.findings[k]; x.assessment = String(x.assessment).toLowerCase().replace(/\s+/g, ""); x.confidence = String(x.confidence).toLowerCase(); }
+  for (const k of ["quality", "trajectory", "valuation"]) { const x = parsed.findings[k]; x.assessment = normalizeAssessment(k, x.assessment); x.confidence = String(x.confidence).toLowerCase(); }
   for (const r of parsed.risks) r.finding = String(r.finding).toUpperCase();
   for (const c of parsed.checkpoints) c.finding = String(c.finding).toUpperCase();
   const record = {
