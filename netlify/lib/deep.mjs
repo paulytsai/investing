@@ -2,6 +2,7 @@
 // transcripts, financials, geography, peer metrics and news, then translated.
 import { provider, soft } from "./providers/index.mjs";
 import { openStore } from "./store.mjs";
+import { cfg } from "./config.mjs";
 import { fxToUsd, STATEMENT_FIELDS } from "./stockdata.mjs";
 import { logEvent } from "./events.mjs";
 import { runJson, fetchTranscripts, financialDigest, newsDigest, getCachedSummary } from "./summarize.mjs";
@@ -186,7 +187,7 @@ export async function translateDeep(en, lang, bundle) {
   const request = (extra) => runJson({
     system: translateDeepPrompt(lang),
     user: `Translate this JSON. Return JSON only.${extra}\n\n${JSON.stringify(source)}`,
-    schema: DEEP_SCHEMA, effort: "medium", maxTokens: 32000,
+    schema: DEEP_SCHEMA, effort: "medium", maxTokens: 32000, model: cfg.translationModel(),
   });
   // A translation occasionally shortens a field below the completeness floor: ask once more.
   let { parsed, message } = await request("");

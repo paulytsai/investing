@@ -176,7 +176,7 @@ export async function generateSectorEnglish(id) {
 
 export async function translateSector(en, lang) {
   const source = Object.fromEntries(Object.keys(SECTOR_SCHEMA.properties).map((k) => [k, en[k]]));
-  const request = (extra) => runJson({ system: translateSectorPrompt(lang), user: `Translate this JSON. Return JSON only.${extra}\n\n${JSON.stringify(source)}`, schema: SECTOR_SCHEMA, effort: "medium", maxTokens: 32000 });
+  const request = (extra) => runJson({ system: translateSectorPrompt(lang), user: `Translate this JSON. Return JSON only.${extra}\n\n${JSON.stringify(source)}`, schema: SECTOR_SCHEMA, effort: "medium", maxTokens: 32000, model: cfg.translationModel() });
   let { parsed, message } = await request("");
   if (!isSectorComplete(parsed, lang)) {
     console.warn(`sector translation ${en.id} to ${lang} incomplete (${sectorIncompleteReason(parsed, lang)}); retrying`);

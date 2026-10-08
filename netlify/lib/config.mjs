@@ -56,6 +56,10 @@ export const cfg = {
   summaryModel() {
     return env("SUMMARY_MODEL", "claude-opus-5-5");
   },
+  // Translations only carry the English text across, so a cheaper model does them.
+  translationModel() {
+    return env("TRANSLATION_MODEL", "claude-sonnet-5-5");
+  },
   lemon() {
     return {
       store: env("LEMONSQUEEZY_STORE"), // store subdomain, e.g. "mystore"

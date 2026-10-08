@@ -66,9 +66,9 @@ export async function runJson(opts) {
   return withRateLimitRetry(() => runJsonOnce(opts));
 }
 
-async function runJsonOnce({ system, user, schema, effort, maxTokens }) {
+async function runJsonOnce({ system, user, schema, effort, maxTokens, model }) {
   const stream = client().beta.messages.stream({
-    model: cfg.summaryModel(),
+    model: model || cfg.summaryModel(),
     max_tokens: maxTokens,
     betas: ["server-side-fallback-2026-07-01"],
     fallbacks: "default",
@@ -232,7 +232,7 @@ export async function translateSummary(en, lang, bundle) {
   const { parsed, message } = await runJson({
     system: translateSystemPrompt(lang),
     user: `Translate this JSON. Return JSON only.\n\n${JSON.stringify(source)}`,
-    schema: TEXT_SCHEMA, effort: "medium", maxTokens: 12000,
+    schema: TEXT_SCHEMA, effort: "medium", maxTokens: 12000, model: cfg.translationModel(),
   });
   if (!isComplete({ ...parsed, competitors: [] }, lang)) throw new Error(`Translation to ${lang} came back incomplete`);
   const record = { ...en, ...parsed, lang, translatedFrom: "en", model: message.model, generatedAt: new Date().toISOString(), usage: { input: message.usage?.input_tokens, output: message.usage?.output_tokens } };
