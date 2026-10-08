@@ -257,7 +257,7 @@
       <div class="bio-row"><img class="bio-photo" src="/img/paul-tsai.jpg" alt="${esc(B.name)}" width="240" height="320">
         <div class="bio-text"><h3>${esc(B.name)} <span class="muted">${esc(B.role)}</span></h3>
         ${B.paragraphs.map((p) => `<p>${esc(p)}</p>`).join("")}
-        <h4 class="sub">${esc(A.siteTitle)}</h4>${A.site.map((p) => `<p>${esc(p.split("{brand}").join(brandName()))}</p>`).join("")}
+        <h4 class="sub">${esc(A.siteTitle.split("{brand}").join(brandName()))}</h4>${A.site.map((p) => `<p>${esc(p.split("{brand}").join(brandName()))}</p>`).join("")}
         <p class="muted small">${esc(B.book)}</p>
         <p><a class="btn" href="https://paultsai.net" target="_blank" rel="noopener">${esc(A.more)}</a> <a class="btn" href="#/contact">${t("contact.link")}</a></p></div></div></section>
       <div class="footer">${t("disclaimer")}<br><a href="#/about">${t("about.link")}</a> · <a href="#/contact">${t("contact.link")}</a></div>`;
