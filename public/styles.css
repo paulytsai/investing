@@ -462,6 +462,9 @@ details.dcf-card[open] > summary.sec .sec-t::before { content: "▾ 【"; }
 /* about 15% larger type inside the two boxes so they fill the row */
 .land-row .land h2 { font-size: 27px; }
 .land-row .land.spec .lead { font-size: 19.5px; max-width: none; }
+/* the pitch paragraph stands apart from the bullets: a quiet tinted block in the site's deep blue */
+.land-row .land.spec .lead { color: #0b3d6b; background: #eef4fa; border-left: 4px solid var(--accent); border-radius: 0 4px 4px 0; padding: 14px 18px; margin: 10px 0 16px; text-align: left; line-height: 1.75; font-weight: 500; }
+@media (max-width: 640px) { .land-row .land.spec .lead { padding: 12px 14px; } }
 .land-row .land.spec .spec-list { font-size: 18.4px; line-height: 1.65; }
 .land-row .pricecard { max-width: 480px; padding: 22px 26px; }
 .land-row .pricecard .plan { font-size: 15px; }
