@@ -4,6 +4,7 @@
 import { cfg } from "../lib/config.mjs";
 import { stockBundle, latestTranscriptDate } from "../lib/stockdata.mjs";
 import { ensureSummary, getCachedSummary } from "../lib/summarize.mjs";
+import { ensureDeep, getCachedDeep } from "../lib/deep.mjs";
 import { openStore } from "../lib/store.mjs";
 import { warmSettings, shardSymbols } from "../lib/warmer.mjs";
 
@@ -41,9 +42,11 @@ export default async (req) => {
       const missing = [];
       const ready = {};
       for (const lang of langs) { const ok = !!(await getCachedSummary(symbol, lang, bundle.latestTranscriptDate)); ready[lang] = ok; if (!ok) missing.push(lang); }
+      const missingDeep = [];
+      for (const lang of langs) { const ok = !!(await getCachedDeep(symbol, lang, bundle.latestTranscriptDate)); ready[`deep-${lang}`] = ok; if (!ok) missingDeep.push(lang); }
       coverage[symbol] = { ready, transcript: bundle.latestTranscriptDate || null, checkedAt: Date.now() };
-      if (!missing.length) return;
-      if (missing.includes("en")) {
+      if (!missing.length && !missingDeep.length) return;
+      if (missing.includes("en") || missingDeep.includes("en")) {
         if (generations >= maxGenerations) return; // leave English generations for the next run
         generations++;
       }
@@ -52,6 +55,12 @@ export default async (req) => {
         await ensureSummary(symbol, lang, bundle);
         coverage[symbol].ready[lang] = true;
         if (lang === "en") { log.generated.push(symbol); if (st.paceMs) await sleep(st.paceMs); } else log.translated.push(`${symbol}:${lang}`);
+      }
+      for (const lang of missingDeep) {
+        if (overBudget()) break;
+        await ensureDeep(symbol, lang, bundle);
+        coverage[symbol].ready[`deep-${lang}`] = true;
+        if (lang === "en") log.generated.push(`${symbol}:deep`); else log.translated.push(`${symbol}:deep:${lang}`);
       }
     } catch (e) {
       log.errors.push(`${symbol}: ${String(e.status ? `HTTP ${e.status} ` : "")}${String(e.message).slice(0, 160)}`);

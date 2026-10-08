@@ -78,8 +78,8 @@
     state.locale = loc;
     document.documentElement.lang = loc;
     document.title = state.symbol && state.route.view === "stock" ? `${state.symbol} | ${t("siteName")}` : t("siteName");
-    if (state.stock.b) { state.stock.s = null; state.stock.summaryStatus = null; }
-    if (state.demo.b) { state.demo.s = null; state.demo.summaryStatus = null; }
+    if (state.stock.b) { state.stock.s = null; state.stock.summaryStatus = null; state.stock.d = null; state.stock.deepStatus = null; }
+    if (state.demo.b) { state.demo.s = null; state.demo.summaryStatus = null; state.demo.d = null; state.demo.deepStatus = null; }
     $("#searchInput").placeholder = t("searchPlaceholder");
     $("#searchBtn").textContent = t("search");
     try { localStorage.setItem("locale", loc); } catch {}
@@ -301,9 +301,9 @@
   state.demo = newCtx(true);
 
   async function loadStock(symbol) {
-    stopSummaryPolling(state.stock);
+    stopSummaryPolling(state.stock); stopDeepPolling(state.stock);
     const c = state.stock;
-    if (state.symbol !== symbol) { c.b = null; c.chartCache = {}; c.s = null; c.summaryStatus = null; c.tab = 0; }
+    if (state.symbol !== symbol) { c.b = null; c.chartCache = {}; c.s = null; c.summaryStatus = null; c.d = null; c.deepStatus = null; c.tab = 0; }
     state.symbol = symbol;
     if (!c.b) {
       app.innerHTML = `<div class="panel spinner">${esc(symbol)} …</div>`;
@@ -368,8 +368,9 @@
   }
   function renderTab(c) {
     const body = c.root && c.root.querySelector("[data-tabbody]"); if (!body) return;
-    body.innerHTML = [tabOverview, tabFinancials, tabValuation, tabHolders][c.tab](c);
+    body.innerHTML = [tabOverview, tabFinancials, tabValuation, tabHolders, tabDeep][c.tab](c);
     if (c.tab === 2) bindTarget(c);
+    if (c.tab === 4 && !c.d && c.deepStatus !== "pending" && c.deepStatus !== "disabled") loadDeep(c);
     markScrollable(body);
   }
 
@@ -564,6 +565,24 @@
     update();
   }
 
+  function tabDeep(c) {
+    const D = t("deep"); const d = c.d;
+    if (!d) {
+      const msg = c.deepStatus === "disabled" ? t("summaryDisabled") : c.deepStatus === "error" ? t("summaryError") : `<span class="spinner">${D.generating}</span>`;
+      return `<section class="card"><h3 class="sec"><span class="sec-t">${D.title}</span></h3><p class="muted" style="margin:8px">${esc(D.intro)}</p><p style="margin:8px">${msg}</p></section>`;
+    }
+    const bf = wrap(`<table class="tbl deep-bf"><thead><tr><th>${D.segment}</th><th>${D.revenueShare}</th><th>${D.competitors}</th><th>${D.purchaseCriteria}</th><th>${D.position}</th></tr></thead><tbody>${d.battlefields.map((b) => `<tr><th>${esc(b.segment)}</th><td>${esc(b.revenueShare)}</td><td>${esc(b.competitors)}</td><td>${esc(b.purchaseCriteria)}</td><td>${esc(b.position)}</td></tr>`).join("")}</tbody></table>`);
+    const piece = (k) => `<div class="ai"><span class="hl">${esc(d[k].headline)}</span><span class="body">${esc(d[k].body)}</span></div>`;
+    const rows = ["profitPools", "costPosition", "industry", "demand", "newMarkets"].map((k) => row(`<b>${D[k]}</b>`, piece(k))).join("");
+    const imps = `<ol class="imps">${d.implications.map((i) => `<li>${esc(i.point)} <span class="tag ${esc(i.type)}">${D[i.type] || esc(i.type)}</span> <span class="muted small">${D[i.confidence] || esc(i.confidence)}</span></li>`).join("")}</ol>`;
+    const tr = (d.transcriptsUsed || [])[0];
+    const note = `<p class="note">${esc(t("updatedNote", { period: tr ? tr.period : "—", date: tr ? fmtDate(tr.date) : "—", gen: fmtDate(d.generatedAt) }))}</p>`;
+    return `${sec(D.title, `<p class="muted deep-intro">${esc(D.intro)} <b>${esc(D.readTime)}</b></p>`)}
+      ${sec(D.battlefields, bf)}
+      <table class="shk ov">${rows}</table>
+      ${sec(D.implications, imps + `<p class="note"><b>${D.caveats}:</b> ${esc(d.caveats)}</p>` + note)}`;
+  }
+
   // ---------- AI summary polling ----------
   function stopSummaryPolling(c) { if (c && c.timer) clearTimeout(c.timer); if (c) c.timer = null; }
   function applySummary(c, r, lang) {
@@ -586,6 +605,27 @@
     }
   }
 
+  function stopDeepPolling(c) { if (c && c.deepTimer) clearTimeout(c.deepTimer); if (c) c.deepTimer = null; }
+  function applyDeep(c, r) {
+    c.deepStatus = r.status;
+    if (r.status === "ready") { c.d = r.summary; c.deepTries = 0; }
+    if (c.root && c.tab === 4) renderTab(c);
+    if (r.status === "pending" && (c.deepTries || 0) < 40) { c.deepTries = (c.deepTries || 0) + 1; c.deepTimer = setTimeout(() => loadDeep(c), 6000); }
+  }
+  async function loadDeep(c) {
+    stopDeepPolling(c);
+    const symbol = c.b && c.b.symbol; const lang = state.locale;
+    if (!symbol) return;
+    if (!state.config.summariesEnabled) { c.deepStatus = "disabled"; if (c.root && c.tab === 4) renderTab(c); return; }
+    try {
+      const r = c.demo ? (await api(`/api/demo?lang=${encodeURIComponent(lang)}`)).deep : await api(`/api/deep/${encodeURIComponent(symbol)}?lang=${encodeURIComponent(lang)}`);
+      if (c.b.symbol !== symbol || lang !== state.locale) return;
+      applyDeep(c, r || { status: "error" });
+    } catch (e) {
+      c.deepStatus = "error"; if (c.root && c.tab === 4) renderTab(c);
+    }
+  }
+
   // ---------- landing sample (live page, no login) ----------
   async function mountDemo(container) {
     const c = state.demo;
@@ -593,11 +633,12 @@
     container.innerHTML = `<div class="spinner">…</div>`;
     try {
       const r = await api(`/api/demo?lang=${encodeURIComponent(state.locale)}`);
-      c.b = r.bundle; c.s = null; c.summaryStatus = null; c.tab = 0;
+      c.b = r.bundle; c.s = null; c.summaryStatus = null; c.d = null; c.deepStatus = null; c.tab = 0;
       c.chartCache = Object.fromEntries(Object.entries(r.charts).map(([k, pts]) => [`${r.bundle.symbol}:${k}`, pts]));
       if (!document.body.contains(container)) return;
       mountStock(container, c);
       applySummary(c, r.summary, state.locale);
+      if (r.deep) applyDeep(c, r.deep);
     } catch (e) {
       container.innerHTML = `<div class="error">${t("loadError")}</div>`;
     }

@@ -59,7 +59,7 @@ async function withRateLimitRetry(fn, waits = [20000, 45000, 90000]) {
   }
 }
 
-async function runJson(opts) {
+export async function runJson(opts) {
   return withRateLimitRetry(() => runJsonOnce(opts));
 }
 
@@ -80,7 +80,7 @@ async function runJsonOnce({ system, user, schema, effort, maxTokens }) {
   return { parsed: JSON.parse(text), message };
 }
 
-async function fetchTranscripts(symbol, transcripts) {
+export async function fetchTranscripts(symbol, transcripts) {
   const picks = transcripts.slice(0, TRANSCRIPTS_TO_USE);
   const results = await Promise.all(
     picks.map(async (t) => {
@@ -93,7 +93,7 @@ async function fetchTranscripts(symbol, transcripts) {
   return results.filter(Boolean);
 }
 
-function financialDigest(bundle) {
+export function financialDigest(bundle) {
   const rows = bundle.performance.map((r) => `${r.kind === "estimate" ? "E " : r.kind === "quarter" ? "Q " : "FY"} ${r.label}: revenue ${r.revenue ?? "-"}M, op.income ${r.operatingIncome ?? "-"}M, net ${r.netIncome ?? "-"}M, EPS ${r.eps ?? "-"}, DPS ${r.dps ?? "-"}`);
   const seg = bundle.company.segments.map((s) => `${s.name} ${s.sharePct ?? "?"}%`).join(", ");
   const f = bundle.financials; const c = bundle.cashflow;
@@ -112,7 +112,7 @@ function financialDigest(bundle) {
   ].filter(Boolean).join("\n");
 }
 
-function newsDigest(news) {
+export function newsDigest(news) {
   return (Array.isArray(news) ? news : []).slice(0, 25)
     .map((n) => `- ${String(n.publishedDate || "").slice(0, 10)} [${n.publisher || n.site || ""}] ${n.title}${n.text ? ` — ${String(n.text).slice(0, 240)}` : ""}`)
     .join("\n");

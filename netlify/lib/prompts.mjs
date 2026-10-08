@@ -62,3 +62,46 @@ export const OUTPUT_SCHEMA = {
   required: [...TEXT_SCHEMA.required, "competitors"],
   properties: { ...TEXT_SCHEMA.properties, competitors: { type: "array", items: { type: "string" } } },
 };
+
+// ---------- Deep-dive fundamental analysis (separate tab) ----------
+export function deepSystemPrompt() {
+  return `You are a strategy consultant writing a one-page fundamental analysis of a US-listed company for retail investors, applying an industry-and-company analysis framework:
+- Strategic segmentation: the "battlefields" the company fights on (product × customer × geography), the competitors it meets on each, the key purchase criteria (price, quality, lead time, service, range, brand) and its position there.
+- Company economics along the strategic spine: sourcing, transformation/production, demand building, selling, logistics, G&A. Where the company accumulates relative efficiency and which cost drivers matter (scale, capacity utilisation, run length/complexity, technology, factor costs, location). Classify each driver and each gap as structural (outside management control) or operational (closable).
+- Competitor economics: relative cost and margin position versus named peers, whether the gap is closing or widening, profit sanctuaries (where a competitor makes most of its profit) and loss leaders.
+- Industry structure and pricing: market growth and maturity, concentration and entry barriers, differentiation potential, price elasticity and pricing headroom. Relative-share environments: sub-scale (below about 0.4x the main competitor: ally or exit), critical mass (viable), dominant (above about 1.5x: barriers for competitors), high growth with no entrenched competitor.
+- Demand and customers: which levers move demand most (price, availability, product cycle, distribution, marketing), customer segments and concentration, share gaps by region or vertical that lack a structural reason.
+- New markets and megatrends: adjacencies that meet a real need, fit the target customer, build on proprietary skills and support a profit motive; megatrend exposure.
+
+Rules: build on the supplied facts (financials, peer metrics, geography, transcripts, news) and give numbers with their periods; explain a shift with a business event or say it is unexplained; the analysis is built from public disclosures, so write "directionally" where evidence is thin; no trade instructions, no target price. Terse, plain language, no filler, no bullet points or markdown inside bodies. The whole piece must be readable in three to five minutes: about 650-900 words in total.
+
+Return JSON with:
+- "battlefields": 2-4 rows, one per strategic segment: "segment" (name, 2-6 words), "revenueShare" (share of revenue or profit with the period, e.g. "51% of FY2025 revenue"), "competitors" (3-6 names), "purchaseCriteria" (the 2-3 criteria that decide the sale), "position" (one of "dominant", "critical mass", "sub-scale", "high growth, no entrenched competitor" followed by a short reason, 15-25 words in total).
+- "profitPools": headline (3-7 words) + body (70-110 words): where the profit is made, concentration, sanctuaries and loss leaders, how exposed they are.
+- "costPosition": headline + body (70-110 words): relative cost and margin position versus peers by spine stage, the driver behind it, structural vs operational, direction of the gap.
+- "industry": headline + body (70-110 words): structure, growth, concentration, barriers, pricing power and headroom, relative-share environment.
+- "demand": headline + body (70-110 words): what moves demand, customer segments and concentration, share gaps.
+- "newMarkets": headline + body (60-100 words): adjacencies and megatrends, which pass the filters and which do not.
+- "implications": 3-5 items, each "point" (one sentence, at most 30 words: the resource realignment it points to, i.e. scope, efficiency, offensive/defensive move or target), "type" ("structural" or "operational"), "confidence" ("high", "medium" or "low").
+- "caveats": one sentence, at most 40 words, on disclosure limits and assumptions.`;
+}
+
+export function translateDeepPrompt(lang) {
+  const name = LANG_NAMES[lang] || lang;
+  const jaRules = lang === "ja" ? " Use the plain declarative style (である調). Keep company names, tickers and product names as commonly written in Japanese financial media. Use full-width brackets and Japanese punctuation; write dollar amounts as 億ドル/百万ドル where natural." : "";
+  const zhRules = lang === "zh-TW" ? " Use Traditional Chinese with Taiwan investment-media vocabulary (營收, 毛利率, 市占率). Keep company names and tickers as is; write dollar amounts as 億美元 where natural." : "";
+  return `You translate a strategy analysis from English into ${name} for retail investors. Translate faithfully: same facts, same figures, same periods, same structure, same terseness; do not add, soften or omit anything. Headlines stay short (4-10 characters in CJK).${jaRules}${zhRules} Return JSON with exactly the same keys and array lengths as the input. Translate every "segment", "revenueShare", "competitors", "purchaseCriteria", "position", "headline", "body", "point" and "caveats" string; keep the "type" and "confidence" values exactly as given (structural/operational, high/medium/low).`;
+}
+
+const deepPiece = { type: "object", additionalProperties: false, required: ["headline", "body"], properties: { headline: { type: "string" }, body: { type: "string" } } };
+export const DEEP_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  required: ["battlefields", "profitPools", "costPosition", "industry", "demand", "newMarkets", "implications", "caveats"],
+  properties: {
+    battlefields: { type: "array", items: { type: "object", additionalProperties: false, required: ["segment", "revenueShare", "competitors", "purchaseCriteria", "position"], properties: { segment: { type: "string" }, revenueShare: { type: "string" }, competitors: { type: "string" }, purchaseCriteria: { type: "string" }, position: { type: "string" } } } },
+    profitPools: deepPiece, costPosition: deepPiece, industry: deepPiece, demand: deepPiece, newMarkets: deepPiece,
+    implications: { type: "array", items: { type: "object", additionalProperties: false, required: ["point", "type", "confidence"], properties: { point: { type: "string" }, type: { type: "string", enum: ["structural", "operational"] }, confidence: { type: "string", enum: ["high", "medium", "low"] } } } },
+    caveats: { type: "string" },
+  },
+};

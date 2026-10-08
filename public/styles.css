@@ -403,3 +403,14 @@ table.shk th.rowh { width: 8.5em; }
   .tw.scrolls::after { content: "←→"; display: block; text-align: right; font-size: 11px; color: var(--muted); }
   .form { margin: 12px auto; }
 }
+
+/* ---------- deep dive tab ---------- */
+.deep-intro { margin: 8px; line-height: 1.7; }
+table.deep-bf th, table.deep-bf td { vertical-align: top; }
+table.deep-bf tbody th { white-space: normal; font-weight: 600; }
+.imps { margin: 8px 8px 4px; padding-left: 22px; line-height: 1.75; }
+.imps li { margin-bottom: 6px; }
+.tag { display: inline-block; padding: 0 7px; border-radius: 9px; font-size: 12px; margin-left: 4px; background: var(--head); color: var(--text); vertical-align: 1px; }
+.tag.structural { background: #e8eef7; color: #0b3d6b; }
+.tag.operational { background: #e7f3ea; color: #1a5c2a; }
+@media (max-width: 640px) { table.deep-bf { font-size: 12.5px; } }

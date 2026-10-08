@@ -35,6 +35,7 @@ export default handler(async (req, context) => {
       else if (e.action === "signup") d.signups++;
       else if (e.action === "search") d.searches++;
       else if (e.action === "ai_generate") { d.ai++; generations++; const [, inp, out] = e.detail.split("_"); cost += Number(inp || 0) * PRICE_IN + Number(out || 0) * PRICE_OUT; }
+      else if (e.action === "ai_deep") { d.ai++; generations++; const [, inp, out] = e.detail.split("_"); cost += Number(inp || 0) * PRICE_IN + Number(out || 0) * PRICE_OUT; }
       else if (e.action === "ai_translate") { translations++; cost += 0.03; }
       if (e.user && e.user !== "anon" && e.user !== "system") { d.users.add(e.user); if (!lastSeen[e.user]) lastSeen[e.user] = e.ts; }
     }
@@ -45,7 +46,7 @@ export default handler(async (req, context) => {
     const warm = (await warmStatus()).last;
     const coverage = await warmCoverage();
     const universe = warmUniverse();
-    const langs = [...new Set(["en", ...cfg.locales()])];
+    const langs = [...new Set(["en", ...cfg.locales()])]; langs.push(...langs.map((l) => `deep-${l}`));
     const covCounts = Object.fromEntries(langs.map((l) => [l, universe.filter((sym) => coverage[sym]?.ready?.[l]).length]));
     const pending = universe.filter((sym) => !langs.every((l) => coverage[sym]?.ready?.[l]));
     return json({
