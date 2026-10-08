@@ -699,6 +699,15 @@
     const tk = c.tab === 0 ? "" : takeaway(c, c.tab);
     el.innerHTML = tk ? `<span class="take-l">${esc(t("simpleUi").takeLabel)}</span> ${tk}` : ""; el.hidden = !tk;
   }
+  // Insider buying or selling in the latest quarter, from the bundle's insider statistics
+  function insiderSignal(b) {
+    const i = b && b.insider; if (!i) return null; const I = t("simpleUi").insider;
+    const net = (i.acquiredShares || 0) - (i.disposedShares || 0);
+    const tone = net > 0 ? "good" : net < 0 ? "bad" : "na";
+    const text = net > 0 ? I.buying : net < 0 ? I.selling : I.flat;
+    const detail = I.detail.replace("{y}", i.year).replace("{q}", i.quarter).replace("{b}", fmtInt(i.purchases || 0)).replace("{bs}", fmtInt(i.acquiredShares || 0)).replace("{s}", fmtInt(i.sales || 0)).replace("{ss}", fmtInt(i.disposedShares || 0));
+    return { tone, text, detail, html: `<span class="chip ${tone}" title="${esc(detail)}"><span class="chip-v">${esc(text)}</span></span>` };
+  }
   const sgnPct = (v, d = 1) => (v === null || v === undefined ? NA : `${v > 0 ? "+" : ""}${fmtDec(v, d)}%`);
   function rangePos(r, S) {
     if (!r || r.now === null || r.now === undefined) return "";
@@ -712,7 +721,7 @@
       case 1: { const sg = (g.salesGrowth || []).slice(-1)[0]; return sg && sg.pct !== null ? esc(S.takeFin.replace("{g}", sgnPct(sg.pct)).replace("{fy}", sg.label).replace("{m}", fmtDec(g.operatingMarginPct, 1))) : ""; }
       case 2: { const r = v.history && v.history.range5 && v.history.range5.pe; return v.pe !== null && v.pe !== undefined ? esc(S.takeVal.replace("{pe}", fmtDec(v.pe, 1)).replace("{range}", r ? `${fmtDec(r.low, 1)}〜${fmtDec(r.high, 1)}` : "–").replace("{pos}", r ? rangePos(r, S) : "")) : ""; }
       case 3: { const p = m.price, a50 = m.priceAvg50, a200 = m.priceAvg200; return p && a50 && a200 ? esc(S.takeTech.replace("{m50}", p >= a50 ? S.above : S.below).replace("{m200}", p >= a200 ? S.above : S.below)) : ""; }
-      case 4: { const h = b.holders && b.holders.summary; return h && h.ownershipPct !== null && h.ownershipPct !== undefined ? esc(S.takeHold.replace("{pct}", fmtDec(h.ownershipPct, 0))) : ""; }
+      case 4: { const h = b.holders && b.holders.summary; const ins = insiderSignal(b); return `${ins ? ins.html + " " : ""}${h && h.ownershipPct !== null && h.ownershipPct !== undefined ? esc(S.takeHold.replace("{pct}", fmtDec(h.ownershipPct, 0))) : ""}`; }
       case 5: return c.d ? chipsHtml(c, true) : `<span class="muted">${esc(S.takeDeep)}</span>`;
     }
     return "";
@@ -997,11 +1006,13 @@
       wrap(`<table class="tbl"><thead><tr><th></th><th class="num">${t("high")}</th><th class="num">${t("low")}</th><th class="num">${t("volume")}</th></tr></thead><tbody>${monthly}</tbody></table>`);
     const filings = b.filings.map((x) => `<tr><th>${esc(x.filingDate)}</th><td><a href="${esc(x.url)}" target="_blank" rel="noopener">${esc(x.form)}</a> <span class="muted">${esc(x.description || "")}</span></td></tr>`).join("");
     const events = b.materialEvents.map((e) => `<tr><th>${esc(e.filingDate)}</th><td>${esc(e.form)} · ${esc(e.items.join(", "))}</td></tr>`).join("");
-    const gHold = h.summary && h.summary.ownershipPct !== null && h.summary.ownershipPct !== undefined ? `${t("instOwnership")} ${fmtPct(h.summary.ownershipPct)}${h.holders[0] ? ` · ${esc(h.holders[0].name)}` : ""}` : "";
+    const ins = insiderSignal(b);
+    const gHold = `${ins ? ins.html + " " : ""}${h.summary && h.summary.ownershipPct !== null && h.summary.ownershipPct !== undefined ? `${t("instOwnership")} ${fmtPct(h.summary.ownershipPct)}${h.holders[0] ? ` · ${esc(h.holders[0].name)}` : ""}` : ""}`;
+    const insiderLine = ins ? `<p class="insider-line">${ins.html} <span class="muted">${esc(ins.detail)}</span></p>` : "";
     const gOff = b.officers.length ? `${esc(b.officers[0].name)}（${esc(b.officers[0].title)}）${b.officers.length > 1 ? ` +${b.officers.length - 1}` : ""}` : "";
     const gCap = caps.length ? `${caps.length}: ${yymm(caps[0].date)}` : `${t("tech").high52} $${fmtDec((p.yearly[0] || {}).high)}`;
     const gFil = b.filings[0] ? `${esc(b.filings[0].form)} ${esc(b.filings[0].filingDate || b.filings[0].date || "")}` : "";
-    return `<div class="grid2">${sec(t("holders"), holders, "", gHold)}${sec(t("officers"), officers, "", gOff)}</div>
+    return `<div class="grid2">${sec(t("holders"), insiderLine + holders, "", gHold)}${sec(t("officers"), officers, "", gOff)}</div>
       <div class="grid2b">${sec(t("capitalChanges"), wrap(`<table class="tbl"><tbody>${capRows}</tbody></table>`) + prices, "", gCap)}
       ${sec(t("filings"), wrap(`<table class="tbl"><tbody>${filings || `<tr><td class="c">${NA}</td></tr>`}</tbody></table>`), "", gFil) + (events ? sec(t("events"), wrap(`<table class="tbl"><tbody>${events}</tbody></table>`)) : "")}</div>`;
   }

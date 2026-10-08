@@ -639,3 +639,6 @@ details.dd-sec > .body { margin: 8px 0 0 18px; line-height: 1.8; white-space: pr
 .door p { margin: 0 0 10px; font-size: 14px; }
 .door-chips { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; }
 @media (max-width: 760px) { .doors { grid-template-columns: 1fr; } .sr-row { grid-template-columns: 1fr; gap: 2px; } .guide-gloss div { grid-template-columns: 1fr; } }
+
+.insider-line { margin: 6px 8px 4px; font-size: 14px; }
+.gist .chip, .take-strip .chip { vertical-align: middle; }
