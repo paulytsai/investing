@@ -189,12 +189,13 @@ export default handler(async (req, context) => {
   // Drop one sector's AI report (every language, this period) so the next entitled view regenerates it.
   if (action === "sector-rebuild" && req.method === "POST") {
     const id = String(query(req).get("id") || "").toLowerCase();
+    const lang = String(query(req).get("lang") || ""); // optional: drop only that language's translation
     if (!id) throw new HttpError(400, "id required");
     const summaries = await openStore("summaries");
-    const keys = (await summaries.list("sector:")).filter((k) => k.includes(`:${id}:`));
+    const keys = (await summaries.list("sector:")).filter((k) => k.includes(`:${id}:`) && (!lang || k.includes(`:${id}:${lang}:`)));
     for (const k of keys) await summaries.delete(k);
     const jobs = await openStore("jobs");
-    const jobKeys = (await jobs.list("job:sector:")).filter((k) => k.includes(`:${id}:`));
+    const jobKeys = (await jobs.list("job:sector:")).filter((k) => k.includes(`:${id}:`) && (!lang || k.includes(`:${id}:${lang}:`)));
     for (const k of jobKeys) await jobs.delete(k);
     return json({ id, deleted: keys, jobsCleared: jobKeys });
   }

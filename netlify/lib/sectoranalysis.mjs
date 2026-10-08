@@ -13,7 +13,7 @@ import { deepIncompleteReason } from "./deep.mjs";
 
 const VERSION = "s2";
 const TRANSLATION_VERSION = "1";
-const JOB_TTL_MS = 10 * 60 * 1000;
+const JOB_TTL_MS = 16 * 60 * 1000; // a big sector (70 bundles + a 32k-token report + translation) can take the whole 15-minute background limit; a shorter TTL let status polls start a second, racing generation
 const filled = (v, min = 1) => typeof v === "string" && v.trim().length >= min;
 
 /** Reports refresh monthly (and whenever the version changes). */
@@ -177,11 +177,14 @@ export async function generateSectorEnglish(id, { model = undefined, save = true
 export async function translateSector(en, lang) {
   const source = Object.fromEntries(Object.keys(SECTOR_SCHEMA.properties).map((k) => [k, en[k]]));
   const request = (extra) => runJson({ system: translateSectorPrompt(lang), user: `Translate this JSON. Return JSON only.${extra}\n\n${JSON.stringify(source)}`, schema: SECTOR_SCHEMA, effort: "medium", maxTokens: 32000, model: cfg.translationModel() });
+  // The translation must keep every constituent (same symbols, same order) and every section.
+  const sameShape = (p) => Array.isArray(p.constituents) && p.constituents.length === en.constituents.length && p.constituents.every((c, i) => c.symbol === en.constituents[i].symbol) && Array.isArray(p.sections) && p.sections.length === en.sections.length;
+  const problem = (p) => !isSectorComplete(p, lang) ? sectorIncompleteReason(p, lang) : !sameShape(p) ? `constituents ${p.constituents?.length} vs ${en.constituents.length} or sections changed` : null;
   let { parsed, message } = await request("");
-  if (!isSectorComplete(parsed, lang)) {
-    console.warn(`sector translation ${en.id} to ${lang} incomplete (${sectorIncompleteReason(parsed, lang)}); retrying`);
-    ({ parsed, message } = await request(" Translate every string in full; do not shorten or summarise any field."));
-    if (!isSectorComplete(parsed, lang)) throw new Error(`Translation to ${lang} came back incomplete (${sectorIncompleteReason(parsed, lang)})`);
+  if (problem(parsed)) {
+    console.warn(`sector translation ${en.id} to ${lang} incomplete (${problem(parsed)}); retrying`);
+    ({ parsed, message } = await request(" Translate every string in full; keep every array item in the same order and do not shorten, merge or drop any constituent or section."));
+    if (problem(parsed)) throw new Error(`Translation to ${lang} came back incomplete (${problem(parsed)})`);
   }
   const record = { ...en, ...parsed, lang, translatedFrom: "en", model: message.model, generatedAt: new Date().toISOString(), usage: { input: message.usage?.input_tokens, output: message.usage?.output_tokens } };
   const store = await openStore("summaries");
