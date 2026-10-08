@@ -3,6 +3,7 @@
 // supporting sections, a read on each constituent, risks, questions, checkpoints.
 import { openStore, cached } from "./store.mjs";
 import { cfg } from "./config.mjs";
+import { localizeTexts, cleanCompanyName } from "./localize.mjs";
 import { logEvent } from "./events.mjs";
 import { stockBundle, liveQuote } from "./stockdata.mjs";
 import { provider, soft } from "./providers/index.mjs";
@@ -51,7 +52,7 @@ const n1 = (v, d = 1) => (v === null || v === undefined || Number.isNaN(Number(v
  * already built and falls back to a quote for the rest, so it never blocks on 30 upstream
  * fetches; report generation (`full` true) builds any missing bundle, a few at a time.
  */
-export async function constituentRows(sector, { full = false, lang = cfg.defaultLocale() } = {}) {
+async function constituentRowsRaw(sector, { full = false, lang = cfg.defaultLocale() } = {}) {
   const layersOf = (sym) => AI_LAYERS.filter((l) => l.members.includes(sym)).map((l) => l.layer);
   // Report generation builds the bundle of every constituent (a few at a time) so each
   // read in the report rests on full financial data; the page itself never builds anything.
@@ -61,6 +62,43 @@ export async function constituentRows(sector, { full = false, lang = cfg.default
   const worker = async () => { while (i < sector.members.length) { const sym = sector.members[i++]; out.push(await constituentRow(sym, { full, layersOf, quote: quotes[sym], lang })); } };
   await Promise.all(Array.from({ length: Math.min(limit, sector.members.length) }, worker));
   return sector.members.map((sym) => out.find((r) => r.symbol === sym));
+}
+
+export async function constituentRows(sector, { full = false, lang = cfg.defaultLocale() } = {}) {
+  const rows = await constituentRowsRaw(sector, { full, lang });
+  // Descriptions that fell back to the provider's English text are translated once and cached.
+  // Report generation (full) translates for every site language and waits; a page request only
+  // reads the cache and asks a background job to fill what is missing.
+  const langs = full ? [...new Set(cfg.locales())].filter((l) => l !== "en") : lang !== "en" ? [lang] : [];
+  for (const l of langs) {
+    const items = rows.filter((r) => r && r._featureEn && r.feature).map((r) => ({ key: r.symbol, text: r.feature }));
+    if (!items.length) continue;
+    const map = await localizeTexts(items, l, { peek: !full });
+    if (l === lang) for (const r of rows) if (r && map[r.symbol]) { r.feature = map[r.symbol]; r._featureEn = false; }
+    if (!full && map._missing) requestLocalization(sector.id, l).catch(() => {});
+  }
+  for (const r of rows) if (r) { r.name = cleanCompanyName(r.name); delete r._featureEn; }
+  return rows;
+}
+
+/** Ask the background function to translate a sector's missing descriptions (at most once per 10 minutes per sector and language). */
+async function requestLocalization(id, lang) {
+  const jobs = await openStore("jobs");
+  const key = `job:localize:${id}:${lang}`;
+  const existing = await jobs.get(key);
+  if (existing && Date.now() - existing.startedAt < 10 * 60 * 1000) return;
+  await jobs.set(key, { startedAt: Date.now() });
+  const url = `${cfg.siteUrl().replace(/\/$/, "")}/.netlify/functions/localize-background`;
+  await fetch(url, { method: "POST", headers: { "content-type": "application/json", "x-internal-secret": cfg.internalSecret() }, body: JSON.stringify({ id, lang }) });
+}
+
+/** Translate every English-fallback description of a sector for one language (run by the background function). */
+export async function localizeSector(id, lang) {
+  const sector = await sectorById(id); if (!sector) return { id, lang, translated: 0 };
+  const rows = await constituentRowsRaw(sector, { lang });
+  const items = rows.filter((r) => r && r._featureEn && r.feature).map((r) => ({ key: r.symbol, text: r.feature }));
+  const map = await localizeTexts(items, lang);
+  return { id, lang, translated: Object.keys(map).filter((k) => k !== "_missing").length };
 }
 
 /** Batch quotes for a sector's members (five-minute cache), the fallback for names without a bundle. */
@@ -98,7 +136,7 @@ async function constituentRow(symbol, { full, layersOf, quote, lang }) {
     if (!b) {
       const q = quote || await liveQuote(symbol).catch(() => ({}));
       const p = await liteProfile(symbol);
-      return { symbol, name: p.name || q.name || symbol, exchange: q.exchange || p.exchange || null, country: p.country || null, marketCapM: q.marketCap ? Math.round(q.marketCap / 1e6) : null, price: q.price ?? null, changePct: q.changePct ?? null, peForward: null, evEbitda: null, opMarginPct: null, grossMarginPct: null, roicPct: null, revenueGrowthPct: null, growthLabel: null, yearHigh: q.yearHigh ?? null, yearLow: q.yearLow ?? null, layers: layersOf(symbol), feature: p.description || null, storyHeadline: null, pending: true, _en: null, _fin: null, _rev: "" };
+      return { symbol, name: p.name || q.name || symbol, exchange: q.exchange || p.exchange || null, country: p.country || null, marketCapM: q.marketCap ? Math.round(q.marketCap / 1e6) : null, price: q.price ?? null, changePct: q.changePct ?? null, peForward: null, evEbitda: null, opMarginPct: null, grossMarginPct: null, roicPct: null, revenueGrowthPct: null, growthLabel: null, yearHigh: q.yearHigh ?? null, yearLow: q.yearLow ?? null, layers: layersOf(symbol), feature: p.description || null, _featureEn: !!p.description, storyHeadline: null, pending: true, _en: null, _fin: null, _rev: "" };
     }
     {
       const v = b.valuation || {}, m = b.market || {};
@@ -106,7 +144,7 @@ async function constituentRow(symbol, { full, layersOf, quote, lang }) {
       const growth = (b.growth && b.growth.salesGrowth && b.growth.salesGrowth[b.growth.salesGrowth.length - 1]) || null;
       const s = lang === "en" ? null : await getCachedSummary(symbol, lang, b.latestTranscriptDate).catch(() => null);
       const en = await getCachedSummary(symbol, "en", b.latestTranscriptDate).catch(() => null);
-      return { symbol, name: b.company.name, exchange: b.company.exchange, country: b.company.country || "US", marketCapM: m.marketCapM, price: m.price, changePct: m.changePct, peForward: v.peForward, evEbitda: v.evEbitda, opMarginPct: v.opMarginPct, grossMarginPct: v.grossMarginPct, roicPct: v.roicPct, revenueGrowthPct: growth ? growth.pct : null, growthLabel: growth ? growth.label : null, yearHigh: v.yearHigh, yearLow: v.yearLow, layers: layersOf(symbol), feature: s ? s.feature : (en ? en.feature : shortDescription(b.company.description)), storyHeadline: s && s.story ? s.story.headline : null,
+      return { symbol, name: b.company.name, exchange: b.company.exchange, country: b.company.country || "US", marketCapM: m.marketCapM, price: m.price, changePct: m.changePct, peForward: v.peForward, evEbitda: v.evEbitda, opMarginPct: v.opMarginPct, grossMarginPct: v.grossMarginPct, roicPct: v.roicPct, revenueGrowthPct: growth ? growth.pct : null, growthLabel: growth ? growth.label : null, yearHigh: v.yearHigh, yearLow: v.yearLow, layers: layersOf(symbol), feature: s ? s.feature : (en ? en.feature : shortDescription(b.company.description)), _featureEn: !s && lang !== "en", storyHeadline: s && s.story ? s.story.headline : null,
         _en: en ? { feature: en.feature, story: en.story, longTerm: en.longTerm && en.longTerm.headline, recent: en.recent && en.recent.headline, bull: en.bull && en.bull.headline, bear: en.bear && en.bear.headline } : null, _pe5: b.valuation && b.valuation.history && b.valuation.history.range5 && b.valuation.history.range5.pe ? b.valuation.history.range5.pe : null, _fin: b.financials ? { netDebtToEbitda: b.financials.netDebtToEbitda, capex: b.indicators && b.indicators.capex, rnd: b.indicators && b.indicators.rnd } : null, _rev: (b.performance || []).slice(0, 7).map((r) => `${r.kind === "estimate" ? "E" : ""}${r.label}:${r.revenue}`).join(" ") };
     }
   } catch (e) { return { symbol, error: e.message }; }
