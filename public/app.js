@@ -709,19 +709,30 @@
       const msg = c.deepStatus === "disabled" ? t("summaryDisabled") : c.deepStatus === "error" ? t("summaryError") : `<span class="spinner">${D.generating}</span>`;
       return `<section class="card"><h3 class="sec"><span class="sec-t">${D.title}</span></h3><p class="muted" style="margin:8px">${esc(D.intro)}</p><p style="margin:8px">${msg}</p></section>`;
     }
-    const bf = wrap(`<table class="tbl deep-bf"><thead><tr><th>${D.segment}</th><th>${D.revenueShare}</th><th>${D.competitors}</th><th>${D.purchaseCriteria}</th><th>${D.position}</th></tr></thead><tbody>${d.battlefields.map((b) => `<tr><th>${esc(b.segment)}</th><td data-l="${D.revenueShare}">${esc(b.revenueShare)}</td><td data-l="${D.competitors}">${esc(b.competitors)}</td><td data-l="${D.purchaseCriteria}">${esc(b.purchaseCriteria)}</td><td data-l="${D.position}">${esc(b.position)}</td></tr>`).join("")}</tbody></table>`);
-    const piece = (k) => `<div class="ai"><span class="hl">${esc(d[k].headline)}</span><span class="body">${esc(d[k].body)}</span></div>`;
-    const rows = ["profitPools", "costPosition", "industry", "demand", "newMarkets"].map((k) => row(`<b>${D[k]}</b>`, piece(k))).join("");
+    const F = d.findings || {};
+    const card = (key, f) => f ? `<div class="finding"><div class="f-head"><span class="f-title">${D.f[key]}</span><span class="pill asm ${esc(String(f.assessment).toLowerCase()).replace(/[^a-z]/g, "")}">${esc(D.asm[String(f.assessment).toLowerCase()] || f.assessment)}</span><span class="muted small">${D.conf[String(f.confidence).toLowerCase()] || esc(f.confidence)}</span></div>
+      <p class="f-mech">${esc(f.mechanism)}</p>
+      <p><b>${D.evidence}:</b> ${esc(f.evidence)}</p><p><b>${D.counter}:</b> ${esc(f.counterevidence)}</p><p class="f-dec"><b>${D.decisive}:</b> ${esc(f.decisive)}</p></div>` : "";
+    const findings = `<div class="findings">${card("quality", F.quality)}${card("trajectory", F.trajectory)}${card("valuation", F.valuation)}</div>${F.divergences ? `<p class="divergences"><b>${D.divergences}:</b> ${esc(F.divergences)}</p>` : ""}`;
+    const bf = wrap(`<table class="tbl deep-bf"><thead><tr><th>${D.segment}</th><th>${D.revenueShare}</th><th>${D.competitors}</th><th>${D.purchaseCriteria}</th><th>${D.position}</th></tr></thead><tbody>${(d.battlefields || []).map((b) => `<tr><th>${esc(b.segment)}</th><td data-l="${D.revenueShare}">${esc(b.revenueShare)}</td><td data-l="${D.competitors}">${esc(b.competitors)}</td><td data-l="${D.purchaseCriteria}">${esc(b.purchaseCriteria)}</td><td data-l="${D.position}">${esc(b.position)}</td></tr>`).join("")}</tbody></table>`);
+    const story = d.story ? `<div class="deep-story"><div class="hl">${esc(d.story.headline)}</div><p>${esc(d.story.body)}</p></div>` : "";
+    const secs = Object.fromEntries((d.sections || []).map((x) => [x.key, x]));
+    const piece = (k) => secs[k] ? `<div class="ai"><span class="hl">${esc(secs[k].headline)}</span><span class="body">${esc(secs[k].body)}</span></div>` : "";
+    const rows = ["history", "detective", "moat", "outlook", "cycle", "management", "valuationDetail", "consensus"].filter((k) => secs[k]).map((k) => row(`<b>${D[k]}</b>`, piece(k))).join("");
+    const risks = wrap(`<table class="tbl"><thead><tr><th>${D.risk}</th><th>${D.indicator}</th><th>${D.affects}</th></tr></thead><tbody>${(d.risks || []).map((r) => `<tr><td>${esc(r.risk)}</td><td>${esc(r.indicator)}</td><td class="c"><span class="tag">${esc(r.finding)}</span></td></tr>`).join("")}</tbody></table>`);
+    const qs = `<ol class="imps">${(d.questions || []).map((q) => `<li>${esc(q)}</li>`).join("")}</ol>`;
+    const cps = wrap(`<table class="tbl cps"><thead><tr><th>${D.premise}</th><th>${D.kpi}</th><th>${D.latest}</th><th>${D.failure}</th><th>${D.next}</th></tr></thead><tbody>${(d.checkpoints || []).map((x) => `<tr><td>${esc(x.premise)} <span class="tag">${esc(x.finding)}</span></td><td>${esc(x.kpi)}</td><td>${esc(x.latest)}</td><td>${esc(x.failure)}</td><td>${esc(x.next)}</td></tr>`).join("")}</tbody></table>`);
     const tr = (d.transcriptsUsed || [])[0];
-    const note = `<p class="note"><b>${D.caveats}:</b> ${esc(d.caveats)}</p><p class="note">${esc(t("updatedNote", { period: tr ? tr.period : "—", date: tr ? fmtDate(tr.date) : "—", gen: fmtDate(d.generatedAt) }))}</p>`;
-    const story = d.narrative ? `<div class="deep-story"><div class="hl">${esc(d.narrative.headline)}</div><p>${esc(d.narrative.body)}</p></div>` : "";
-    return `${sec(D.title, `<p class="muted deep-intro">${esc(D.intro)} <b>${esc(D.readTime)}</b></p>${story}`)}
-      ${sec(D.battlefields, bf)}
+    const note = `<p class="note"><b>${D.caveats}:</b> ${esc(d.caveats)}</p><p class="note">${esc(t("updatedNote", { period: tr ? tr.period : "—", date: tr ? fmtDate(tr.date) : "—", gen: fmtDate(d.generatedAt) }))} ${esc(D.noAdvice)}</p>`;
+    return `${sec(D.title, `<p class="muted deep-intro">${esc(D.intro)} <b>${esc(D.readTime)}</b></p>`)}
+      ${sec(D.findingsTitle, findings)}
+      ${sec(D.storyTitle, story + `<h4 class="sub">${D.battlefields}</h4>` + bf)}
       <table class="shk ov">${rows}</table>
+      ${sec(D.risks, risks)}
+      ${sec(D.questions, qs)}
+      ${sec(D.checkpoints, cps)}
       <section class="card">${note}</section>`;
   }
-
-  // ---------- AI summary polling ----------
   function stopSummaryPolling(c) { if (c && c.timer) clearTimeout(c.timer); if (c) c.timer = null; }
   function applySummary(c, r, lang) {
     c.summaryStatus = r.status;

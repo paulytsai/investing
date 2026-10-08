@@ -465,3 +465,18 @@ details.dcf-card[open] > summary.sec .sec-t::before { content: "▾ 【"; }
 
 .about-page { margin: 12px auto; max-width: 980px; text-align: center; }
 .about-page .bio-text h4 { margin: 14px 0 6px; }
+
+/* ---------- deep dive: three findings ---------- */
+.findings { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin: 8px; }
+.finding { border: 1px solid var(--border); padding: 10px 12px; background: #fff; }
+.f-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 6px; }
+.f-title { font-weight: 700; font-size: 16px; color: var(--logo-sea); }
+.pill.asm { background: #e8eef7; color: #0b3d6b; font-weight: 600; }
+.pill.asm.strong, .pill.asm.improving, .pill.asm.undemanding { background: #e7f3ea; color: #1a5c2a; }
+.pill.asm.weak, .pill.asm.deteriorating, .pill.asm.demanding { background: #fdecec; color: #8a1f1b; }
+.finding p { margin: 0 0 6px; line-height: 1.7; font-size: 14.5px; }
+.finding .f-mech { font-size: 15.5px; }
+.finding .f-dec { color: var(--muted); }
+.divergences { margin: 4px 8px 8px; line-height: 1.75; }
+table.cps td { vertical-align: top; font-size: 13.5px; }
+@media (max-width: 900px) { .findings { grid-template-columns: 1fr; } }

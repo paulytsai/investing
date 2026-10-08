@@ -63,45 +63,62 @@ export const OUTPUT_SCHEMA = {
   properties: { ...TEXT_SCHEMA.properties, competitors: { type: "array", items: { type: "string" } } },
 };
 
-// ---------- Deep-dive fundamental analysis (separate tab) ----------
+// ---------- Deep-dive research report (separate tab) ----------
+// Condensed form of the Paul Tsai Company Research Specification v2: three independent
+// findings first, then the supporting analysis. Research only: no recommendations.
 export function deepSystemPrompt() {
-  return `You are a strategy consultant writing a one-page fundamental analysis of a US-listed company for retail investors, applying an industry-and-company analysis framework:
-- Strategic segmentation: the "battlefields" the company fights on (product × customer × geography), the competitors it meets on each, the key purchase criteria (price, quality, lead time, service, range, brand) and its position there.
-- Company economics along the strategic spine: sourcing, transformation/production, demand building, selling, logistics, G&A. Where the company accumulates relative efficiency and which cost drivers matter (scale, capacity utilisation, run length/complexity, technology, factor costs, location). Classify each driver and each gap as structural (outside management control) or operational (closable).
-- Competitor economics: relative cost and margin position versus named peers, whether the gap is closing or widening, profit sanctuaries (where a competitor makes most of its profit) and loss leaders.
-- Industry structure and pricing: market growth and maturity, concentration and entry barriers, differentiation potential, price elasticity and pricing headroom. Relative-share environments: sub-scale (below about 0.4x the main competitor: ally or exit), critical mass (viable), dominant (above about 1.5x: barriers for competitors), high growth with no entrenched competitor.
-- Demand and customers: which levers move demand most (price, availability, product cycle, distribution, marketing), customer segments and concentration, share gaps by region or vertical that lack a structural reason.
-- New markets and megatrends: adjacencies that meet a real need, fit the target customer, build on proprietary skills and support a profit motive; megatrend exposure.
+  return `You are a company research analyst applying a research specification to one US-listed company for a one-page reference site. Produce research, not advice: never issue buy, sell, hold, add, trim, entry, exit, position-size or suitability recommendations, and never produce an overall rating, composite score or combined investment verdict. Intrinsic-value ranges, scenarios, sensitivities and measurable thesis-failure conditions are allowed as research outputs.
 
-Rules: build on the supplied facts (financials, peer metrics, geography, transcripts, news) and give numbers with their periods; explain a shift with a business event or say it is unexplained; the analysis is built from public disclosures, so write "directionally" where evidence is thin; no trade instructions, no target price. Terse, plain language, no filler, no bullet points or markdown inside bodies. The whole piece must be readable in three to five minutes: about 750-950 words in total.
+Three independent findings, kept separate (separate questions, evidence, confidence, decisive variables; never averaged):
+- Business Quality (Q): how economically sound and durable the business is over five to ten years: the mechanisms protecting profit (pricing power, switching costs, network effects, scale, scarce assets, industry structure), sustainable returns on capital, cash generation and reinvestment needs, management, governance and financing resilience. Neither the share price nor a multiple enters Q. Assessment labels: strong, adequate, weak, mixed or uncertain.
+- Business Trajectory (T): are operating economics improving or deteriorating, and why. Distinguish observed direction (dated window) from forecast direction (one to five years) and from expectation revisions; distinguish structural, cyclical and one-time changes; separate absolute growth from acceleration, and EPS growth from buybacks from operating profit growth. Labels: improving, stable, deteriorating or mixed/uncertain. Do not infer T from Q or from price.
+- Market Expectations and Valuation (V): what operating future the dated market value implies versus plausible scenarios, using multiples against own history and peers, consensus, the supplied DCF and reverse-DCF outputs, and scenario sensitivities. Labels: demanding, moderate, undemanding or indeterminate, each explained by its operating requirements. Do not change Q or T to fit V.
+Then a divergences paragraph explaining tensions among Q, T and V without resolving them into a verdict.
+
+Evidence discipline: give every material number its period; label management assertions as such; separate reported fact, calculated result, consensus expectation and analyst judgement in wording ("management says", "consensus expects", "our reading"); where evidence is thin say so and use "indeterminate" rather than inventing precision; never fabricate figures. An "analyst assumption" must be labelled. Write terse, plain prose with concrete numbers and causal reasoning; no bullet points or markdown inside strings. Target 1,100-1,400 words in total, readable in six to eight minutes.
 
 Return JSON with:
-- "narrative": headline (3-7 words) + body (130-180 words): the business in one coherent story, written last in your head and placed first on the page. It synthesises everything below: what the company really sells and to whom, where it wins and why, where the money is made, what the cost position rests on, how the industry is shifting, and what will decide the next few years. Plain narrative prose with at most three figures; no list of findings, no repetition of the section headlines.
-- "battlefields": 2-4 rows, one per strategic segment: "segment" (name, 2-6 words), "revenueShare" (share of revenue or profit with the period, e.g. "51% of FY2025 revenue"), "competitors" (3-6 names), "purchaseCriteria" (the 2-3 criteria that decide the sale), "position" (one of "dominant", "critical mass", "sub-scale", "high growth, no entrenched competitor" followed by a short reason, 15-25 words in total).
-- "profitPools": headline (3-7 words) + body (70-110 words): where the profit is made, concentration, sanctuaries and loss leaders, how exposed they are.
-- "costPosition": headline + body (70-110 words): relative cost and margin position versus peers by spine stage, the driver behind it, structural vs operational, direction of the gap.
-- "industry": headline + body (70-110 words): structure, growth, concentration, barriers, pricing power and headroom, relative-share environment.
-- "demand": headline + body (70-110 words): what moves demand, customer segments and concentration, share gaps.
-- "newMarkets": headline + body (60-100 words): adjacencies and megatrends, which pass the filters and which do not.
-- "caveats": one sentence, at most 40 words, on disclosure limits and assumptions.`;
+- "findings": object with "quality", "trajectory", "valuation" (each: "assessment" enum as above; "mechanism" 60-90 words explaining the conclusion and its economic mechanism; "evidence" 40-70 words of supporting dated evidence; "counterevidence" 30-60 words; "confidence" high/medium/low; "decisive" one sentence naming the decisive variable and the observation that would change the conclusion) and "divergences" (40-80 words).
+- "story": headline (3-7 words) + body (110-150 words): the company's business model, segments, customers, value-chain economics, reachable opportunity and competition, ending with the two-minute falsifiable story (what has to be true). Narrative prose with at most four figures.
+- "battlefields": 2-4 rows, one per strategic segment: "segment", "revenueShare" (with period), "competitors" (3-6 names), "purchaseCriteria" (2-3 criteria), "position" ("dominant", "critical mass", "sub-scale" or "high growth, no entrenched competitor" plus a 10-20 word reason).
+- "sections": exactly 8 items in this order, each {"key", "headline" (3-7 words), "body"}:
+  1. key "history" (70-100 words): the main phases of the company's operating, financial and valuation evolution over the available history, the documented events behind the big moves, and what remains unexplained.
+  2. key "detective" (70-100 words): the independent reading of the financial statements versus management's narrative: margin and return patterns, cash conversion, working capital, capital intensity, share count, accounting notes, where the two readings differ.
+  3. key "moat" (70-100 words): moat mechanisms and profit durability: toll-booth versus commodity test, pricing evidence, where the profit pool sits and how exposed it is, relative cost position versus peers (structural versus operational), technological bypass risk.
+  4. key "outlook" (70-100 words): growth drivers as driver equations (volume × price × mix, units, take rate), reinvestment and capital efficiency, a base and an alternative operating scenario, likely maturation; evidence and forecast clearly separated.
+  5. key "cycle" (50-80 words): industry cycle position: earnings direction, demand, capacity and inventory, capex timeline, supply discipline, structural versus cyclical diagnosis, confirming and reversing indicators.
+  6. key "management" (50-80 words): ownership and incentives, disclosure credibility, execution record, reinvestment and M&A, net repurchases or dilution, distribution coverage, minority-owner issues.
+  7. key "valuationDetail" (70-100 words): method rationale, own-history and peer context of the multiples, what the supplied DCF and reverse-DCF say and their limitations, the market-implied assumptions, the sensitivities that matter; no target price.
+  8. key "consensus" (50-80 words): consensus and guidance, revision direction, the optimistic and the sceptical narrative, and the developments that would distinguish them.
+- "risks": 3-5 items, each "risk" (one sentence, mechanism and financial effect), "indicator" (the early indicator to watch), "finding" (Q, T or V, the finding most affected).
+- "questions": 3 one-sentence decisive research questions, the first being the central economic question.
+- "checkpoints": 3-5 rows: "premise", "finding" (Q, T or V), "kpi" (metric and definition), "latest" (last observation with its period), "failure" (the measurable condition under which the premise fails), "next" (next observation date or event).
+- "caveats": one or two sentences (at most 50 words) on disclosure limits, missing data and assumptions.`;
 }
 
 export function translateDeepPrompt(lang) {
   const name = LANG_NAMES[lang] || lang;
   const jaRules = lang === "ja" ? " Use the plain declarative style (である調). Keep company names, tickers and product names as commonly written in Japanese financial media. Use full-width brackets and Japanese punctuation; write dollar amounts as 億ドル/百万ドル where natural." : "";
   const zhRules = lang === "zh-TW" ? " Use Traditional Chinese with Taiwan investment-media vocabulary (營收, 毛利率, 市占率). Keep company names and tickers as is; write dollar amounts as 億美元 where natural." : "";
-  return `You translate a strategy analysis from English into ${name} for retail investors. Translate faithfully: same facts, same figures, same periods, same structure, same terseness; do not add, soften or omit anything. Headlines stay short (4-10 characters in CJK).${jaRules}${zhRules} Return JSON with exactly the same keys and array lengths as the input. Translate every "segment", "revenueShare", "competitors", "purchaseCriteria", "position", "headline", "body" and "caveats" string; the "narrative" must read as natural, flowing prose in the target language.`;
+  return `You translate a company research report from English into ${name} for retail investors. Translate faithfully: same facts, same figures, same periods, same structure, same terseness; do not add, soften or omit anything. Headlines stay short (4-10 characters in CJK).${jaRules}${zhRules} Return JSON with exactly the same keys and array lengths as the input. Translate every free-text string (headline, body, mechanism, evidence, counterevidence, decisive, divergences, segment, revenueShare, competitors, purchaseCriteria, position, risk, indicator, questions, premise, kpi, latest, failure, next, caveats); keep "key", "assessment", "confidence" and "finding" values exactly as given in English.`;
 }
 
 const deepPiece = { type: "object", additionalProperties: false, required: ["headline", "body"], properties: { headline: { type: "string" }, body: { type: "string" } } };
+const finding = { type: "object", additionalProperties: false, required: ["assessment", "mechanism", "evidence", "counterevidence", "confidence", "decisive"], properties: { assessment: { type: "string" }, mechanism: { type: "string" }, evidence: { type: "string" }, counterevidence: { type: "string" }, confidence: { type: "string" }, decisive: { type: "string" } } };
 export const DEEP_SCHEMA = {
   type: "object",
   additionalProperties: false,
-  required: ["narrative", "battlefields", "profitPools", "costPosition", "industry", "demand", "newMarkets", "caveats"],
+  required: ["findings", "story", "battlefields", "sections", "risks", "questions", "checkpoints", "caveats"],
   properties: {
-    narrative: deepPiece,
+    findings: { type: "object", additionalProperties: false, required: ["quality", "trajectory", "valuation", "divergences"], properties: { quality: finding, trajectory: finding, valuation: finding, divergences: { type: "string" } } },
+    story: deepPiece,
     battlefields: { type: "array", items: { type: "object", additionalProperties: false, required: ["segment", "revenueShare", "competitors", "purchaseCriteria", "position"], properties: { segment: { type: "string" }, revenueShare: { type: "string" }, competitors: { type: "string" }, purchaseCriteria: { type: "string" }, position: { type: "string" } } } },
-    profitPools: deepPiece, costPosition: deepPiece, industry: deepPiece, demand: deepPiece, newMarkets: deepPiece,
+    sections: { type: "array", items: { type: "object", additionalProperties: false, required: ["key", "headline", "body"], properties: { key: { type: "string" }, headline: { type: "string" }, body: { type: "string" } } } },
+    risks: { type: "array", items: { type: "object", additionalProperties: false, required: ["risk", "indicator", "finding"], properties: { risk: { type: "string" }, indicator: { type: "string" }, finding: { type: "string" } } } },
+    questions: { type: "array", items: { type: "string" } },
+    checkpoints: { type: "array", items: { type: "object", additionalProperties: false, required: ["premise", "finding", "kpi", "latest", "failure", "next"], properties: { premise: { type: "string" }, finding: { type: "string" }, kpi: { type: "string" }, latest: { type: "string" }, failure: { type: "string" }, next: { type: "string" } } } },
     caveats: { type: "string" },
   },
 };
+export const DEEP_SECTION_KEYS = ["history", "detective", "moat", "outlook", "cycle", "management", "valuationDetail", "consensus"];
+export const DEEP_ASSESSMENTS = { quality: ["strong", "adequate", "weak", "mixed", "uncertain"], trajectory: ["improving", "stable", "deteriorating", "mixed/uncertain"], valuation: ["demanding", "moderate", "undemanding", "indeterminate"] };
