@@ -7,6 +7,7 @@ import { fxToUsd, STATEMENT_FIELDS } from "./stockdata.mjs";
 import { logEvent } from "./events.mjs";
 import { runJson, fetchTranscripts, financialDigest, newsDigest, getCachedSummary } from "./summarize.mjs";
 import { deepSystemPrompt, translateDeepPrompt, DEEP_SCHEMA, DEEP_SECTION_KEYS, DEEP_ASSESSMENTS, normalizeAssessment } from "./prompts.mjs";
+import { polishFindings } from "./polish.mjs";
 
 const VERSION = "d4";
 const TRANSLATION_VERSION = "1";
@@ -170,6 +171,7 @@ export async function generateDeepEnglish(symbol, bundle) {
   for (const k of ["quality", "trajectory", "valuation"]) { const x = parsed.findings[k]; x.assessment = normalizeAssessment(k, x.assessment); x.confidence = String(x.confidence).toLowerCase(); }
   for (const r of parsed.risks) r.finding = String(r.finding).toUpperCase();
   for (const c of parsed.checkpoints) c.finding = String(c.finding).toUpperCase();
+  ({ record: parsed } = await polishFindings(parsed, { kind: "deep", lang: "en" }));
   const record = {
     symbol, lang: "en", ...parsed,
     transcriptsUsed: transcripts.map((t) => ({ period: t.period, date: t.date })),
@@ -196,6 +198,7 @@ export async function translateDeep(en, lang, bundle) {
     ({ parsed, message } = await request(" Translate every string in full; do not shorten or summarise any field."));
     if (!isDeepComplete(parsed, lang)) throw new Error(`Translation to ${lang} came back incomplete (${deepIncompleteReason(parsed, lang)})`);
   }
+  ({ record: parsed } = await polishFindings(parsed, { kind: "deep", lang }));
   const record = { ...en, ...parsed, lang, translatedFrom: "en", model: message.model, generatedAt: new Date().toISOString(), usage: { input: message.usage?.input_tokens, output: message.usage?.output_tokens } };
   const store = await openStore("summaries");
   await store.set(deepKey(en.symbol, lang, bundle.latestTranscriptDate), record);

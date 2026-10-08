@@ -4,6 +4,7 @@ import { getCachedSummary, summaryKey } from "./summarize.mjs";
 import { getCachedDeep, deepKey } from "./deep.mjs";
 import { openStore } from "./store.mjs";
 import { cfg } from "./config.mjs";
+import { requestPolish, wantsPolish } from "./polish.mjs";
 
 const JOB_TTL_MS = 8 * 60 * 1000;
 const KINDS = {
@@ -15,7 +16,7 @@ async function jobStatus(kind, symbol, lang, bundle) {
   const K = KINDS[kind];
   if (!cfg.anthropicKey()) return { status: "disabled" };
   const cached = await K.cached(symbol, lang, bundle.latestTranscriptDate);
-  if (cached) return { status: "ready", summary: cached };
+  if (cached) { if (kind === "deep" && wantsPolish(cached, lang)) requestPolish(K.key(symbol, lang, bundle.latestTranscriptDate), { kind: "deep", lang }).catch(() => {}); return { status: "ready", summary: cached }; }
 
   const jobs = await openStore("jobs");
   const jobKey = `job:${K.key(symbol, lang, bundle.latestTranscriptDate)}`;

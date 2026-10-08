@@ -11,6 +11,7 @@ import { getCachedSummary, runJson } from "./summarize.mjs";
 import { DEEP_SCHEMA, DEEP_SECTION_KEYS, LANG_NAMES, normalizeAssessment } from "./prompts.mjs";
 import { sectorById, AI_LAYERS } from "./sectors.mjs";
 import { deepIncompleteReason } from "./deep.mjs";
+import { polishFindings, requestPolish, wantsPolish } from "./polish.mjs";
 
 const VERSION = "s2";
 const TRANSLATION_VERSION = "1";
@@ -164,10 +165,12 @@ export function sectorSystemPrompt() {
   return `You are a research analyst applying a research specification to an industry sector for a one-page reference site. Research only: never issue buy, sell, hold, overweight, underweight or allocation recommendations, and never produce a composite score or ranking of the sector or its companies.
 
 Three independent findings for the sector, kept separate and never averaged:
-- Sector Quality (Q): how economically sound and durable the sector's profit pool is over five to ten years: value-chain profit capture, industry structure and concentration, entry barriers, pricing power, switching costs, scale and scarce assets, returns on capital, reinvestment needs, financing resilience. Labels: strong, adequate, weak, mixed or uncertain. Price and multiples do not enter Q.
-- Sector Trajectory (T): are the sector's operating economics improving or deteriorating, and why: demand, volume and price, capacity additions and utilisation, inventories, capex cycle, supply discipline, margins, estimate revisions; distinguish observed direction (dated) from forecast direction (one to five years) and structural from cyclical and one-time changes. Labels: improving, stable, deteriorating or mixed/uncertain.
-- Market Expectations and Valuation (V): what the group's dated multiples imply versus plausible scenarios, using own-history and cross-sector context, dispersion inside the group, consensus growth, and the operating requirements behind the price. Every multiple you cite for a company must be placed against that company's own 5-year low/median/high from the table (near the low end, the middle, the high end, or outside the range); say where the group as a whole sits versus its own history. Labels: demanding, moderate, undemanding or indeterminate.
+- Sector Quality: how economically sound and durable the sector's profit pool is over five to ten years: value-chain profit capture, industry structure and concentration, entry barriers, pricing power, switching costs, scale and scarce assets, returns on capital, reinvestment needs, financing resilience. Labels: strong, adequate, weak, mixed or uncertain. Price and multiples do not enter sector quality.
+- Sector Trajectory: are the sector's operating economics improving or deteriorating, and why: demand, volume and price, capacity additions and utilisation, inventories, capex cycle, supply discipline, margins, estimate revisions; distinguish observed direction (dated) from forecast direction (one to five years) and structural from cyclical and one-time changes. Labels: improving, stable, deteriorating or mixed/uncertain.
+- Market Expectations and Valuation: what the group's dated multiples imply versus plausible scenarios, using own-history and cross-sector context, dispersion inside the group, consensus growth, and the operating requirements behind the price. Every multiple you cite for a company must be placed against that company's own 5-year low/median/high from the table (near the low end, the middle, the high end, or outside the range); say where the group as a whole sits versus its own history. Labels: demanding, moderate, undemanding or indeterminate.
 Then a divergences paragraph.
+
+In every sentence refer to a finding by its name (sector quality, sector trajectory, valuation); never by a letter. The one-letter codes Q, T and V appear only in the "finding" fields of risks and checkpoints. Write assessment labels in words inside prose as well.
 
 Evidence discipline: give material numbers their period; separate reported data, consensus, management assertions (from the digests) and your own reading; say "indeterminate" where evidence is thin; never fabricate. Terse plain prose with concrete numbers and causal reasoning; no bullet points or markdown inside strings. About 1,200-1,500 words in total.
 
@@ -177,9 +180,9 @@ Return JSON with:
 - "battlefields": 3-6 rows, one per value-chain stage or sub-segment (for the AI stack, one per layer): "segment", "revenueShare" (share of the sector's profit pool or revenue, or "n/a" with the reason), "competitors" (the main listed and private players), "purchaseCriteria" (what decides the sale), "position" (who captures the profit and why, 15-25 words).
 - "sections": exactly 8 items in this order, each {"key", "headline", "body"}: "history" (70-100 words: phases of the sector's development, the events behind the big moves, what is unexplained), "detective" (70-100 words: what the aggregate numbers say versus the sector narrative: margins, returns, cash conversion, capital intensity, dispersion between leaders and laggards), "moat" (70-100 words: where durable advantages sit in the chain, toll-booth versus commodity layers, pricing evidence, bypass risk), "outlook" (70-100 words: demand driver equations, capacity and reinvestment, base and alternative scenarios, maturation), "cycle" (50-80 words: cycle position, supply response, capex timeline, confirming and reversing indicators), "management" (50-80 words: capital allocation patterns across the group: capex, M&A, buybacks, dilution, governance issues), "valuationDetail" (70-100 words: group multiples versus each company's own 5-year range and versus other sectors, dispersion, what the price requires, sensitivities), "consensus" (50-80 words: consensus, revisions, the optimistic and sceptical narratives and what distinguishes them).
 - "constituents": one item per listed constituent in the data table: "symbol", "role" (its place in the chain, 2-6 words), "read" (20-35 words: position, what drives it, the main exposure, and where its multiple sits versus its own range when the table gives one). Build every read from the business column, the table and any digest; never write that a company has no data, no digest or no multiples. Where a metric shows "-", say nothing about it and write about what the row does show.
-- "risks": 3-5 items: "risk" (mechanism and effect), "indicator" (early indicator), "finding" (Q, T or V).
+- "risks": 3-5 items: "risk" (mechanism and effect), "indicator" (early indicator), "finding" (the code Q, T or V for the finding most affected).
 - "questions": 3 decisive research questions, the first being the central economic question.
-- "checkpoints": 3-5 rows: "premise", "finding" (Q, T or V), "kpi", "latest" (with period), "failure", "next".
+- "checkpoints": 3-5 rows: "premise", "finding" (the code Q, T or V), "kpi", "latest" (with period), "failure", "next".
 - "caveats": at most 50 words on data limits and assumptions.`;
 }
 
@@ -187,7 +190,7 @@ function translateSectorPrompt(lang) {
   const name = LANG_NAMES[lang] || lang;
   const jaRules = lang === "ja" ? " Use the plain declarative style (である調); full-width brackets and Japanese punctuation; dollar amounts as 億ドル/百万ドル where natural; keep tickers and company names as written in Japanese financial media." : "";
   const zhRules = lang === "zh-TW" ? " Use Traditional Chinese with Taiwan investment-media vocabulary; keep tickers and company names as is; dollar amounts as 億美元 where natural." : "";
-  return `You translate a sector research report from English into ${name} for retail investors. Translate faithfully: same facts, figures, periods, structure and terseness.${jaRules}${zhRules} Return JSON with exactly the same keys and array lengths. Translate every free-text string; keep "key", "symbol", "assessment", "confidence" and "finding" values exactly as given in English.`;
+  return `You translate a sector research report from English into ${name} for retail investors. Translate faithfully: same facts, figures, periods, structure and terseness.${jaRules}${zhRules} Return JSON with exactly the same keys and array lengths. Translate every free-text string, including assessment words that occur inside sentences (weak, demanding and the like must not stay in English); if a sentence refers to a finding by the letter Q, T or V, write the finding's name in the target language instead (${lang === "ja" ? "セクターの質 / セクターの方向性 / 市場の期待と評価" : lang === "zh-TW" ? "產業品質 / 產業走向 / 市場預期與估值" : "sector quality / sector trajectory / market expectations and valuation"}). Keep "key", "symbol", "assessment", "confidence" and "finding" values exactly as given in English.`;
 }
 
 export async function generateSectorEnglish(id, { model = undefined, save = true } = {}) {
@@ -204,6 +207,7 @@ export async function generateSectorEnglish(id, { model = undefined, save = true
   for (const k of ["quality", "trajectory", "valuation"]) { const x = parsed.findings[k]; x.assessment = normalizeAssessment(k, x.assessment); x.confidence = String(x.confidence).toLowerCase(); }
   for (const r of parsed.risks) r.finding = String(r.finding).toUpperCase();
   for (const c of parsed.checkpoints) c.finding = String(c.finding).toUpperCase();
+  ({ record: parsed } = await polishFindings(parsed, { kind: "sector", lang: "en" }));
   const record = { id, lang: "en", period: sectorPeriod(), ...parsed, model: message.model, generatedAt: new Date().toISOString(), usage: { input: message.usage?.input_tokens, output: message.usage?.output_tokens } };
   if (!save) return record;
   const store = await openStore("summaries");
@@ -224,6 +228,7 @@ export async function translateSector(en, lang) {
     ({ parsed, message } = await request(" Translate every string in full; keep every array item in the same order and do not shorten, merge or drop any constituent or section."));
     if (problem(parsed)) throw new Error(`Translation to ${lang} came back incomplete (${problem(parsed)})`);
   }
+  ({ record: parsed } = await polishFindings(parsed, { kind: "sector", lang }));
   const record = { ...en, ...parsed, lang, translatedFrom: "en", model: message.model, generatedAt: new Date().toISOString(), usage: { input: message.usage?.input_tokens, output: message.usage?.output_tokens } };
   const store = await openStore("summaries");
   await store.set(sectorKey(en.id, lang), record);
@@ -244,7 +249,7 @@ export async function ensureSector(id, lang) {
 export async function sectorStatus(id, lang) {
   if (!cfg.anthropicKey()) return { status: "disabled" };
   const cached = await getCachedSector(id, lang);
-  if (cached) return { status: "ready", summary: cached };
+  if (cached) { if (wantsPolish(cached, lang)) requestPolish(sectorKey(id, lang), { kind: "sector", lang }).catch(() => {}); return { status: "ready", summary: cached }; }
   const jobs = await openStore("jobs");
   const jobKey = `job:${sectorKey(id, lang)}`;
   const existing = await jobs.get(jobKey);
