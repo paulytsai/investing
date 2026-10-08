@@ -18,6 +18,7 @@ const YEARS = 10;
 const CONSENSUS_MAX = 5;
 const MATURE_S2C = 2.5; // sustainable sales-to-capital for a mature company
 const DISTRESS_PROCEEDS = 0.5; // share of going-concern value recovered in a distress sale
+const TERMINAL_ROIC_SPREAD = 5; // terminal ROIC may exceed the cost of capital by up to this many points
 
 const num = (v) => (v === null || v === undefined || Number.isNaN(Number(v)) ? null : Number(v));
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
@@ -42,7 +43,7 @@ function syntheticRating(coverage, ebit, cash) {
 
 /**
  * @param {object} p
- *  price, sharesOut, dilutedShares, marketCap, totalDebt, leases, cash, nonOperatingAssets, minorityInterest, beta,
+ *  price, sharesOut, dilutedShares, marketCap, totalDebt, leases, cash, nonOperatingAssets, minorityInterest, beta, roic (%),
  *  riskFree (%), erp (%), nol (accumulated operating losses, same unit as revenue),
  *  latest: {revenue, ebit, taxRate, interestExpense, investedCapital},
  *  estimates: [{date, revenue, ebit}] future fiscal years ascending (may be short)
@@ -124,28 +125,51 @@ export function damodaranDcf(p, override = {}) {
     prevRev = revenue;
   }
 
-  // Terminal value: ROIC in stable growth = cost of capital => reinvestment rate = g / ROIC.
+  // Terminal value: in stable growth a company with a durable advantage keeps ROIC above its cost of
+  // capital, so terminal ROIC = current ROIC bounded between WACC and WACC + 5 points; reinvestment rate = g / ROIC.
   const last = years[years.length - 1];
   const terminalEbit = last.ebit * (1 + g / 100);
   const terminalNopat = terminalEbit * (1 - MARGINAL_TAX / 100);
-  const reinvestRate = waccMature > 0 ? g / waccMature : 0;
+  const currentRoic = num(p.roic);
+  const terminalRoic = Number.isFinite(currentRoic) ? clamp(currentRoic, waccMature, waccMature + TERMINAL_ROIC_SPREAD) : waccMature;
+  const reinvestRate = terminalRoic > 0 ? g / terminalRoic : 0;
   const terminalFcff = terminalNopat * (1 - reinvestRate);
   if (waccMature <= g || terminalFcff <= 0) return null;
   const terminalValue = terminalFcff / ((waccMature - g) / 100);
   const pvTerminal = terminalValue * cumDf;
   const pvExplicit = years.reduce((s, y) => s + y.pv, 0);
+  const failure = rating.failure / 100;
+  const toPerShare = (goingConcern) => ((goingConcern * (1 - failure) + goingConcern * DISTRESS_PROCEEDS * failure) - debt + cash + nonOp - minority) / shares;
   const goingConcernValue = pvExplicit + pvTerminal;
   // Expected value across survival and failure (distress sale recovers a fraction of going-concern value).
-  const failure = rating.failure / 100;
   const enterpriseValue = goingConcernValue * (1 - failure) + goingConcernValue * DISTRESS_PROCEEDS * failure;
   const equityValue = enterpriseValue - debt + cash + nonOp - minority;
   const perShare = equityValue / shares;
   const revenueCagr = Math.pow(last.revenue / num(L.revenue), 1 / YEARS) - 1;
 
+  // Implied moat: how many years beyond year 10 must ROIC stay at today's level (uncapped) before fading to the
+  // cost of capital for the DCF to reach the current price. Growth stays at g throughout.
+  let impliedMoat = null;
+  if (price && Number.isFinite(currentRoic) && currentRoic > waccMature + 0.01) {
+    const moatRoic = currentRoic;
+    const valueWithMoat = (N) => {
+      let pv = 0, df = cumDf, nopat = terminalNopat;
+      for (let k = 0; k < N; k++) { df /= 1 + waccMature / 100; pv += nopat * (1 - g / moatRoic) * df; nopat *= 1 + g / 100; }
+      const tv = (nopat * (1 - g / waccMature)) / ((waccMature - g) / 100);
+      return toPerShare(pvExplicit + pv + tv * df);
+    };
+    const maxYears = 100;
+    if (valueWithMoat(0) >= price) impliedMoat = { years: 0, roic: moatRoic, reached: true };
+    else if (valueWithMoat(maxYears) < price) impliedMoat = { years: maxYears, roic: moatRoic, reached: false, valueAtMax: valueWithMoat(maxYears) };
+    else { let lo = 0, hi = maxYears; while (hi - lo > 1) { const mid = Math.floor((lo + hi) / 2); if (valueWithMoat(mid) >= price) hi = mid; else lo = mid; } impliedMoat = { years: hi, roic: moatRoic, reached: true }; }
+  } else if (price && Number.isFinite(currentRoic)) {
+    impliedMoat = { years: 0, roic: currentRoic, reached: perShare >= price, noExcess: true };
+  }
+
   return {
     perShare, price, upsidePct: price ? (perShare / price - 1) * 100 : null,
     enterpriseValue, goingConcernValue, equityValue, pvExplicit, pvTerminal, terminalValue, terminalShare: pvTerminal / goingConcernValue,
-    story: { endRevenue: last.revenue, revenueCagrPct: revenueCagr * 100, targetMarginPct: last.margin * 100, currentMarginPct: (num(L.ebit) / num(L.revenue)) * 100, salesToCapitalNow: s2cNow, salesToCapitalMature: s2cMature, waccNow, waccMature, failurePct: rating.failure, rating: rating.rating, distressProceedsPct: DISTRESS_PROCEEDS * 100 },
+    story: { endRevenue: last.revenue, revenueCagrPct: revenueCagr * 100, targetMarginPct: last.margin * 100, currentMarginPct: (num(L.ebit) / num(L.revenue)) * 100, salesToCapitalNow: s2cNow, salesToCapitalMature: s2cMature, waccNow, waccMature, failurePct: rating.failure, rating: rating.rating, distressProceedsPct: DISTRESS_PROCEEDS * 100, terminalRoic, currentRoic, impliedMoat },
     inputs: { riskFree: rf, erp, beta, costEquity, preTaxCostDebt, costDebt, spread: rating.spread, coverage, taxRate: taxRateNow, marginalTax: MARGINAL_TAX, weightEquity: wE, weightDebt: wD, wacc: waccNow, waccMature, g, salesToCapital: s2cNow, reinvestRate, debt, leases: num(p.leases) || 0, cash, nonOperatingAssets: nonOp, minority, nol: Math.max(0, num(p.nol) || 0), shares, marketCap, consensusYears: est.length, horizonYears: YEARS },
     years,
   };

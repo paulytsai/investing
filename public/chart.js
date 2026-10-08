@@ -42,6 +42,9 @@
     // those near the price range; levels far outside it are left out rather than squashing the chart.
     const levels = (opts.levels || []).filter((l) => Number.isFinite(l.price) && l.price > min - span0 * 0.35 && l.price < max + span0 * 0.35);
     for (const l of levels) { if (l.price < min) min = l.price; if (l.price > max) max = l.price; }
+    // overlay series (moving averages), aligned index by index with the price points
+    const series = (opts.series || []).filter((sr) => Array.isArray(sr.points) && sr.points.length === points.length);
+    for (const sr of series) for (const p of sr.points) { if (p[1] !== null && Number.isFinite(p[1])) { if (p[1] < min) min = p[1]; if (p[1] > max) max = p[1]; } }
     const span = max - min;
     min -= span * 0.05; max += span * 0.05;
     const x = (i) => pad.l + (i / (points.length - 1)) * iw;
@@ -85,6 +88,13 @@
       el("rect", { x: W - pad.r - tw - 2, y: ly - 10, width: tw, height: 13, fill: "#fff", opacity: 0.85, rx: 2 }, svg);
       const t = el("text", { x: W - pad.r - 6, y: ly, class: "chart-label lvl-label", "text-anchor": "end", fill: st.stroke }, svg);
       t.textContent = l.label;
+    }
+    for (const sr of series) {
+      let d = "", pen = false, lastI = -1;
+      sr.points.forEach((p, i) => { if (p[1] === null || !Number.isFinite(p[1])) { pen = false; return; } d += `${pen ? "L" : "M"}${x(i).toFixed(1)},${y(p[1]).toFixed(1)}`; pen = true; lastI = i; });
+      if (!d) continue;
+      el("path", { d, fill: "none", stroke: sr.color || "#d08c1a", "stroke-width": 1.4, "stroke-dasharray": sr.dash || "", opacity: 0.95 }, svg);
+      if (sr.label && lastI >= 0) { const t = el("text", { x: x(lastI) - 4, y: y(sr.points[lastI][1]) - 5, class: "chart-label lvl-label", "text-anchor": "end", fill: sr.color || "#d08c1a" }, svg); t.textContent = sr.label; }
     }
     const path = points.map((p, i) => `${i ? "L" : "M"}${x(i).toFixed(1)},${y(p[1]).toFixed(1)}`).join("");
     el("path", { d: `${path}L${x(points.length - 1).toFixed(1)},${(pad.t + ih).toFixed(1)}L${pad.l},${(pad.t + ih).toFixed(1)}Z`, fill: `url(#${gradId})` }, svg);

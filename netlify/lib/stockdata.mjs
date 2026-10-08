@@ -74,11 +74,16 @@ export async function chartSeries(symbol, range) {
   const days = RANGES[range] || RANGES["1y"];
   const all = await dailyPrices(symbol);
   const cutoff = new Date(Date.now() - days * 86400000).toISOString().slice(0, 10);
-  const pts = all.filter((r) => r.d >= cutoff).reverse(); // oldest first
+  const asc = all.slice().reverse(); // oldest first
+  const startIdx = asc.findIndex((r) => r.d >= cutoff);
+  const pts = startIdx < 0 ? [] : asc.slice(startIdx);
   // thin long series for payload size (keep <= ~800 points)
   const step = Math.max(1, Math.floor(pts.length / 800));
-  const thinned = step === 1 ? pts : pts.filter((_, i) => i % step === 0 || i === pts.length - 1);
-  return { symbol, range, points: thinned.map((r) => [r.d, r.p]), from: pts[0]?.d, to: pts[pts.length - 1]?.d };
+  const keep = (i) => step === 1 || i % step === 0 || i === pts.length - 1;
+  // simple moving averages over the trailing N closes, using history before the range start
+  const ma = (n) => { let sum = 0; const out = []; for (let i = 0; i < asc.length; i++) { sum += asc[i].p; if (i >= n) sum -= asc[i - n].p; const inRange = i >= startIdx && startIdx >= 0; if (inRange && keep(i - startIdx)) out.push([asc[i].d, i >= n - 1 ? Math.round((sum / n) * 100) / 100 : null]); } return out; };
+  const thinned = pts.filter((_, i) => keep(i));
+  return { symbol, range, points: thinned.map((r) => [r.d, r.p]), ma50: ma(50), ma200: ma(200), from: pts[0]?.d, to: pts[pts.length - 1]?.d };
 }
 
 function priceTables(daily) {
@@ -523,7 +528,7 @@ async function buildBundle(symbol) {
     const dcfInput = {
       price, sharesOut, dilutedShares: num(latestFY?.weightedAverageShsOutDil), marketCap: num(q.marketCap || profile.marketCap),
       totalDebt: num(bs?.totalDebt), leases: num(bs?.capitalLeaseObligations), cash: num(bs?.cashAndShortTermInvestments), nonOperatingAssets: num(bs?.longTermInvestments), minorityInterest: num(bs?.minorityInterest),
-      nol, beta: num(profile.beta), riskFree: rf.rate, erp: Number(process.env.DCF_ERP || 4.5),
+      nol, beta: num(profile.beta), roic: pct(kmTTM?.returnOnInvestedCapitalTTM), riskFree: rf.rate, erp: Number(process.env.DCF_ERP || 4.5),
       latest: { revenue: num(latestFY?.revenue), ebit: num(latestFY?.operatingIncome), taxRate, interestExpense: num(latestFY?.interestExpense), investedCapital: num(km?.investedCapital) || (bs ? (num(bs.totalDebt) || 0) + (num(bs.totalStockholdersEquity) || 0) - (num(bs.cashAndShortTermInvestments) || 0) : null) },
       estimates: nextEst.map((e) => ({ date: e.date, revenue: num(e.revenueAvg), ebit: num(e.ebitAvg) })),
     };
@@ -653,7 +658,7 @@ export async function indexMembership(symbol) {
 }
 
 export async function stockBundle(symbol, { force = false } = {}) {
-  return cached(`stock:${symbol}`, 12 * 3600, () => buildBundle(symbol), { version: "10", force });
+  return cached(`stock:${symbol}`, 12 * 3600, () => buildBundle(symbol), { version: "11", force });
 }
 
 /** Newest earnings-call transcript date FMP lists for a symbol (one light request). */

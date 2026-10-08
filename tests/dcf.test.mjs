@@ -44,3 +44,23 @@ test("sensitivity grids move in the right direction", () => {
   assert.ok(s.storyAxis.cagr[2] > s.storyAxis.cagr[0]);
   assert.equal(s.storyAxis.margin[1], base.story.targetMarginPct);
 });
+
+test("terminal ROIC stays above WACC for high-return companies, capped at WACC + 5", () => {
+  const hi = damodaranDcf({ ...mature, roic: 50 });
+  const lo = damodaranDcf({ ...mature, roic: 3 });
+  const none = damodaranDcf(mature);
+  assert.ok(Math.abs(hi.story.terminalRoic - (hi.inputs.waccMature + 5)) < 1e-9, "capped at WACC + 5");
+  assert.ok(Math.abs(lo.story.terminalRoic - lo.inputs.waccMature) < 1e-9, "floored at WACC");
+  assert.ok(Math.abs(none.story.terminalRoic - none.inputs.waccMature) < 1e-9);
+  assert.ok(hi.perShare > lo.perShare, "higher terminal ROIC, higher value");
+});
+
+test("implied moat years: price far above value needs many years, price below value needs none", () => {
+  const r = damodaranDcf({ ...mature, roic: 40 });
+  const cheap = damodaranDcf({ ...mature, roic: 40, price: r.perShare * 0.5 });
+  assert.equal(cheap.story.impliedMoat.years, 0);
+  const dear = damodaranDcf({ ...mature, roic: 40, price: r.perShare * 1.15 });
+  assert.ok(dear.story.impliedMoat.years > 0 && dear.story.impliedMoat.reached, JSON.stringify(dear.story.impliedMoat));
+  const absurd = damodaranDcf({ ...mature, roic: 40, price: r.perShare * 10 });
+  assert.equal(absurd.story.impliedMoat.reached, false);
+});

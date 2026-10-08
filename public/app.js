@@ -303,7 +303,7 @@
   async function loadStock(symbol) {
     stopSummaryPolling(state.stock); stopDeepPolling(state.stock);
     const c = state.stock;
-    if (state.symbol !== symbol) { c.b = null; c.chartCache = {}; c.s = null; c.summaryStatus = null; c.d = null; c.deepStatus = null; c.tab = 0; }
+    if (state.symbol !== symbol) { c.b = null; c.chartCache = {}; c.techCache = {}; c.s = null; c.summaryStatus = null; c.d = null; c.deepStatus = null; c.tab = 0; }
     state.symbol = symbol;
     if (!c.b) {
       app.innerHTML = `<div class="panel spinner">${esc(symbol)} …</div>`;
@@ -513,13 +513,16 @@
     if (!d) dcfHtml = `<p class="muted">${V.noDcf}</p>`;
     else {
       const I = d.inputs; const up = d.upsidePct; const Y = d.story || {};
-      const head = `<div class="dcf-head"><div class="dcf-value"><div class="stat-l">${V.perShare}</div><div class="dcf-num">$${x(d.perShare, 2)}</div><div class="${up >= 0 ? "up" : "down"}">${V.vsPrice} ${up >= 0 ? "+" : ""}${x(up)}% <span class="muted">($${x(d.price, 2)})</span></div></div>
+      const M = Y.impliedMoat;
+      const moat = M ? `<div class="moat"><div class="stat-l">${V.moatYears}</div><div class="moat-num">${M.noExcess ? V.moatNoExcess : M.reached ? (M.years === 0 ? V.moatZero : t("val.moatN", { n: M.years })) : V.moatBeyond}</div><div class="muted small">${esc(t("val.moatNote", { roic: fmtPct(M.roic, 1), wacc: fmtPct(Y.waccMature, 1) }))}</div></div>` : "";
+      const head = `<div class="dcf-head"><div class="dcf-value"><div class="stat-l">${V.perShare}</div><div class="dcf-num">$${x(d.perShare, 2)}</div><div class="${up >= 0 ? "up" : "down"}">${V.vsPrice} ${up >= 0 ? "+" : ""}${x(up)}% <span class="muted">($${x(d.price, 2)})</span></div>${moat}</div>
         <div><h4 class="sub">${V.story}</h4>${kv([
           [V.endRevenue, `${fmtBig(Y.endRevenue / 1e6)} <span class="muted">(${V.cagr} ${Y.revenueCagrPct >= 0 ? "+" : ""}${x(Y.revenueCagrPct)}%)</span>`],
           [V.targetMargin, `${fmtPct(Y.targetMarginPct)} <span class="muted">(${V.currentMargin} ${fmtPct(Y.currentMarginPct)})</span>`],
           [V.s2cPath, `${x(Y.salesToCapitalNow, 2)} → ${x(Y.salesToCapitalMature, 2)}`],
           [V.waccPath, `${fmtPct(Y.waccNow, 2)} → ${fmtPct(Y.waccMature, 2)} <span class="muted">(${V.costEquity} ${fmtPct(I.costEquity, 2)} = ${V.rf} ${fmtPct(I.riskFree, 2)} + β ${x(I.beta, 2)} × ${V.erp} ${fmtPct(I.erp, 1)}; ${V.costDebt} ${fmtPct(I.costDebt, 2)}, ${fmtPct(I.weightDebt * 100, 1)})</span>`],
           [V.failure, `${fmtPct(Y.failurePct, 1)} <span class="muted">(${esc(Y.rating || "")}; ${V.distress} ${fmtPct(Y.distressProceedsPct, 0)})</span>`],
+          [V.terminalRoic, `${fmtPct(Y.terminalRoic, 1)} <span class="muted">(${V.currentRoic} ${fmtPct(Y.currentRoic, 1)}; WACC ${fmtPct(Y.waccMature, 1)} 〜 +5pt)</span>`],
           [V.g, fmtPct(I.g, 2)], [V.tax, `${fmtPct(I.taxRate)} → ${fmtPct(I.marginalTax, 0)}${I.nol > 0 ? ` <span class="muted">(${V.nolLabel} ${fmtBig(I.nol / 1e6)})</span>` : ""}`],
         ])}
         <h4 class="sub">${V.bridge}</h4>${kv([[V.goingConcern, fmtBig(d.goingConcernValue / 1e6)], [V.evLabel, fmtBig(d.enterpriseValue / 1e6)], [V.debtLeases, `−${fmtBig(I.debt / 1e6)}`], [V.cashNonOp, `+${fmtBig((I.cash + I.nonOperatingAssets) / 1e6)}`], I.minority ? [V.minority, `−${fmtBig(I.minority / 1e6)}`] : null, [V.equity, fmtBig(d.equityValue / 1e6)], [V.terminalShare, fmtPct(d.terminalShare * 100, 0)]].filter(Boolean))}</div></div>`;
@@ -577,17 +580,19 @@
   async function loadTechChart(c) {
     const el = c.root && c.root.querySelector("[data-techchart]"); if (!el) return;
     const range = c.techRange || "1y"; const key = `${c.b.symbol}:${range}`;
-    if (!c.chartCache[key]) {
+    c.techCache = c.techCache || {};
+    if (!c.techCache[key]) {
       el.innerHTML = `<div class="spinner">…</div>`;
-      try { c.chartCache[key] = (await api(`/api/chart/${encodeURIComponent(c.b.symbol)}?range=${range}`)).points; } catch (e) { el.innerHTML = `<div class="error">${t("loadError")}</div>`; return; }
+      try { const r = await api(`/api/chart/${encodeURIComponent(c.b.symbol)}?range=${range}`); c.techCache[key] = { points: r.points, ma50: r.ma50, ma200: r.ma200 }; c.chartCache[key] = c.chartCache[key] || r.points; } catch (e) { el.innerHTML = `<div class="error">${t("loadError")}</div>`; return; }
       if (!document.body.contains(el)) return;
     }
-    const v = c.b.valuation || {}; const K = t("tech"); const tech = c.s && c.s.technical;
+    const v = c.b.valuation || {}; const K = t("tech"); const tech = c.s && c.s.technical; const ch = c.techCache[key];
     const levels = [];
     if (tech) { for (const r of tech.resistance || []) levels.push({ price: r.level, kind: "res", label: `R $${fmtDec(r.level, 1)}` }); for (const r of tech.support || []) levels.push({ price: r.level, kind: "sup", label: `S $${fmtDec(r.level, 1)}` }); }
-    if (v.priceAvg50) levels.push({ price: v.priceAvg50, kind: "ma50", label: `${K.ma50} $${fmtDec(v.priceAvg50, 1)}`, series: "ma", window: 50 });
-    if (v.priceAvg200) levels.push({ price: v.priceAvg200, kind: "ma200", label: `${K.ma200} $${fmtDec(v.priceAvg200, 1)}`, series: "ma", window: 200 });
-    window.renderChart(el, c.chartCache[key], { locale: state.locale, height: el.clientWidth < 600 ? 320 : 420, levels, current: v.price, daily: c.chartCache[`${c.b.symbol}:10y`] || null });
+    const series = [];
+    if (ch.ma50) series.push({ points: ch.ma50, color: "#d08c1a", label: K.ma50 });
+    if (ch.ma200) series.push({ points: ch.ma200, color: "#6b4fbb", label: K.ma200 });
+    window.renderChart(el, ch.points, { locale: state.locale, height: el.clientWidth < 600 ? 320 : 420, levels, series, current: v.price });
   }
   function tabDeep(c) {
     const D = t("deep"); const d = c.d;
@@ -658,7 +663,8 @@
     try {
       const r = await api(`/api/demo?lang=${encodeURIComponent(state.locale)}`);
       c.b = r.bundle; c.s = null; c.summaryStatus = null; c.d = null; c.deepStatus = null; c.tab = 0;
-      c.chartCache = Object.fromEntries(Object.entries(r.charts).map(([k, pts]) => [`${r.bundle.symbol}:${k}`, pts]));
+      c.chartCache = Object.fromEntries(Object.entries(r.charts).map(([k, ch]) => [`${r.bundle.symbol}:${k}`, Array.isArray(ch) ? ch : ch.points]));
+      c.techCache = Object.fromEntries(Object.entries(r.charts).filter(([, ch]) => !Array.isArray(ch)).map(([k, ch]) => [`${r.bundle.symbol}:${k}`, ch]));
       if (!document.body.contains(container)) return;
       mountStock(container, c);
       applySummary(c, r.summary, state.locale);

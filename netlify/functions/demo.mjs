@@ -14,7 +14,7 @@ export default handler(async (req) => {
   const bundle = await stockBundle(symbol);
   await logEvent("demo_view", { detail: symbol, req });
   const [charts, summary, deep] = await Promise.all([
-    Promise.all(RANGES.map((r) => chartSeries(symbol, r).then((c) => [r, c.points]))),
+    Promise.all(RANGES.map((r) => chartSeries(symbol, r).then((c) => [r, { points: c.points, ma50: c.ma50, ma200: c.ma200 }]))),
     summaryStatus(symbol, lang, bundle),
     deepStatus(symbol, lang, bundle),
   ]);
