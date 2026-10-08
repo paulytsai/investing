@@ -1,5 +1,5 @@
 // Admin panel API: usage stats, users, warmer control. Requires role "admin".
-import { json, handler, param, HttpError } from "../lib/http.mjs";
+import { json, handler, param, query, HttpError } from "../lib/http.mjs";
 import { requireAdmin, entitlement } from "../lib/entitlement.mjs";
 import { listUsers } from "../lib/users.mjs";
 import { listEvents } from "../lib/events.mjs";
