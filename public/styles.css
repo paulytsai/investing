@@ -408,8 +408,6 @@ table.shk th.rowh { width: 8.5em; }
 .deep-intro { margin: 8px; line-height: 1.7; }
 table.deep-bf th, table.deep-bf td { vertical-align: top; }
 table.deep-bf tbody th { white-space: normal; font-weight: 600; }
-.imps { margin: 8px 8px 4px; padding-left: 22px; line-height: 1.75; }
-.imps li { margin-bottom: 6px; }
 .tag { display: inline-block; padding: 0 7px; border-radius: 9px; font-size: 12px; margin-left: 4px; background: var(--head); color: var(--text); vertical-align: 1px; }
 .tag.structural { background: #e8eef7; color: #0b3d6b; }
 .tag.operational { background: #e7f3ea; color: #1a5c2a; }
@@ -443,3 +441,8 @@ details.dcf-card[open] > summary.sec .sec-t::before { content: "▾ 【"; }
 
 .moat { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--border-soft); }
 .moat-num { font-size: 20px; font-weight: 700; margin: 2px 0 4px; }
+
+.deep-story { margin: 4px 8px 10px; padding: 14px 16px; background: var(--bg); border-left: 4px solid var(--logo-sea); }
+.deep-story .hl { font-weight: 700; font-size: 18px; color: var(--logo-sea); margin-bottom: 6px; }
+.deep-story p { margin: 0; font-size: 16.5px; line-height: 1.9; }
+@media (max-width: 640px) { .deep-story { margin: 4px 0 8px; padding: 12px; } .deep-story p { font-size: 15.5px; } }

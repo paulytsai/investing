@@ -6,9 +6,9 @@ import { logEvent } from "./events.mjs";
 import { runJson, fetchTranscripts, financialDigest, newsDigest, getCachedSummary } from "./summarize.mjs";
 import { deepSystemPrompt, translateDeepPrompt, DEEP_SCHEMA } from "./prompts.mjs";
 
-const VERSION = "d1";
+const VERSION = "d2";
 const TRANSLATION_VERSION = "1";
-const PIECES = ["profitPools", "costPosition", "industry", "demand", "newMarkets"];
+const PIECES = ["narrative", "profitPools", "costPosition", "industry", "demand", "newMarkets"];
 const filled = (v, min = 1) => typeof v === "string" && v.trim().length >= min;
 
 export function deepKey(symbol, lang, latestTranscriptDate) {
@@ -20,7 +20,6 @@ export function isDeepComplete(rec) {
   if (!rec || !Array.isArray(rec.battlefields) || rec.battlefields.length < 2) return false;
   if (rec.battlefields.some((b) => ["segment", "revenueShare", "competitors", "purchaseCriteria", "position"].some((k) => !filled(b[k], 3)))) return false;
   for (const k of PIECES) { const p = rec[k]; if (!p || !filled(p.headline, 3) || !filled(p.body, 120)) return false; }
-  if (!Array.isArray(rec.implications) || rec.implications.length < 3 || rec.implications.some((i) => !filled(i.point, 15) || !["structural", "operational"].includes(i.type) || !["high", "medium", "low"].includes(i.confidence))) return false;
   if (!filled(rec.caveats, 15)) return false;
   return true;
 }
@@ -93,7 +92,7 @@ export async function generateDeepEnglish(symbol, bundle) {
 }
 
 export async function translateDeep(en, lang, bundle) {
-  const source = { battlefields: en.battlefields, profitPools: en.profitPools, costPosition: en.costPosition, industry: en.industry, demand: en.demand, newMarkets: en.newMarkets, implications: en.implications, caveats: en.caveats };
+  const source = { narrative: en.narrative, battlefields: en.battlefields, profitPools: en.profitPools, costPosition: en.costPosition, industry: en.industry, demand: en.demand, newMarkets: en.newMarkets, caveats: en.caveats };
   const { parsed, message } = await runJson({
     system: translateDeepPrompt(lang),
     user: `Translate this JSON. Return JSON only.\n\n${JSON.stringify(source)}`,

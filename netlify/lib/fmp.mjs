@@ -10,7 +10,17 @@ export class FmpError extends Error {
   }
 }
 
-export async function fmp(endpoint, params = {}, { timeoutMs = 9000 } = {}) {
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+export async function fmp(endpoint, params = {}, opts = {}) {
+  // Rate limits (HTTP 429) are retried with short pauses so bursts from the warmer do not drop panels.
+  for (let i = 0; ; i++) {
+    try { return await fmpOnce(endpoint, params, opts); }
+    catch (e) { if (e instanceof FmpError && /HTTP 429/.test(e.message) && i < 3) { await sleep([1500, 4000, 8000][i]); continue; } throw e; }
+  }
+}
+
+async function fmpOnce(endpoint, params = {}, { timeoutMs = 9000 } = {}) {
   const url = new URL(`${BASE}/${endpoint.replace(/^\//, "")}`);
   for (const [k, v] of Object.entries(params)) if (v !== undefined && v !== null) url.searchParams.set(k, String(v));
   const key = cfg.fmpKey();

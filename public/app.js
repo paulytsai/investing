@@ -603,35 +603,13 @@
     const bf = wrap(`<table class="tbl deep-bf"><thead><tr><th>${D.segment}</th><th>${D.revenueShare}</th><th>${D.competitors}</th><th>${D.purchaseCriteria}</th><th>${D.position}</th></tr></thead><tbody>${d.battlefields.map((b) => `<tr><th>${esc(b.segment)}</th><td data-l="${D.revenueShare}">${esc(b.revenueShare)}</td><td data-l="${D.competitors}">${esc(b.competitors)}</td><td data-l="${D.purchaseCriteria}">${esc(b.purchaseCriteria)}</td><td data-l="${D.position}">${esc(b.position)}</td></tr>`).join("")}</tbody></table>`);
     const piece = (k) => `<div class="ai"><span class="hl">${esc(d[k].headline)}</span><span class="body">${esc(d[k].body)}</span></div>`;
     const rows = ["profitPools", "costPosition", "industry", "demand", "newMarkets"].map((k) => row(`<b>${D[k]}</b>`, piece(k))).join("");
-    const imps = `<ol class="imps">${d.implications.map((i) => `<li>${esc(i.point)} <span class="tag ${esc(i.type)}">${D[i.type] || esc(i.type)}</span> <span class="muted small">${D[i.confidence] || esc(i.confidence)}</span></li>`).join("")}</ol>`;
     const tr = (d.transcriptsUsed || [])[0];
-    const note = `<p class="note">${esc(t("updatedNote", { period: tr ? tr.period : "—", date: tr ? fmtDate(tr.date) : "—", gen: fmtDate(d.generatedAt) }))}</p>`;
-    return `${sec(D.title, `<p class="muted deep-intro">${esc(D.intro)} <b>${esc(D.readTime)}</b></p>`)}
+    const note = `<p class="note"><b>${D.caveats}:</b> ${esc(d.caveats)}</p><p class="note">${esc(t("updatedNote", { period: tr ? tr.period : "—", date: tr ? fmtDate(tr.date) : "—", gen: fmtDate(d.generatedAt) }))}</p>`;
+    const story = d.narrative ? `<div class="deep-story"><div class="hl">${esc(d.narrative.headline)}</div><p>${esc(d.narrative.body)}</p></div>` : "";
+    return `${sec(D.title, `<p class="muted deep-intro">${esc(D.intro)} <b>${esc(D.readTime)}</b></p>${story}`)}
       ${sec(D.battlefields, bf)}
       <table class="shk ov">${rows}</table>
-      ${sec(D.implications, imps + `<p class="note"><b>${D.caveats}:</b> ${esc(d.caveats)}</p>` + note)}`;
-  }
-
-  // ---------- AI summary polling ----------
-  function stopSummaryPolling(c) { if (c && c.timer) clearTimeout(c.timer); if (c) c.timer = null; }
-  function applySummary(c, r, lang) {
-    c.summaryStatus = r.status;
-    if (r.status === "ready") { c.s = r.summary; c.tries = 0; }
-    if (c.root && (c.tab === 0 || c.tab === 2 || c.tab === 3)) renderTab(c);
-    if (r.status === "pending" && c.tries < 40) { c.tries++; c.timer = setTimeout(() => loadSummary(c), 6000); }
-  }
-  async function loadSummary(c) {
-    stopSummaryPolling(c);
-    const symbol = c.b && c.b.symbol; const lang = state.locale;
-    if (!symbol) return;
-    if (!state.config.summariesEnabled) { c.summaryStatus = "disabled"; if (c.root && c.tab === 0) renderTab(c); return; }
-    try {
-      const r = c.demo ? (await api(`/api/demo?lang=${encodeURIComponent(lang)}`)).summary : await api(`/api/summary/${encodeURIComponent(symbol)}?lang=${encodeURIComponent(lang)}`);
-      if (c.b.symbol !== symbol || lang !== state.locale) return;
-      applySummary(c, r, lang);
-    } catch (e) {
-      c.summaryStatus = "error"; if (c.root && c.tab === 0) renderTab(c);
-    }
+      <section class="card">${note}</section>`;
   }
 
   function stopDeepPolling(c) { if (c && c.deepTimer) clearTimeout(c.deepTimer); if (c) c.deepTimer = null; }
