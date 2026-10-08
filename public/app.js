@@ -375,7 +375,7 @@
 
   function aiBox(c, part) {
     const s = c.s;
-    if (s && s[part]) return `<div class="ai"><span class="hl">${esc(s[part].headline)}</span><span class="body">${esc(s[part].body)}</span></div>`;
+    if (s && s[part] && s[part].body) return `<div class="ai"><span class="hl">${esc(s[part].headline)}</span><span class="body">${esc(s[part].body)}</span></div>`;
     if (c.summaryStatus === "pending" || c.summaryStatus === null) return `<span class="spinner">${t("generating")}</span>`;
     if (c.summaryStatus === "disabled") return `<span class="muted">${t("summaryDisabled")}</span>`;
     return `<span class="muted">${t("summaryError")}</span>`;

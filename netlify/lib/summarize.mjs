@@ -18,9 +18,22 @@ export function summaryKey(symbol, lang, latestTranscriptDate) {
   return `${v}:${symbol}:${lang}:${latestTranscriptDate || "none"}`;
 }
 
+const PIECES = ["longTerm", "recent", "change", "bull", "bear"];
+const filled = (v) => typeof v === "string" && v.trim().length > 0;
+
+/** True when every piece of commentary is present; a record with empty strings is treated as missing. */
+export function isComplete(rec) {
+  if (!rec || !filled(rec.feature)) return false;
+  for (const k of PIECES) { const p = rec[k]; if (!p || !filled(p.headline) || !filled(p.body)) return false; }
+  const t = rec.technical;
+  if (!t || !Array.isArray(t.support) || !t.support.length || !Array.isArray(t.resistance) || !t.resistance.length || !filled(t.comment)) return false;
+  return true;
+}
+
 export async function getCachedSummary(symbol, lang, latestTranscriptDate) {
   const store = await openStore("summaries");
-  return store.get(summaryKey(symbol, lang, latestTranscriptDate));
+  const rec = await store.get(summaryKey(symbol, lang, latestTranscriptDate));
+  return isComplete(rec) ? rec : null;
 }
 
 function client() {
@@ -183,11 +196,18 @@ export async function generateEnglish(symbol, bundle) {
     "## Recent news (newest first)", newsDigest(news) || "(none)", "",
     ...transcripts.flatMap((t) => [`## Earnings call transcript — ${t.period} (${t.date})`, t.content, ""]),
   ].join("\n");
-  const { parsed, message } = await runJson({
+  const request = (extra) => runJson({
     system: englishSystemPrompt(),
-    user: `Write the commentary for ${bundle.company.name} (${symbol}). Return JSON only.\n\n${materials}`,
-    schema: OUTPUT_SCHEMA, effort: "medium", maxTokens: 8000,
+    user: `Write the commentary for ${bundle.company.name} (${symbol}). Return JSON only.${extra}\n\n${materials}`,
+    schema: OUTPUT_SCHEMA, effort: "high", maxTokens: 12000,
   });
+  let { parsed, message } = await request("");
+  if (!isComplete({ ...parsed, competitors: [] })) {
+    // The model occasionally returns empty strings for some pieces; ask once more, explicitly.
+    console.warn(`incomplete commentary for ${symbol}; retrying`);
+    ({ parsed, message } = await request(" Every piece (feature, longTerm, recent, change, bull, bear, technical with support and resistance levels, competitors) must be filled in; empty strings are not acceptable."));
+    if (!isComplete({ ...parsed, competitors: [] })) throw new Error("Model returned incomplete commentary");
+  }
   const competitors = await resolveCompetitors(symbol, parsed.competitors);
   const record = {
     symbol, lang: "en", ...parsed, competitors,
@@ -208,8 +228,9 @@ export async function translateSummary(en, lang, bundle) {
   const { parsed, message } = await runJson({
     system: translateSystemPrompt(lang),
     user: `Translate this JSON. Return JSON only.\n\n${JSON.stringify(source)}`,
-    schema: TEXT_SCHEMA, effort: "low", maxTokens: 8000,
+    schema: TEXT_SCHEMA, effort: "medium", maxTokens: 12000,
   });
+  if (!isComplete({ ...parsed, competitors: [] })) throw new Error(`Translation to ${lang} came back incomplete`);
   const record = { ...en, ...parsed, lang, translatedFrom: "en", model: message.model, generatedAt: new Date().toISOString(), usage: { input: message.usage?.input_tokens, output: message.usage?.output_tokens } };
   const store = await openStore("summaries");
   await store.set(summaryKey(en.symbol, lang, bundle.latestTranscriptDate), record);

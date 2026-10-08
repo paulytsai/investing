@@ -23,7 +23,7 @@ Pieces (all in English):
 - "competitors": 8-12 closest competitors worldwide, most relevant first, as primary-listing tickers in Financial Modeling Prep format: US listings plain (MSFT); other markets with the exchange suffix (Samsung 005930.KS, Hon Hai 2317.TW, Xiaomi 1810.HK, Toyota 7203.T, SAP SAP.DE, ASML ASML.AS, Shell SHEL.L, Tencent 0700.HK). No OTC ADR tickers.
 - "asOf": date of the newest transcript used.
 
-The five bodies must not repeat the same facts. No bullet points, no markdown, no headings inside bodies.
+The five bodies must not repeat the same facts. No bullet points, no markdown, no headings inside bodies. Every field is mandatory and must be filled in full; never return an empty string or an empty list.
 
 Density reference for bull and bear:
 ${STYLE_EXAMPLES}`;
