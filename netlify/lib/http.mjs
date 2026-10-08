@@ -36,7 +36,8 @@ export function handler(fn) {
     } catch (e) {
       if (e instanceof HttpError) return error(e.status, e.code, e.message, e.extra);
       console.error("Unhandled error", e);
-      return error(500, "internal_error", "Internal error");
+      if (e && e.name === "FmpError") return error(502, "upstream_fmp", String(e.message).slice(0, 300));
+      return error(500, "internal_error", e && e.message ? String(e.message).slice(0, 200) : "Internal error");
     }
   };
 }

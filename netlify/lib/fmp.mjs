@@ -3,7 +3,12 @@ import { cfg } from "./config.mjs";
 
 const BASE = "https://financialmodelingprep.com/stable";
 
-export class FmpError extends Error {}
+export class FmpError extends Error {
+  constructor(msg) {
+    super(msg);
+    this.name = "FmpError";
+  }
+}
 
 export async function fmp(endpoint, params = {}, { timeoutMs = 9000 } = {}) {
   const url = new URL(`${BASE}/${endpoint.replace(/^\//, "")}`);
