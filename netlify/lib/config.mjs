@@ -39,7 +39,7 @@ export const cfg = {
     return "dev-only-insecure-secret";
   },
   trialDays() {
-    return Number(env("TRIAL_DAYS", "7"));
+    return Number(env("TRIAL_DAYS", "30"));
   },
   fmpKey() {
     return env("FMP_API_KEY");

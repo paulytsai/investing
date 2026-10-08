@@ -46,7 +46,7 @@ not a translation.
 * Users sign up with username, email and password (scrypt-hashed). Sessions are
   HMAC-signed HttpOnly cookies. Storage is **Netlify Blobs** (`users`, `cache`,
   `summaries`, `jobs`, `billing_events` stores) — no external database.
-* A **free trial** (`TRIAL_DAYS`, default 7; 90 reads as "3 months" in the copy) starts at signup. After that, data endpoints return
+* A **free trial** (`TRIAL_DAYS`, default 30; multiples of 30 from 60 up read as months in the copy) starts at signup. After that, data endpoints return
   `402` until a Lemon Squeezy subscription is active.
 * **Lemon Squeezy**: the Subscribe button opens the hosted checkout
   (`https://<store>.lemonsqueezy.com/checkout/buy/<variant>` with the user's
