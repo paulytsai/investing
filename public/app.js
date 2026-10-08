@@ -17,6 +17,8 @@
     return v;
   }
   const brandName = () => (state.config && state.config.brand && state.config.brand.name) || "Kabukaizu";
+  // " in Japanese and English" on a two-language site, nothing on a single-language one (English copy only).
+  const langsNote = () => { const ls = (state.config && state.config.locales) || []; return ls.length > 1 ? ` in ${ls.map((l) => window.LOCALE_NAMES_EN[l] || l).join(" and ")}` : ""; };
   function applyBrand() {
     const b = (state.config && state.config.brand) || {};
     document.querySelectorAll(".brand-name").forEach((el) => (el.textContent = b.name || "Kabukaizu"));
@@ -158,7 +160,7 @@
         <h1>${esc(L.heroTitle)}</h1><p class="lead">${esc(L.heroLead)}</p>
         <div class="actions"><a class="btn primary big" href="#/signup">${esc(L.ctaPrimary)}</a><a class="btn big" href="#/login">${esc(L.ctaSecondary)}</a></div>
         <p class="small">${esc(L.ctaNote.replace("{price}", price))}</p>
-      </div><span class="hero-credit">葛飾北斎『神奈川沖浪裏』</span></section>
+      </div><span class="hero-credit">${esc(t("heroCredit"))}</span></section>
       <section class="land">
         <h2>${esc(L.samplesTitle)}</h2><p class="lead">${esc(L.samplesLead)}</p>
         <div class="demo-frame" data-demo></div>
@@ -173,7 +175,7 @@
       <section class="land pricing">
         <h2>${esc(L.pricingTitle)}</h2>
         <div class="pricecard"><div class="plan">${esc(L.pricingPlan)}</div><div class="amount">${esc(price)}</div>
-          <ul>${L.pricingBullets.map((b) => `<li>${esc(b)}</li>`).join("")}</ul>
+          <ul>${L.pricingBullets.map((b) => `<li>${esc(b.replace("{langs}", langsNote()))}</li>`).join("")}</ul>
           <a class="btn primary big" href="#/signup">${esc(L.ctaPrimary)}</a>
           <p class="muted small">${esc(L.pricingNote)}</p></div>
       </section>

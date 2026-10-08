@@ -2,6 +2,7 @@
 // file-backed store under .data/ for local development (scripts/dev.mjs).
 import fs from "node:fs/promises";
 import path from "node:path";
+import { cfg } from "./config.mjs";
 
 let blobsModule = null;
 let blobsAvailable = null;
@@ -122,10 +123,16 @@ const cache = new Map();
 /** Open a named store ("users", "cache", "jobs", ...). */
 // Stores are created per call rather than cached: a warm function instance that kept a
 // store object across invocations would carry an expired Blobs token ("Token expired").
+// Content stores (market data cache, AI commentary, generation jobs) can live on another
+// site (SHARED_BLOBS_SITE_ID / SHARED_BLOBS_TOKEN) so that editions share one corpus;
+// accounts, billing, events and contact messages always stay on the site itself.
+const SHARED_STORES = new Set(["cache", "summaries", "jobs"]);
+
 export async function openStore(name) {
   if (await blobsReady()) {
     const { getStore } = await loadBlobs();
-    return new BlobStore(getStore({ name, consistency: "strong" }));
+    const shared = SHARED_STORES.has(name) ? cfg.sharedBlobs() : null;
+    return new BlobStore(getStore(shared ? { name, consistency: "strong", siteID: shared.siteID, token: shared.token } : { name, consistency: "strong" }));
   }
   if (cache.has(name)) return cache.get(name);
   const impl = new FileStore(name);

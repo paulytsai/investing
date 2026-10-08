@@ -9,8 +9,8 @@ import { logEvent } from "../lib/events.mjs";
 
 export default handler(async (req, context) => {
   const id = param(context, "id");
-  if (!id || id === "list") return json({ sectors: allSectors().map((s) => ({ id: s.id, group: s.group, name: s.name, desc: s.desc || null, members: s.members, layers: s.layers || null })) }, 200, { "cache-control": "public, max-age=3600" });
-  const sector = sectorById(id);
+  if (!id || id === "list") return json({ sectors: (await allSectors()).map((s) => ({ id: s.id, group: s.group, name: s.name, desc: s.desc || null, members: s.members, layers: s.layers || null })) }, 200, { "cache-control": "public, max-age=3600" });
+  const sector = await sectorById(id);
   if (!sector) throw new HttpError(404, "not_found");
   const lang = query(req).get("lang") || cfg.defaultLocale();
   if (!SUPPORTED_LOCALES.includes(lang)) throw new HttpError(400, "invalid_locale");

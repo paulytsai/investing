@@ -6,7 +6,7 @@
 [build.environment]
   # These values are not secrets (addresses and display names) and appear in docs or
   # on the site itself; keep the secrets scanner from failing the build on them.
-  SECRETS_SCAN_OMIT_KEYS = "MAIL_FROM,CONTACT_TO,ADMIN_USERNAME,FRIEND_USERNAME,SITE_URL,SITE_BRAND,SITE_LOCALES,SITE_DEFAULT_LOCALE,DEMO_SYMBOL"
+  SECRETS_SCAN_OMIT_KEYS = "MAIL_FROM,CONTACT_TO,ADMIN_USERNAME,FRIEND_USERNAME,SITE_URL,SITE_BRAND,SITE_LOCALES,SITE_DEFAULT_LOCALE,DEMO_SYMBOL,SHARED_BLOBS_SITE_ID"
 
 [functions]
   node_bundler = "esbuild"

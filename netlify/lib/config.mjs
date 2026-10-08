@@ -76,11 +76,19 @@ export const cfg = {
     if (env("FRIEND_PASSWORD")) list.push({ username: env("FRIEND_USERNAME", "Friend"), password: env("FRIEND_PASSWORD"), role: "friend" });
     return list;
   },
+  // One brand per deployment: Kabukaizu (ja), Guhaitu (zh-TW) and US Stock Almanac (en only).
   brand() {
-    const id = env("SITE_BRAND") || (cfg.defaultLocale() === "zh-TW" ? "guhaitu" : "kabukaizu");
-    return id === "guhaitu"
-      ? { id, name: "Guhaitu", seal: "股海圖", sub: "US Stock Almanac", sealImage: "/img/seal-guhaitu.png", favicon: "/favicon-guhaitu.png", touchIcon: "/apple-touch-icon-guhaitu.png" }
-      : { id: "kabukaizu", name: "Kabukaizu", seal: "株海図", sub: "US Stock Almanac", sealImage: "/img/seal.png", favicon: "/favicon.png", touchIcon: "/apple-touch-icon.png" };
+    const d = cfg.defaultLocale();
+    const id = env("SITE_BRAND") || (d === "zh-TW" ? "guhaitu" : d === "en" ? "usstockalmanac" : "kabukaizu");
+    if (id === "guhaitu") return { id, name: "Guhaitu", seal: "股海圖", sub: "US Stock Almanac", sealImage: "/img/seal-guhaitu.png", favicon: "/favicon-guhaitu.png", touchIcon: "/apple-touch-icon-guhaitu.png", domain: "guhaitu.com" };
+    if (id === "usstockalmanac") return { id, name: "US Stock Almanac", seal: "US Stock Almanac", sub: "Any US stock on one page", sealImage: "/img/seal-usa.png", favicon: "/favicon-usa.png", touchIcon: "/apple-touch-icon-usa.png", domain: "usstockalmanac.com" };
+    return { id: "kabukaizu", name: "Kabukaizu", seal: "株海図", sub: "US Stock Almanac", sealImage: "/img/seal.png", favicon: "/favicon.png", touchIcon: "/apple-touch-icon.png", domain: "kabukaizu.com" };
+  },
+  // Optional: read the AI commentary and data caches from another Netlify site's Blobs
+  // (the Kabukaizu site), so a second edition does not regenerate every digest.
+  sharedBlobs() {
+    const siteID = env("SHARED_BLOBS_SITE_ID"), token = env("SHARED_BLOBS_TOKEN");
+    return siteID && token ? { siteID, token } : null;
   },
   isProduction() {
     return env("CONTEXT") === "production";

@@ -32,9 +32,10 @@ One codebase, deployed as separate Netlify sites with different `SITE_LOCALES` (
 | --- | --- | --- |
 | Japanese site (Kabukaizu, 株海図 seal) | `ja,en` | 日本語 / English |
 | Traditional Chinese site (Guhaitu, 股海圖 seal) | `zh-TW,en` | 繁體中文 / English |
+| US edition (US Stock Almanac, usstockalmanac.com) | `en` | none (English only) |
 
-`SITE_BRAND` (`kabukaizu` or `guhaitu`) picks the wordmark, seal and favicon;
-it defaults from `SITE_DEFAULT_LOCALE`.
+`SITE_BRAND` (`kabukaizu`, `guhaitu` or `usstockalmanac`) picks the wordmark,
+seal and favicon; it defaults from `SITE_DEFAULT_LOCALE` (`ja`, `zh-TW`, `en`).
 
 UI strings live in `public/i18n.js`. AI commentary is generated and cached per
 ticker **and** per language, so switching the toggle shows native-language text,
@@ -179,7 +180,42 @@ npm test
    same repo with `SITE_LOCALES=zh-TW,en`, `SITE_DEFAULT_LOCALE=zh-TW`, its own
    domain, its own `AUTH_SECRET`, and its own Lemon Squeezy webhook. User
    accounts are per site.
-5. Synchronous functions default to a 10 s limit; the stock bundle normally
+5. **US edition (usstockalmanac.com) checklist.** Create a third Netlify site from
+   the same repo and branch, then:
+   - Environment: `SITE_BRAND=usstockalmanac`, `SITE_LOCALES=en`,
+     `SITE_DEFAULT_LOCALE=en`, `SITE_URL=https://usstockalmanac.com`, a fresh
+     `AUTH_SECRET` and `INTERNAL_SECRET`, `PRICE_LABEL=US$10 / month`, the same
+     `FMP_API_KEY`, `EDGAR_TOOLS_API_KEY`, `ANTHROPIC_API_KEY`, `SUMMARY_MODEL`,
+     `ADMIN_USERNAME` / `ADMIN_PASSWORD`, `RESEND_API_KEY`, `MAIL_FROM`
+     (an address on a domain verified in Resend, e.g. `hello@usstockalmanac.com`,
+     which means adding that domain in Resend and letting it configure
+     Cloudflare), `CONTACT_TO`, and `DEMO_SYMBOL` if wanted.
+   - **Share the AI corpus instead of regenerating it.** Set
+     `SHARED_BLOBS_SITE_ID` to the Kabukaizu site's Site ID (Site configuration →
+     General → Site details) and `SHARED_BLOBS_TOKEN` to a Netlify personal access
+     token (User settings → Applications → Personal access tokens). The `cache`,
+     `summaries` and `jobs` stores are then read from and written to the
+     Kabukaizu site, so every English digest, deep dive and sector report that
+     already exists is served immediately and anything generated on either site
+     benefits both. Accounts, billing, events and contact messages stay on the
+     US site. Leave both variables unset to run fully independent stores (the
+     warmer then regenerates everything on the new site, roughly US$300 for the
+     English digests and deep dives of the universe).
+   - Billing: either reuse the Kabukaizu Lemon Squeezy store and variant
+     (`LEMONSQUEEZY_STORE`, `LEMONSQUEEZY_VARIANT_ID`) with a **second webhook**
+     pointing at `https://usstockalmanac.com/api/webhooks/lemonsqueezy` and its own
+     `LEMONSQUEEZY_WEBHOOK_SECRET`, or create a separate product for the US
+     edition.
+   - Warmer: the hourly schedule runs on every site and only generates what is
+     missing, so with shared stores it costs nothing extra. Without shared
+     stores, dispatch "Generate everything missing now" from the admin panel
+     once.
+   - Domain: add `usstockalmanac.com` and `www` in Netlify (Domain management),
+     point the Cloudflare DNS records at Netlify as instructed there, and wait for
+     the certificate. Then open `/`, `/s/AAPL`, `/sitemap.xml`, `/robots.txt` and
+     `/llms.txt` to confirm the English head, JSON-LD and seal.
+   - Search Console / Bing Webmaster: add the domain and submit `/sitemap.xml`.
+6. Synchronous functions default to a 10 s limit; the stock bundle normally
    loads in 3–6 s on a cold cache. If you see timeouts, ask Netlify support to
    raise the function timeout to 26 s.
 

@@ -11,10 +11,10 @@ export const CREATOR = {
 export function siteMeta(locale) {
   const b = cfg.brand();
   const loc = locale || cfg.defaultLocale();
-  const url = (cfg.siteUrl() || "https://kabukaizu.com").replace(/\/$/, "");
+  const url = (cfg.siteUrl() || `https://${b.domain}`).replace(/\/$/, "");
   const copy = {
     ja: { title: `${b.name} | 米国株アルマナック — 米国株を1ページで`, description: `${b.name}は米国上場企業の業績・財務・バリュエーション・株主・役員を1ページにまとめた米国株アルマナック。EDGARの公開財務情報と決算説明会のトランスクリプトをAIが読み込み、長期トレンド、直近動向、強気・弱気シナリオを日本語で要約します。7日間無料。`, tagline: "米国株という大海原の、あなたの水先案内人。" },
-    en: { title: `${b.name} | US Stock Almanac — any US stock on one page`, description: `${b.name} is a US stock almanac: results, financials, valuation, holders and officers for any US-listed company on one page, with AI digests of EDGAR filings and earnings-call transcripts: long-term trend, recent quarters, bull and bear cases. 7-day free trial.`, tagline: "Your pilot guide for the blue ocean of US stocks." },
+    en: { title: b.id === "usstockalmanac" ? `${b.name} — any US stock on one page` : `${b.name} | US Stock Almanac — any US stock on one page`, description: `${b.name} puts any US-listed company on one page: results, financials, valuation, holders and officers, with AI digests of EDGAR filings and earnings-call transcripts: long-term trend, recent quarters, bull and bear cases. 7-day free trial.`, tagline: "Your pilot guide for the blue ocean of US stocks." },
     "zh-TW": { title: `${b.name} | 美股年鑑 — 一頁看懂任何美股`, description: `${b.name} 是美股年鑑：任何美國上市公司的業績、財務、估值、股東與經營層一頁看完。AI 讀取 EDGAR 公開財務資料與財報電話會議逐字稿，整理出長期趨勢、近期動態與多空論點。免費試用 7 天。`, tagline: "引領您航向美股藍海的領航指南。" },
   }[loc] || null;
   const c = copy || { title: `${b.name} | US Stock Almanac`, description: "", tagline: "" };
@@ -23,7 +23,7 @@ export function siteMeta(locale) {
 
 export function siteJsonLd(m) {
   return [
-    { "@context": "https://schema.org", "@type": "WebSite", name: m.brand.name, alternateName: `${m.brand.name} US Stock Almanac`, url: m.url, inLanguage: m.locales, description: m.description },
+    { "@context": "https://schema.org", "@type": "WebSite", name: m.brand.name, alternateName: m.brand.id === "usstockalmanac" ? "usstockalmanac.com" : `${m.brand.name} US Stock Almanac`, url: m.url, inLanguage: m.locales, description: m.description },
     { "@context": "https://schema.org", "@type": "SoftwareApplication", name: m.brand.name, applicationCategory: "FinanceApplication", operatingSystem: "Web", url: m.url, description: m.description, image: m.ogImage, offers: { "@type": "Offer", price: "10", priceCurrency: "USD", description: "Monthly subscription, 7-day free trial" }, author: { "@type": "Person", name: CREATOR.name, url: CREATOR.url } },
     { "@context": "https://schema.org", "@type": "Person", name: CREATOR.name, alternateName: CREATOR.nameJa, url: CREATOR.url, image: `${m.url}${CREATOR.image}`, jobTitle: CREATOR.jobTitle[m.locale] || CREATOR.jobTitle.en, sameAs: CREATOR.sameAs, alumniOf: ["University of California, Los Angeles", "Carnegie Mellon University"], worksFor: { "@type": "Organization", name: m.brand.name, url: m.url } },
   ];
