@@ -3,7 +3,7 @@ import { json, handler, param, query, HttpError } from "../lib/http.mjs";
 import { requireAdmin, entitlement } from "../lib/entitlement.mjs";
 import { listUsers } from "../lib/users.mjs";
 import { listEvents, eventDetails } from "../lib/events.mjs";
-import { getUser, findUserByLogin } from "../lib/users.mjs";
+import { getUser, findUserByLogin, createUser, saveUser } from "../lib/users.mjs";
 import { openStore } from "../lib/store.mjs";
 import { stockBundle, normalizeSymbol } from "../lib/stockdata.mjs";
 import { cfg } from "../lib/config.mjs";
@@ -175,6 +175,16 @@ export default handler(async (req, context) => {
     const keys = (await store.list("")).filter((k) => { const p = k.split(":"); return p.includes(symbol) && p.includes(lang) && !k.startsWith("sector:"); });
     for (const k of keys) await store.delete(k);
     return json({ symbol, lang, deleted: keys });
+  }
+
+  // Create a complimentary member (family, friends, press): never billed, no trial clock.
+  // POST /api/admin/member  body {username, email, password, note?}
+  if (action === "member" && req.method === "POST") {
+    let body = {}; try { body = await req.json(); } catch {}
+    const user = await createUser({ username: String(body.username || "").trim(), email: String(body.email || "").trim(), password: body.password, locale: cfg.defaultLocale() });
+    user.plan = "free"; user.note = String(body.note || "").slice(0, 120) || "complimentary";
+    await saveUser(user);
+    return json({ user: { username: user.username, email: user.email, plan: user.plan, entitlement: entitlement(user) } }, 201);
   }
 
   // Access codes (free months, no card): list, create or update, deactivate.
