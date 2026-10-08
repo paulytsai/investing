@@ -38,6 +38,8 @@ export const cfg = {
     if (env("NETLIFY") || env("AWS_LAMBDA_FUNCTION_NAME") || env("NETLIFY_BLOBS_CONTEXT")) require("AUTH_SECRET");
     return "dev-only-insecure-secret";
   },
+  /** The one sector whose report anyone can read on the landing page as a sample. */
+  sampleSector() { return env("SAMPLE_SECTOR", "ai-chips"); },
   trialDays() {
     // The public trial is 30 days everywhere (copy, signup clock, SEO text). TRIAL_DAYS is no
     // longer read, so a stale value in the hosting environment cannot change it.

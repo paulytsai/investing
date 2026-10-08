@@ -7,6 +7,7 @@ export default handler(async () => {
   return json({
     locales: cfg.locales(),
     defaultLocale: cfg.defaultLocale(),
+    sampleSector: cfg.sampleSector(),
     trialDays: cfg.trialDays(),
     priceLabel: lemon.priceLabel,
     priceCurrency: cfg.price().currency,

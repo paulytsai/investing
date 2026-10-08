@@ -552,3 +552,10 @@ table.cons .small { line-height: 1.4; }
 .pill.ok { background: #e3f3e8; color: #1b6b3a; border: 1px solid #bfe3cb; font-weight: 600; }
 .hero-wave .pill.ok { background: rgba(227,243,232,.92); }
 .form .nocard { margin: -4px 0 12px; font-size: 14px; color: var(--muted); }
+
+/* sample links under the "Sample pages" title; sample tag and note on the sector pages */
+.sample-links { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin: 2px 0 10px; }
+.sample-links .btn.active { background: var(--accent); color: #fff; border-color: var(--accent); cursor: default; }
+.tag.sample { background: #e3f3e8; color: #1b6b3a; border: 1px solid #bfe3cb; font-size: 11px; vertical-align: middle; }
+.sample-note { background: #f3f8ec; border-color: #cfe3b8; text-align: center; padding: 14px; }
+.sample-note p { margin: 0 0 10px; }
