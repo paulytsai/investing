@@ -201,7 +201,8 @@ npm test
    the same repo and branch, then:
    - Environment: `SITE_BRAND=usstockalmanac`, `SITE_LOCALES=en`,
      `SITE_DEFAULT_LOCALE=en`, `SITE_URL=https://usstockalmanac.com`, a fresh
-     `AUTH_SECRET` and `INTERNAL_SECRET`, `PRICE_LABEL=US$10 / month`, the same
+     `AUTH_SECRET` and `INTERNAL_SECRET`, `PRICE_LABEL=US$10`, `PRICE_AMOUNT=10`,
+     `PRICE_CURRENCY=USD`, the same
      `FMP_API_KEY`, `EDGAR_TOOLS_API_KEY`, `ANTHROPIC_API_KEY`, `SUMMARY_MODEL`,
      `ADMIN_USERNAME` / `ADMIN_PASSWORD`, `RESEND_API_KEY`, `MAIL_FROM`
      (an address on a domain verified in Resend, e.g. `hello@usstockalmanac.com`,
