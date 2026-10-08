@@ -333,3 +333,17 @@ table.shk th.rowh { width: 8.5em; }
 .target .tp-price { font-size: 22px; }
 .target .tp-up { margin-left: 8px; font-weight: 600; }
 .tech-comment { margin: 10px 8px 0; line-height: 1.75; }
+
+.billing-h { font-size: 16px; margin: 22px 0 8px; padding-top: 14px; border-top: 1px solid var(--border-soft); }
+.form .btn + .btn, .form .btn + div { margin-top: 10px; }
+.btn.danger { background: #b42318; color: #fff; border-color: #b42318; }
+.btn.danger-outline { color: #b42318; border-color: #e2a5a0; background: #fff; }
+.form #deletePw { margin-top: 8px; }
+.admin h2 { font-size: 22px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.stats-admin { grid-template-columns: repeat(6, 1fr); margin-bottom: 12px; }
+.bars { display: flex; align-items: flex-end; gap: 4px; height: 160px; padding: 0 8px 22px; position: relative; }
+.bar { flex: 1; position: relative; height: 100%; display: flex; align-items: flex-end; }
+.bar-fill { position: absolute; bottom: 0; left: 0; right: 0; background: var(--logo-sea); border-radius: 2px 2px 0 0; }
+.bar-fill.demo { background: #7fb3dd; }
+.bar-l { position: absolute; bottom: -20px; left: 0; right: 0; text-align: center; font-size: 10px; color: var(--muted); }
+@media (max-width: 900px) { .stats-admin { grid-template-columns: repeat(2, 1fr); } .bar-l { display: none; } }

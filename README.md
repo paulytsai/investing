@@ -52,6 +52,20 @@ not a translation.
   is granted for `active`, `on_trial`, `past_due`, and `cancelled` until
   `ends_at`.
 
+### Built-in accounts and the admin panel
+
+`ADMIN_PASSWORD` and `FRIEND_PASSWORD` (with optional `ADMIN_USERNAME`,
+`FRIEND_USERNAME`) define two accounts that are created on first login and
+never pay. The admin account sees `/#/admin`: users and their status, signups,
+active users, page views per day and per ticker, AI runs with estimated cost,
+warmer status and a button to run it, and a recent-activity feed. Usage is
+recorded as lightweight events in the `events` Blob store (one key per event,
+no values), kept for 30 days of reporting.
+
+Under アカウント → お支払い a subscriber can cancel (ends at period end, through
+the Lemon Squeezy API when `LEMONSQUEEZY_API_KEY` is set, otherwise via the
+portal) or delete the account outright after re-entering the password.
+
 ### Data sources
 
 * **Financial Modeling Prep** (`/stable`): profile, quote, statements, key

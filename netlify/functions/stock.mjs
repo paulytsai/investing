@@ -1,11 +1,13 @@
 import { json, handler, param } from "../lib/http.mjs";
+import { logEvent } from "../lib/events.mjs";
 import { requireEntitled } from "../lib/entitlement.mjs";
 import { stockBundle, normalizeSymbol, liveQuote } from "../lib/stockdata.mjs";
 
 export default handler(async (req, context) => {
-  await requireEntitled(req);
+  const { user } = await requireEntitled(req);
   const symbol = normalizeSymbol(param(context, "symbol"));
   const bundle = await stockBundle(symbol);
+  await logEvent("view", { user, detail: symbol });
   // Refresh the headline quote more often than the rest of the bundle.
   try {
     const q = await liveQuote(symbol);

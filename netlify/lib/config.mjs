@@ -69,6 +69,13 @@ export const cfg = {
   internalSecret() {
     return env("INTERNAL_SECRET") || cfg.authSecret();
   },
+  /** Accounts that always exist and never pay; passwords come from the environment. */
+  builtinAccounts() {
+    const list = [];
+    if (env("ADMIN_PASSWORD")) list.push({ username: env("ADMIN_USERNAME", "admin"), password: env("ADMIN_PASSWORD"), role: "admin" });
+    if (env("FRIEND_PASSWORD")) list.push({ username: env("FRIEND_USERNAME", "Friend"), password: env("FRIEND_PASSWORD"), role: "friend" });
+    return list;
+  },
   brand() {
     const id = env("SITE_BRAND") || (cfg.defaultLocale() === "zh-TW" ? "guhaitu" : "kabukaizu");
     return id === "guhaitu"

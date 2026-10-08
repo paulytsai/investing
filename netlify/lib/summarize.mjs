@@ -5,6 +5,7 @@ import { cfg } from "./config.mjs";
 import { fmpSoft } from "./fmp.mjs";
 import { openStore } from "./store.mjs";
 import { dailyPrices } from "./stockdata.mjs";
+import { logEvent } from "./events.mjs";
 import { englishSystemPrompt, translateSystemPrompt, OUTPUT_SCHEMA, TEXT_SCHEMA } from "./prompts.mjs";
 
 const MAX_TRANSCRIPT_CHARS = 60000;
@@ -177,6 +178,7 @@ export async function generateEnglish(symbol, bundle) {
   };
   const store = await openStore("summaries");
   await store.set(summaryKey(symbol, "en", bundle.latestTranscriptDate), record);
+  await logEvent("ai_generate", { detail: `${symbol}_${message.usage?.input_tokens || 0}_${message.usage?.output_tokens || 0}` });
   return record;
 }
 
@@ -191,6 +193,7 @@ export async function translateSummary(en, lang, bundle) {
   const record = { ...en, ...parsed, lang, translatedFrom: "en", model: message.model, generatedAt: new Date().toISOString(), usage: { input: message.usage?.input_tokens, output: message.usage?.output_tokens } };
   const store = await openStore("summaries");
   await store.set(summaryKey(en.symbol, lang, bundle.latestTranscriptDate), record);
+  await logEvent("ai_translate", { detail: `${en.symbol}_${lang}` });
   return record;
 }
 

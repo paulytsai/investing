@@ -58,3 +58,16 @@ export async function freshPortalUrl(subscriptionId) {
   const data = await res.json();
   return data?.data?.attributes?.urls?.customer_portal || null;
 }
+
+/** Cancel at period end through the API. Returns the updated status or null if no API key. */
+export async function cancelSubscription(subscriptionId) {
+  const { apiKey } = cfg.lemon();
+  if (!apiKey || !subscriptionId) return null;
+  const res = await fetch(`https://api.lemonsqueezy.com/v1/subscriptions/${encodeURIComponent(subscriptionId)}`, {
+    method: "DELETE", headers: { accept: "application/vnd.api+json", authorization: `Bearer ${apiKey}` },
+  });
+  if (!res.ok) throw new Error(`Lemon Squeezy cancel failed: HTTP ${res.status}`);
+  const data = await res.json();
+  const a = data?.data?.attributes || {};
+  return { status: a.status || "cancelled", endsAt: a.ends_at || null, renewsAt: a.renews_at || null };
+}

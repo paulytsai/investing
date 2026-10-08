@@ -96,3 +96,39 @@ export function publicUser(user) {
   const { passwordHash, ...rest } = user;
   return rest;
 }
+
+/** Log a built-in account in: creates it on first use, keeps role/plan in sync. */
+export async function loginBuiltin(login, password) {
+  const acct = cfg.builtinAccounts().find((a) => a.username.toLowerCase() === String(login || "").trim().toLowerCase());
+  if (!acct || password !== acct.password) return null;
+  const users = await openStore("users");
+  const idx = await users.get(`username:${acct.username.toLowerCase()}`);
+  let user = idx?.id ? await users.get(`user:${idx.id}`) : null;
+  if (user && !user.builtin) return null; // a registered user holds this name; refuse to upgrade it
+  if (!user) {
+    const id = crypto.randomUUID();
+    const email = `${acct.username.toLowerCase()}@${(cfg.brand().id || "site")}.local`;
+    await users.set(`username:${acct.username.toLowerCase()}`, { id });
+    await users.set(`email:${email}`, { id });
+    user = { id, username: acct.username, email, passwordHash: hashPassword(password), locale: cfg.defaultLocale(), createdAt: Date.now(), trialEndsAt: 0, subscription: null, builtin: true };
+  }
+  user.role = acct.role; user.plan = "free"; user.builtin = true;
+  if (!verifyPassword(password, user.passwordHash)) user.passwordHash = hashPassword(password);
+  await users.set(`user:${user.id}`, user);
+  return user;
+}
+
+export async function deleteUser(user) {
+  const users = await openStore("users");
+  await users.delete(`user:${user.id}`);
+  await users.delete(`email:${normalizeEmail(user.email)}`);
+  await users.delete(`username:${String(user.username).toLowerCase()}`);
+}
+
+export async function listUsers() {
+  const users = await openStore("users");
+  const keys = await users.list("user:");
+  const out = [];
+  for (const k of keys) { const u = await users.get(k); if (u) out.push(publicUser(u)); }
+  return out.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+}

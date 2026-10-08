@@ -1,5 +1,6 @@
 // Public sample page data (no login): one fixed ticker, all chart ranges, cached AI text.
 import { json, handler, query, HttpError } from "../lib/http.mjs";
+import { logEvent } from "../lib/events.mjs";
 import { stockBundle, chartSeries, normalizeSymbol } from "../lib/stockdata.mjs";
 import { summaryStatus } from "../lib/summaryjob.mjs";
 import { cfg, SUPPORTED_LOCALES } from "../lib/config.mjs";
@@ -11,6 +12,7 @@ export default handler(async (req) => {
   const lang = query(req).get("lang") || cfg.defaultLocale();
   if (!SUPPORTED_LOCALES.includes(lang)) throw new HttpError(400, "invalid_locale");
   const bundle = await stockBundle(symbol);
+  await logEvent("demo_view", { detail: symbol });
   const [charts, summary] = await Promise.all([
     Promise.all(RANGES.map((r) => chartSeries(symbol, r).then((c) => [r, c.points]))),
     summaryStatus(symbol, lang, bundle),

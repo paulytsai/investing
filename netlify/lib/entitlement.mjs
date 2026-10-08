@@ -6,6 +6,8 @@ import { HttpError } from "./http.mjs";
 const ACTIVE_STATUSES = new Set(["active", "on_trial", "past_due"]);
 
 export function entitlement(user, now = Date.now()) {
+  if (user?.role === "admin") return { access: true, state: "admin" };
+  if (user?.plan === "free") return { access: true, state: "complimentary" };
   const sub = user?.subscription;
   if (sub) {
     if (ACTIVE_STATUSES.has(sub.status)) {
@@ -36,4 +38,11 @@ export async function requireEntitled(req) {
   const ent = entitlement(user);
   if (!ent.access) throw new HttpError(402, "subscription_required", "Subscription required", { entitlement: ent });
   return { user, entitlement: ent };
+}
+
+export async function requireAdmin(req) {
+  const user = await currentUser(req);
+  if (!user) throw new HttpError(401, "unauthenticated");
+  if (user.role !== "admin") throw new HttpError(403, "forbidden");
+  return user;
 }

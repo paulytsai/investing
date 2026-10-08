@@ -95,7 +95,7 @@
       : "";
     let right = "";
     if (state.user) {
-      right = `${entPill()}<a href="#/account">${esc(state.user.username)}</a><button class="btn small" id="logoutBtn">${t("logout")}</button>`;
+      right = `${entPill()}${state.user.role === "admin" ? `<a href="#/admin">${t("billing.adminPanel")}</a>` : ""}<a href="#/account">${esc(state.user.username)}</a><button class="btn small" id="logoutBtn">${t("logout")}</button>`;
     } else {
       right = `<a href="#/login">${t("login")}</a><a class="btn small primary" href="#/signup">${t("signup")}</a>`;
     }
@@ -107,6 +107,8 @@
   function entPill() {
     const e = state.ent;
     if (!e) return "";
+    if (e.state === "admin") return `<span class="pill">${t("billing.admin")}</span>`;
+    if (e.state === "complimentary") return `<span class="pill">${t("billing.complimentary")}</span>`;
     if (e.state === "trial") return `<span class="pill warn">${t("trialDaysLeft", { n: e.daysLeft })}</span>`;
     if (e.state === "subscribed") return `<span class="pill">${t("subscribed")}</span>`;
     if (e.state === "cancelled_grace") return `<span class="pill warn">${t("cancelledGrace", { date: fmtDate(e.endsAt) })}</span>`;
@@ -118,7 +120,7 @@
     const h = location.hash.replace(/^#\/?/, "");
     const [a, b] = h.split("/");
     if (a === "s" && b) return { view: "stock", symbol: decodeURIComponent(b).toUpperCase() };
-    if (["login", "signup", "account", "subscribe"].includes(a)) return { view: a };
+    if (["login", "signup", "account", "subscribe", "admin"].includes(a)) return { view: a };
     return { view: "home" };
   }
   window.addEventListener("hashchange", () => { state.route = parseRoute(); render(); });
@@ -129,6 +131,7 @@
     if (r.view === "signup") return renderAuth("signup");
     if (r.view === "account") return state.user ? renderAccount() : renderAuth("login");
     if (r.view === "subscribe") return renderPaywall();
+    if (r.view === "admin") return state.user && state.user.role === "admin" ? renderAdmin() : renderAuth("login");
     if (r.view === "stock") return state.user ? loadStock(r.symbol) : renderAuth("login");
     return renderHome();
   }
@@ -200,6 +203,8 @@
   function statusLine() {
     const e = state.ent;
     if (!e) return "";
+    if (e.state === "admin") return t("billing.admin");
+    if (e.state === "complimentary") return t("billing.complimentary");
     if (e.state === "trial") return t("trialDaysLeft", { n: e.daysLeft }) + ` (${fmtDate(new Date(e.trialEndsAt).toISOString())})`;
     if (e.state === "subscribed") return `${t("subscribed")}${e.renewsAt ? ` · ${fmtDate(e.renewsAt)}` : ""}`;
     if (e.state === "cancelled_grace") return t("cancelledGrace", { date: fmtDate(e.endsAt) });
@@ -208,16 +213,62 @@
 
   function renderAccount() {
     stopSummaryPolling(state.stock); stopSummaryPolling(state.demo);
-    const u = state.user; const e = state.ent;
-    const canSubscribe = state.config.billingEnabled && !(e && e.state === "subscribed");
+    const u = state.user; const e = state.ent; const B = t("billing");
+    const canSubscribe = state.config.billingEnabled && !["subscribed", "admin", "complimentary"].includes(e && e.state);
     const hasSub = u.subscription && u.subscription.id;
+    const canCancel = hasSub && ["active", "on_trial", "past_due"].includes(u.subscription.status);
     app.innerHTML = `<div class="panel form"><h2>${t("account")}</h2>
       <div class="kv"><div>${t("username")}</div><div>${esc(u.username)}</div><div>${t("email")}</div><div>${esc(u.email)}</div><div>${t("pricing")}</div><div>${statusLine()}</div></div>
       <div id="formError"></div>
       ${canSubscribe ? `<button class="btn primary" id="subscribeBtn">${t("subscribe")} — ${esc(state.config.priceLabel)}</button>` : ""}
-      ${hasSub ? `<button class="btn" id="portalBtn">${t("manageBilling")}</button>` : ""}
+      <h3 class="billing-h">${B.title}</h3>
+      ${hasSub ? `<button class="btn" id="portalBtn">${t("manageBilling")}</button><p class="muted small">${B.portalHint}</p>` : ""}
+      ${canCancel ? `<button class="btn" id="cancelBtn">${B.cancelSub}</button><div id="cancelBox" hidden><p>${B.cancelConfirm}</p><button class="btn danger" id="cancelYes">${B.cancelSub}</button> <button class="btn" id="cancelNo">${B.back}</button></div>` : ""}
+      ${u.builtin ? "" : `<button class="btn danger-outline" id="deleteBtn">${B.deleteAcct}</button><div id="deleteBox" hidden><p>${B.deleteConfirm}</p><input type="password" id="deletePw" autocomplete="current-password" placeholder="${t("password")}"><div style="margin-top:8px"><button class="btn danger" id="deleteYes">${B.deleteBtn}</button> <button class="btn" id="deleteNo">${B.back}</button></div></div>`}
       <p class="muted" style="margin-top:14px">${t("priceLine", { price: state.config.priceLabel })}</p></div>`;
     bindBilling();
+    const show = (id, on) => { const el = $(id); if (el) el.hidden = !on; };
+    const err = (e2) => { $("#formError").innerHTML = `<div class="error">${esc(t(`errors.${e2.code}`) !== `errors.${e2.code}` ? t(`errors.${e2.code}`) : e2.message)}</div>`; };
+    const cb = $("#cancelBtn"); if (cb) cb.addEventListener("click", () => show("#cancelBox", true));
+    const cn = $("#cancelNo"); if (cn) cn.addEventListener("click", () => show("#cancelBox", false));
+    const cy = $("#cancelYes"); if (cy) cy.addEventListener("click", async () => {
+      cy.disabled = true;
+      try { const r = await api("/api/auth/cancel-subscription", { method: "POST" }); state.user = r.user; state.ent = r.entitlement; renderUserMenu(); renderAccount(); $("#formError").innerHTML = `<div class="pill">${esc(B.cancelDone.replace("{date}", fmtDate(r.user.subscription.endsAt)))}</div>`; }
+      catch (e2) { if (e2.code === "billing_not_configured") { try { const r = await api("/api/billing/portal"); window.location.href = r.url; } catch (e3) { err(e3); } } else err(e2); cy.disabled = false; }
+    });
+    const db = $("#deleteBtn"); if (db) db.addEventListener("click", () => show("#deleteBox", true));
+    const dn = $("#deleteNo"); if (dn) dn.addEventListener("click", () => show("#deleteBox", false));
+    const dy = $("#deleteYes"); if (dy) dy.addEventListener("click", async () => {
+      dy.disabled = true;
+      try { await api("/api/auth/delete-account", { method: "POST", body: { password: $("#deletePw").value } }); state.user = null; state.ent = null; renderUserMenu(); location.hash = "#/"; state.route = parseRoute(); render(); }
+      catch (e2) { err(e2); dy.disabled = false; }
+    });
+  }
+
+  // ---------- admin panel ----------
+  async function renderAdmin() {
+    stopSummaryPolling(state.stock); stopSummaryPolling(state.demo);
+    app.innerHTML = `<div class="panel spinner">…</div>`;
+    let d;
+    try { d = await api("/api/admin/stats"); } catch (e) { app.innerHTML = `<div class="panel"><div class="error">${esc(e.message)}</div></div>`; return; }
+    const T = d.totals;
+    const tile = (l, v, sub = "") => `<div class="stat"><div class="stat-l">${l}</div><div class="stat-v">${v}</div>${sub ? `<div class="stat-s">${sub}</div>` : ""}</div>`;
+    const maxV = Math.max(1, ...d.series.map((x) => x.views + x.demo));
+    const bars = d.series.map((x) => `<div class="bar" title="${x.day}: views ${x.views}, demo ${x.demo}, logins ${x.logins}, signups ${x.signups}, AI ${x.ai}"><div class="bar-fill" style="height:${Math.round(((x.views + x.demo) / maxV) * 100)}%"></div><div class="bar-fill demo" style="height:${Math.round((x.demo / maxV) * 100)}%"></div><span class="bar-l">${x.day.slice(5)}</span></div>`).join("");
+    const states = Object.entries(T.states).map(([k, v]) => `${k} ${v}`).join(" · ");
+    const w = d.warm.last;
+    app.innerHTML = `<div class="admin">
+      <h2>${t("billing.adminPanel")} <span class="muted small">${esc(fmtDate(d.generatedAt))}</span> <button class="btn small" id="warmBtn">Run warmer now</button></h2>
+      <div class="stats stats-admin">${tile("Users", fmtInt(T.users), esc(states))}${tile("Signups 7d / 30d", `${T.signups7d} / ${T.signups30d}`)}${tile("Active today / 7d / 30d", `${T.activeToday} / ${T.active7d} / ${T.active30d}`)}${tile("Page views 30d", fmtInt(T.views30d), `demo ${fmtInt(T.demo30d)}`)}${tile("AI runs 30d", `${T.aiGenerations30d} gen / ${T.aiTranslations30d} tr`, `≈ US$${fmtDec(T.aiCostUsd30d, 2)}`)}${tile("Warmer", w ? (w.running ? "running" : "idle") : "never ran", w ? `${esc((w.finishedAt || w.startedAt).slice(0, 16).replace("T", " "))} · gen ${w.generated.length} · tr ${w.translated.length} · err ${w.errors.length}` : `${d.warm.universe} tickers, ${d.warm.perRun}/run`)}</div>
+      <section class="card"><h3 class="sec">Daily activity (30 days)<span class="sec-extra">views + demo (light)</span></h3><div class="bars">${bars}</div></section>
+      <div class="grid2b">
+        <section class="card"><h3 class="sec">Top tickers (30 days)</h3>${wrap(`<table class="tbl"><tbody>${d.topSymbols.map((x) => `<tr><th><a href="#/s/${esc(x.symbol)}">${esc(x.symbol)}</a></th><td class="num">${x.views}</td></tr>`).join("") || "<tr><td>—</td></tr>"}</tbody></table>`)}</section>
+        <section class="card"><h3 class="sec">Recent activity</h3>${wrap(`<table class="tbl"><tbody>${d.recent.map((e) => `<tr><th>${esc(new Date(e.ts).toISOString().slice(5, 16).replace("T", " "))}</th><td>${esc(e.user)}</td><td>${esc(e.action)}</td><td>${esc(e.detail)}</td></tr>`).join("")}</tbody></table>`)}</section>
+      </div>
+      <section class="card"><h3 class="sec">Users</h3>${wrap(`<table class="tbl"><thead><tr><th>User</th><th>Email</th><th>Signed up</th><th>Status</th><th>Last seen (30d)</th></tr></thead><tbody>${d.users.map((u) => `<tr><td>${esc(u.username)}${u.role ? ` <span class="pill">${esc(u.role)}</span>` : ""}</td><td>${esc(u.email)}</td><td>${esc(fmtDate(new Date(u.createdAt).toISOString()))}</td><td>${esc(u.state)}${u.status ? ` (${esc(u.status)})` : ""}</td><td>${u.lastSeen ? esc(new Date(u.lastSeen).toISOString().slice(0, 16).replace("T", " ")) : "—"}</td></tr>`).join("")}</tbody></table>`)}</section>
+      ${w && w.errors.length ? `<section class="card"><h3 class="sec">Warmer errors</h3><ul>${w.errors.map((x) => `<li>${esc(x)}</li>`).join("")}</ul></section>` : ""}
+    </div>`;
+    $("#warmBtn").addEventListener("click", async () => { $("#warmBtn").disabled = true; try { await api("/api/admin/warm", { method: "POST" }); $("#warmBtn").textContent = "Warmer started"; } catch (e) { $("#warmBtn").textContent = e.message; } });
   }
 
   function renderPaywall() {
