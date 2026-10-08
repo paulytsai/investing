@@ -10,7 +10,7 @@
 
 [functions]
   node_bundler = "esbuild"
-  included_files = ["netlify/lib/**"]
+  included_files = ["netlify/lib/**", "public/index.html"]
 
 # API routes are declared in each function with `export const config = { path }`
 # (/api/...). The front end is a static single page using hash routing, so no

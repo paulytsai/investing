@@ -116,6 +116,14 @@ stored (admin panel lists the latest 50) and emailed to `CONTACT_TO` (default:
 the `MAIL_FROM` address) with reply-to set to the sender, when mail is
 configured. Honeypot field plus five messages per address per hour.
 
+**SEO and AI search.** The build step writes the `<head>` (title, description,
+canonical, Open Graph, JSON-LD for WebSite, SoftwareApplication and the creator),
+`robots.txt` and `llms.txt` from the brand and locale variables. `/s/:symbol` is a
+server-rendered public preview of a ticker page (profile, the past year's story,
+key figures, JSON-LD) that the app upgrades to the full page for subscribers;
+`/sitemap.xml` lists every warmed ticker. The landing page carries a bio of the
+creator.
+
 ### Project layout
 
 ```
@@ -128,6 +136,9 @@ netlify/functions/      Netlify Functions v2 (Request -> Response)
   stock.mjs             /api/stock/:symbol      full data bundle (profile, results, valuation, DCF)
   deep.mjs              /api/deep/:symbol       deep-dive analysis (cached or background generation)
   contact.mjs           /api/contact            contact form (store + email)
+  teaser.mjs            /api/teaser/:symbol     public preview data
+  stock-page.mjs        /s/:symbol              server-rendered public ticker page
+  sitemap.mjs           /sitemap.xml            sitemap
   chart.mjs             /api/chart/:symbol?range=1m|3m|6m|1y|3y|5y|10y
   summary.mjs           /api/summary/:symbol?lang=ja   cached AI commentary or "pending"
   summary-generate-background.mjs   does the Claude call

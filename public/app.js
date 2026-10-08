@@ -117,6 +117,8 @@
 
   // ---------- routing ----------
   function parseRoute() {
+    const pm = !location.hash && location.pathname.match(/^\/s\/([A-Za-z0-9.\-]+)\/?$/);
+    if (pm) return { view: "stock", symbol: decodeURIComponent(pm[1]).toUpperCase(), ssr: true };
     const h = location.hash.replace(/^#\/?/, "");
     const [a, b] = h.split("/");
     if (a === "s" && b) return { view: "stock", symbol: decodeURIComponent(b).toUpperCase() };
@@ -136,7 +138,7 @@
     if (r.view === "account") return state.user ? renderAccount() : renderAuth("login");
     if (r.view === "subscribe") return renderPaywall();
     if (r.view === "admin") return state.user && state.user.role === "admin" ? renderAdmin() : renderAuth("login");
-    if (r.view === "stock") return state.user ? loadStock(r.symbol) : renderAuth("login");
+    if (r.view === "stock") return state.user ? loadStock(r.symbol) : renderTeaser(r.symbol);
     return renderHome();
   }
 
@@ -155,6 +157,13 @@
       <section class="land">
         <h2>${esc(L.samplesTitle)}</h2><p class="lead">${esc(L.samplesLead)}</p>
         <div class="demo-frame" data-demo></div>
+      </section>
+      <section class="land bio">
+        <h2>${esc(L.bio.title)}</h2>
+        <div class="bio-row"><img class="bio-photo" src="/img/paul-tsai.jpg" alt="${esc(L.bio.name)}" loading="lazy" width="240" height="320">
+          <div class="bio-text"><h3>${esc(L.bio.name)} <span class="muted">${esc(L.bio.role)}</span></h3>
+          ${L.bio.paragraphs.map((p) => `<p>${esc(p)}</p>`).join("")}
+          <p class="muted small">${esc(L.bio.book)} · <a href="https://paultsai.net" target="_blank" rel="noopener">paultsai.net</a></p></div></div>
       </section>
       <section class="land pricing">
         <h2>${esc(L.pricingTitle)}</h2>
@@ -195,8 +204,9 @@
         renderUserMenu();
         const back = sessionStorage.getItem("after_login");
         sessionStorage.removeItem("after_login");
-        location.hash = back || "#/s/AAPL";
-        if (location.hash === (back || "#/s/AAPL")) { state.route = parseRoute(); render(); }
+        const target = back || (state.route.view === "stock" && state.route.symbol ? `#/s/${state.route.symbol}` : "#/s/AAPL");
+        location.hash = target;
+        if (location.hash === target) { state.route = parseRoute(); render(); }
       } catch (e) {
         $("#formError").innerHTML = `<div class="error">${esc(t(`errors.${e.code}`) !== `errors.${e.code}` ? t(`errors.${e.code}`) : e.message)}</div>`;
         btn.disabled = false;
@@ -215,6 +225,29 @@
     return t(e.state === "lapsed" ? "lapsed" : "trialExpired");
   }
 
+  async function renderTeaser(symbol) {
+    stopSummaryPolling(state.stock); stopSummaryPolling(state.demo);
+    const K = t("teaser");
+    if (!(app.dataset.ssr === symbol && app.querySelector(".teaser"))) app.innerHTML = `<div class="panel spinner">${esc(symbol)} …</div>`;
+    let d;
+    try { d = await api(`/api/teaser/${encodeURIComponent(symbol)}?lang=${encodeURIComponent(state.locale)}`); }
+    catch (e) { app.innerHTML = `<div class="panel"><div class="error">${t(e.status === 404 || e.code === "not_a_company" || e.code === "invalid_symbol" ? "notFound" : "loadError")}</div></div>`; return; }
+    if (state.route.symbol !== symbol) return;
+    const c = d.company, m = d.market; const chg = m.change ?? 0; const sign = chg > 0 ? "+" : "";
+    document.title = `${c.name} (${symbol}) | ${t("siteName")}`;
+    const kv = [[K.price, m.price != null ? `$${fmtDec(m.price, 2)} <span class="${chg > 0 ? "up" : chg < 0 ? "down" : ""}">${sign}${fmtDec(m.changePct, 2)}%</span>` : NA], [t("marketCap"), fmtBig(m.marketCapM)], [t("val.peFwd"), fmtDec(m.peForward, 1)], [t("pbr"), fmtDec(m.pbr, 1)], [t("val.divYield"), fmtPct(m.dividendYieldPct, 2)], [t("tech").high52 + " / " + t("tech").low52, m.yearHigh != null ? `$${fmtDec(m.yearHigh, 2)} / $${fmtDec(m.yearLow, 2)}` : NA], [t("sector"), `${esc(c.sector || "")} / ${esc(c.industry || "")}`], [t("exchange"), esc(c.exchange || "")], [t("indexMember"), c.indices && c.indices.length ? c.indices.map((x) => `<b>${esc(x.index)}</b>${x.weightPct != null ? ` ${fmtDec(x.weightPct, 2)}%` : ""}`).join("　") : NA]];
+    app.innerHTML = `<article class="teaser panel"><p class="pill">${K.preview}</p>
+      <h1>${esc(c.name)} <span class="muted">(${esc(symbol)}) · ${esc(c.exchange || "")}</span></h1>
+      ${d.feature ? `<h2 class="sub">${t("feature")}</h2><p class="feature">${esc(d.feature)}</p>` : c.description ? `<h2 class="sub">${t("feature")}</h2><p class="feature">${esc(c.description.slice(0, 600))}</p>` : ""}
+      ${d.story ? `<h2 class="sub">${t("story")}</h2><div class="deep-story"><div class="hl">${esc(d.story.headline)}</div><p>${esc(d.story.body)}</p></div>` : ""}
+      <h2 class="sub">${t("keyStats")}</h2>${kv2(kv)}
+      ${d.competitors && d.competitors.length ? `<p class="muted small">${t("competitors")}: ${d.competitors.map((x) => (x.us ? `<a href="#/s/${esc(x.symbol)}">${esc(x.symbol)}</a>` : esc(x.symbol)) + (x.name ? ` ${esc(x.name)}` : "")).join("、")}</p>` : ""}
+      ${d.headlines ? `<div class="teaser-locked"><h2 class="sub">${K.inside}</h2><ul>${[["longTerm", d.headlines.longTerm], ["recent", d.headlines.recent], ["bull", d.headlines.bull], ["bear", d.headlines.bear]].map(([k, h]) => `<li><b>${t(k)}</b>${h ? `: <span class="blur">${esc(h)}</span>` : ""} 🔒</li>`).join("")}<li>${K.more}</li></ul></div>` : ""}
+      <div class="teaser-lock"><p>${K.locked}</p><a class="btn primary big" href="#/signup">${K.cta}</a> <a class="btn" href="#/login">${t("login")}</a></div>
+      <p class="note">${d.nextEarnings ? `${t("nextEarnings")}: ${fmtDate(d.nextEarnings)} · ` : ""}${t("updated", { date: fmtDate(d.generatedAt || d.asOf) })}</p></article>
+      <div class="footer">${t("aiNote")}<br>${t("disclaimer")}<br><a href="#/contact">${t("contact.link")}</a></div>`;
+  }
+  const kv2 = (rows) => `<dl class="kv2">${rows.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join("")}</dl>`;
   function renderContact() {
     stopSummaryPolling(state.stock); stopSummaryPolling(state.demo);
     const C = t("contact"); const u = state.user;

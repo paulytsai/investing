@@ -30,3 +30,7 @@ data/
 node_modules/
 .netlify/
 .data/
+
+# generated at build
+public/robots.txt
+public/llms.txt

@@ -15,6 +15,7 @@ window.I18N = {
     loginId: "ユーザー名またはメールアドレス",
     pw: { forgot: "パスワードをお忘れですか？", forgotTitle: "パスワードの再設定", forgotLead: "登録したメールアドレスを入力してください。再設定用のリンクをお送りします（有効期限1時間）。", sendLink: "再設定リンクを送る", sent: "メールを送信しました。受信トレイ（迷惑メールフォルダも）をご確認ください。", sentNoMail: "受け付けました。メール送信が未設定のため、管理者が再設定リンクをお送りします。", resetTitle: "新しいパスワードを設定", newPassword: "新しいパスワード（8文字以上）", confirm: "新しいパスワード（確認）", setPassword: "パスワードを設定してログイン", mismatch: "確認用パスワードが一致しません", changeTitle: "パスワードの変更", current: "現在のパスワード", change: "パスワードを変更", changed: "パスワードを変更しました" },
     contact: { link: "お問い合わせ", title: "お問い合わせ", lead: "ご質問・ご要望・不具合のご報告はこちらから。通常2営業日以内に返信します。", name: "お名前", message: "メッセージ", send: "送信", sent: "送信しました。ありがとうございます。" },
+      teaser: { preview: "無料プレビュー", price: "株価", inside: "会員ページの内容", more: "業績10年・バリュエーション・テクニカル・株主・役員・深掘り分析", locked: "長期トレンド、直近動向、強気／弱気シナリオ、業績・財務、バリュエーション、テクニカル、株主・役員、深掘り分析は会員向けです。", cta: "7日間無料で全文を読む" },
     createAccount: "アカウントを作成（7日間無料）",
     haveAccount: "アカウントをお持ちの方は",
     noAccount: "アカウントをお持ちでない方は",
@@ -90,6 +91,7 @@ window.I18N = {
     language: "言語",
     landing: {
       heroTitle: "米国株という大海原の、あなたの水先案内人。",
+      bio: { title: "作った人", name: "ポール・サイ（Paul Tsai）", role: "元フィデリティ投信 調査部長・個人投資家", paragraphs: ["台湾生まれ、米国育ち。UCLA機械工学部卒、東京大学工学部留学、カーネギーメロン大学MBA。フィデリティ投信で21年以上、株式アナリストとして上海オフィスの立ち上げ、中国株調査責任者、日本株調査責任者を務めた。", "2017年に独立し、42歳でFIREを達成。シアトル在住で、米国株と不動産を中心に自己資金を運用しながら、ダイヤモンド・ザイの連載、メルマガ、Tokyo MX2「WORLD MARKETZ」のコメンテーターとして個人投資家に情報を発信している。", "{brand}は、調査部で毎日使っていた「企業を1ページで把握する」仕事の道具を、個人投資家がそのまま使える形にしたもの。"], book: "著書『台湾系アメリカ人が教える 米国株で一生安心のお金をつくる方法！』（ダイヤモンド社、2024年）" },
       heroLead: "{brand}は、米国上場企業の業績・財務・株主・役員を1ページに収めた米国株アルマナック。EDGARに公開された財務情報と決算説明会のトランスクリプトをAIが読み込み、長期トレンド・直近動向・強気／弱気シナリオを日本語でまとめます。",
       ctaPrimary: "7日間無料で試す",
       ctaSecondary: "ログイン",
@@ -138,6 +140,7 @@ window.I18N = {
     username: "Username", email: "Email", password: "Password", loginId: "Username or email",
     pw: { forgot: "Forgot your password?", forgotTitle: "Reset your password", forgotLead: "Enter the email address on your account and we will send a reset link, valid for one hour.", sendLink: "Send reset link", sent: "Email sent. Check your inbox (and the spam folder).", sentNoMail: "Request received. Email sending is not configured yet, so the administrator will send you the reset link.", resetTitle: "Choose a new password", newPassword: "New password (8+ characters)", confirm: "New password (again)", setPassword: "Set password and log in", mismatch: "The two passwords do not match", changeTitle: "Change password", current: "Current password", change: "Change password", changed: "Password changed" },
     contact: { link: "Contact", title: "Contact us", lead: "Questions, requests and bug reports are welcome. We usually reply within two business days.", name: "Name", message: "Message", send: "Send", sent: "Sent. Thank you." },
+      teaser: { preview: "Free preview", price: "Price", inside: "On the member page", more: "Ten years of results, valuation, technical read, holders, officers, deep dive", locked: "Long-term trend, recent quarters, bull and bear cases, results, valuation, technical read, holders, officers and the deep dive are for members.", cta: "Read the full page free for 7 days" },
     createAccount: "Create account (7-day free trial)", haveAccount: "Already have an account?", noAccount: "No account yet?",
     trialNote: "7-day free trial, then {price} (converted to your local currency).",
     trialDaysLeft: "Free trial: {n} days left", subscribed: "Subscriber", cancelledGrace: "Cancelled (access until {date})",
@@ -201,6 +204,7 @@ window.I18N = {
     language: "Language",
     landing: {
       heroTitle: "Your pilot guide for the blue ocean of US stocks.",
+      bio: { title: "Who built this", name: "Paul Tsai", role: "Former head of research, Fidelity Investments Japan · independent investor", paragraphs: ["Born in Taiwan and raised in the United States. Mechanical engineering at UCLA, an exchange year at the University of Tokyo, and an MBA from Carnegie Mellon. More than 21 years as an equity analyst at Fidelity Investments Japan, where he helped launch the Shanghai office and ran both China and Japan equity research.", "Independent since 2017, financially independent at 42. Based in Seattle, he manages his own money in US stocks and real estate and writes for individual investors through a Diamond ZAi column, a newsletter and regular market commentary on Tokyo MX2's WORLD MARKETZ.", "{brand} turns the one-page company sheet his research team used every day into a tool any investor can use."], book: "Author of a 2024 Diamond Inc. book on building lifelong wealth with US stocks" },
       heroLead: "{brand} is a US stock almanac: results, financials, holders and officers for any US-listed company on one page. It is built on the public financials filed with EDGAR and on earnings-call transcripts, processed by AI into the long-term trend, the recent quarters and the bull and bear cases.",
       ctaPrimary: "Start 7-day free trial",
       ctaSecondary: "Log in",
@@ -249,6 +253,7 @@ window.I18N = {
     username: "使用者名稱", email: "電子郵件", password: "密碼", loginId: "使用者名稱或電子郵件",
     pw: { forgot: "忘記密碼？", forgotTitle: "重設密碼", forgotLead: "請輸入帳戶的電子郵件，我們會寄送重設連結（1小時內有效）。", sendLink: "寄送重設連結", sent: "已寄出郵件，請查看收件匣（含垃圾郵件）。", sentNoMail: "已收到申請。尚未設定郵件寄送，管理員將把重設連結寄給您。", resetTitle: "設定新密碼", newPassword: "新密碼（8個字元以上）", confirm: "新密碼（再次輸入）", setPassword: "設定密碼並登入", mismatch: "兩次輸入的密碼不一致", changeTitle: "變更密碼", current: "目前密碼", change: "變更密碼", changed: "密碼已變更" },
     contact: { link: "聯絡我們", title: "聯絡我們", lead: "歡迎提出問題、建議或回報問題。通常於2個工作天內回覆。", name: "姓名", message: "訊息", send: "送出", sent: "已送出，謝謝您。" },
+      teaser: { preview: "免費預覽", price: "股價", inside: "會員頁面內容", more: "十年業績、估值、技術面、股東、經營層、深度分析", locked: "長期趨勢、近期動態、多空論點、業績財務、估值、技術面、股東經營層與深度分析為會員內容。", cta: "免費試用 7 天閱讀全文" },
     createAccount: "建立帳戶（免費試用7天）", haveAccount: "已有帳戶？", noAccount: "還沒有帳戶？",
     trialNote: "免費試用7天，之後每月 {price}（以當地貨幣計價）。",
     trialDaysLeft: "免費試用剩餘{n}天", subscribed: "付費會員", cancelledGrace: "已取消（可使用至{date}）",
@@ -312,6 +317,7 @@ window.I18N = {
     language: "語言",
     landing: {
       heroTitle: "引領您航向美股藍海的領航指南。",
+      bio: { title: "關於作者", name: "Paul Tsai（蔡）", role: "前富達投信研究部主管・獨立投資人", paragraphs: ["生於台灣，成長於美國。UCLA 機械工程學士、東京大學工學部交換、卡內基美隆大學 MBA。在富達投信擔任股票分析師超過 21 年，參與上海辦公室的設立，並先後擔任中國股票與日本股票研究主管。", "2017 年獨立，42 歲達成財務自由。現居西雅圖，以美股與不動產管理自有資金，並透過 Diamond ZAi 專欄、電子報與 Tokyo MX2「WORLD MARKETZ」節目向個人投資人分享觀點。", "{brand} 把研究部每天使用的「一頁看懂一家公司」工作表，變成每位投資人都能使用的工具。"], book: "著有《台湾系アメリカ人が教える 米国株で一生安心のお金をつくる方法！》（Diamond 社，2024）" },
       heroLead: "{brand} 是美股年鑑：任何美國上市公司的業績、財務、股東與經營層，一頁看完。以 EDGAR 公開的財務資料與財報電話會議逐字稿為基礎，由 AI 整理出長期趨勢、近期動態與多空論點。",
       ctaPrimary: "免費試用7天",
       ctaSecondary: "登入",
