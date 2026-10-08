@@ -129,9 +129,8 @@
     const price = state.config.priceLabel;
     if (!state.user) {
       const L = t("landing");
-      const logo = `<div class="brand">${$("#logoTpl").innerHTML}<span class="brand-text"><span class="brand-name">Kabukaizu</span><span class="brand-sub">US Stock Almanac</span></span></div>`;
       app.innerHTML = `
-      <section class="hero hero-wave"><div class="hero-inner">${logo}
+      <section class="hero hero-wave"><img class="hero-seal" src="/img/seal.png" alt="株海図"><div class="hero-inner"><div class="brand"><span class="brand-text"><span class="brand-name">Kabukaizu</span><span class="brand-sub">US Stock Almanac</span></span></div>
         <h1>${esc(L.heroTitle)}</h1><p class="lead">${esc(L.heroLead)}</p>
         <div class="actions"><a class="btn primary big" href="#/signup">${esc(L.ctaPrimary)}</a><a class="btn big" href="#/login">${esc(L.ctaSecondary)}</a></div>
         <p class="small">${esc(L.ctaNote.replace("{price}", price))}</p>
@@ -142,10 +141,6 @@
           <div class="gallery-tabs">${L.samples.map((x, i) => `<button data-sample="${x.key}" class="${i === 0 ? "active" : ""}">${esc(x.label)}</button>`).join("")}</div>
           <figure class="shotframe"><img id="sampleImg" src="/img/sample-${L.samples[0].key}.jpg" alt="${esc(L.samples[0].label)}" loading="eager"><figcaption id="sampleCap">${esc(L.samples[0].caption)}</figcaption></figure>
         </div>
-      </section>
-      <section class="land">
-        <h2>${esc(L.featuresTitle)}</h2>
-        <div class="features">${L.features.map((f) => `<div class="feat"><h3>${esc(f.title)}</h3><p>${esc(f.body)}</p></div>`).join("")}</div>
       </section>
       <section class="land pricing">
         <h2>${esc(L.pricingTitle)}</h2>
@@ -275,7 +270,7 @@
     const sign = chg > 0 ? "+" : "";
     app.innerHTML = `
       <div class="panel">
-        <div class="title-row"><h1><span class="co">${esc(b.company.name)}</span><span class="ticker">${esc(b.symbol)}</span><span class="ex">${esc(b.company.exchange)}</span></h1>
+        <div class="title-row"><h1><span class="co" data-sym="${esc(b.symbol)}">${esc(b.company.name)}</span><span class="ticker">${esc(b.symbol)}</span><span class="ex">${esc(b.company.exchange)}</span></h1>
           <div class="price">$${fmtDec(m.price)} <small class="${cls}">${sign}${fmtDec(m.change)} (${sign}${fmtDec(m.changePct)}%)</small></div></div>
         <div class="meta">${t("updated", { date: fmtDate(m.quoteTime || b.asOf) })}</div>
         <div class="ranges" id="ranges">${Object.keys(t("ranges")).map((r) => `<button data-range="${r}" class="${r === state.chartRange ? "active" : ""}">${t("ranges")[r]}</button>`).join("")}</div>
