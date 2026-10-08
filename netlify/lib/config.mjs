@@ -39,7 +39,9 @@ export const cfg = {
     return "dev-only-insecure-secret";
   },
   trialDays() {
-    return Number(env("TRIAL_DAYS", "30"));
+    // The public trial is 30 days everywhere (copy, signup clock, SEO text). TRIAL_DAYS is no
+    // longer read, so a stale value in the hosting environment cannot change it.
+    return 30;
   },
   fmpKey() {
     return env("FMP_API_KEY");
