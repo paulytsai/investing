@@ -249,7 +249,7 @@ export async function ensureSector(id, lang) {
 export async function sectorStatus(id, lang) {
   if (!cfg.anthropicKey()) return { status: "disabled" };
   const cached = await getCachedSector(id, lang);
-  if (cached) { if (wantsPolish(cached, lang)) requestPolish(sectorKey(id, lang), { kind: "sector", lang }).catch(() => {}); return { status: "ready", summary: cached }; }
+  if (cached) { if (wantsPolish(cached, lang)) await requestPolish(sectorKey(id, lang), { kind: "sector", lang }).catch((e) => console.warn("polish trigger", e.message)); return { status: "ready", summary: cached }; }
   const jobs = await openStore("jobs");
   const jobKey = `job:${sectorKey(id, lang)}`;
   const existing = await jobs.get(jobKey);

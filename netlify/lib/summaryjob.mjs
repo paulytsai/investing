@@ -16,7 +16,7 @@ async function jobStatus(kind, symbol, lang, bundle) {
   const K = KINDS[kind];
   if (!cfg.anthropicKey()) return { status: "disabled" };
   const cached = await K.cached(symbol, lang, bundle.latestTranscriptDate);
-  if (cached) { if (kind === "deep" && wantsPolish(cached, lang)) requestPolish(K.key(symbol, lang, bundle.latestTranscriptDate), { kind: "deep", lang }).catch(() => {}); return { status: "ready", summary: cached }; }
+  if (cached) { if (kind === "deep" && wantsPolish(cached, lang)) await requestPolish(K.key(symbol, lang, bundle.latestTranscriptDate), { kind: "deep", lang }).catch((e) => console.warn("polish trigger", e.message)); return { status: "ready", summary: cached }; }
 
   const jobs = await openStore("jobs");
   const jobKey = `job:${K.key(symbol, lang, bundle.latestTranscriptDate)}`;
