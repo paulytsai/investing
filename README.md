@@ -111,6 +111,11 @@ one hour (`#/reset/<token>`), sent through Resend when `RESEND_API_KEY` and
 they can be sent by hand. Built-in accounts (admin, Friend) keep their
 environment-variable passwords.
 
+**Contact form.** `#/contact`, linked from the footer of every page. Messages are
+stored (admin panel lists the latest 50) and emailed to `CONTACT_TO` (default:
+the `MAIL_FROM` address) with reply-to set to the sender, when mail is
+configured. Honeypot field plus five messages per address per hour.
+
 ### Project layout
 
 ```
@@ -122,6 +127,7 @@ netlify/functions/      Netlify Functions v2 (Request -> Response)
   auth.mjs              /api/auth/{signup,login,logout,me,locale}
   stock.mjs             /api/stock/:symbol      full data bundle (profile, results, valuation, DCF)
   deep.mjs              /api/deep/:symbol       deep-dive analysis (cached or background generation)
+  contact.mjs           /api/contact            contact form (store + email)
   chart.mjs             /api/chart/:symbol?range=1m|3m|6m|1y|3y|5y|10y
   summary.mjs           /api/summary/:symbol?lang=ja   cached AI commentary or "pending"
   summary-generate-background.mjs   does the Claude call

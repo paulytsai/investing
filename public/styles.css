@@ -446,3 +446,6 @@ details.dcf-card[open] > summary.sec .sec-t::before { content: "▾ 【"; }
 .deep-story .hl { font-weight: 700; font-size: 18px; color: var(--logo-sea); margin-bottom: 6px; }
 .deep-story p { margin: 0; font-size: 16.5px; line-height: 1.9; }
 @media (max-width: 640px) { .deep-story { margin: 4px 0 8px; padding: 12px; } .deep-story p { font-size: 15.5px; } }
+
+.form textarea { width: 100%; padding: 9px 12px; border: 1px solid var(--border); border-radius: 3px; font: inherit; font-size: 16px; resize: vertical; }
+.footer a { color: var(--link); }

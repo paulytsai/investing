@@ -8,6 +8,12 @@ import { cfg } from "../lib/config.mjs";
 import { warmUniverse } from "../lib/universe.mjs";
 import { dispatchWarm, warmStatus, warmCoverage, warmSettings } from "../lib/warmer.mjs";
 import { pendingResets } from "../lib/users.mjs";
+
+async function recentMessages() {
+  const store = await openStore("contact");
+  const keys = (await store.list("msg:")).sort().reverse().slice(0, 50);
+  return (await Promise.all(keys.map((k) => store.get(k)))).filter(Boolean);
+}
 import { mailConfigured } from "../lib/mail.mjs";
 
 const PRICE_IN = 4 / 1e6, PRICE_OUT = 20 / 1e6; // claude-opus-5-5 list prices per token
@@ -58,6 +64,7 @@ export default handler(async (req, context) => {
       topSymbols: Object.entries(bySymbol).sort((a, b) => b[1] - a[1]).slice(0, 25).map(([symbol, views]) => ({ symbol, views })),
       recent: events.slice(0, 60),
       warm: { universe: universe.length, perRun: warmSettings().perRun, settings: warmSettings(), last: warm, langs, coverage: covCounts, pending, current: warm?.running ? [].concat(warm.current || []).join(", ") : null },
+      contact: await recentMessages(),
       mail: { configured: mailConfigured(), pendingResets: (await pendingResets()).map((r) => ({ username: r.username, email: r.email, link: `${cfg.siteUrl().replace(/\/$/, "")}/#/reset/${r.token}`, expiresAt: r.expiresAt })) },
       users: allUsers.slice(0, 200).map((u) => ({ username: u.username, email: u.email, createdAt: u.createdAt, state: entitlement(u).state, status: u.subscription?.status || null, role: u.role || null, lastSeen: lastSeen[u.username] || null })),
     });

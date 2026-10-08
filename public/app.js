@@ -121,7 +121,7 @@
     const [a, b] = h.split("/");
     if (a === "s" && b) return { view: "stock", symbol: decodeURIComponent(b).toUpperCase() };
     if (a === "reset" && b) return { view: "reset", token: b };
-    if (["login", "signup", "account", "subscribe", "admin", "forgot"].includes(a)) return { view: a };
+    if (["login", "signup", "account", "subscribe", "admin", "forgot", "contact"].includes(a)) return { view: a };
     return { view: "home" };
   }
   window.addEventListener("hashchange", () => { state.route = parseRoute(); render(); });
@@ -131,6 +131,7 @@
     if (r.view === "login") return renderAuth("login");
     if (r.view === "signup") return renderAuth("signup");
     if (r.view === "forgot") return renderForgot();
+    if (r.view === "contact") return renderContact();
     if (r.view === "reset") return renderReset(r.token);
     if (r.view === "account") return state.user ? renderAccount() : renderAuth("login");
     if (r.view === "subscribe") return renderPaywall();
@@ -162,7 +163,7 @@
           <a class="btn primary big" href="#/signup">${esc(L.ctaPrimary)}</a>
           <p class="muted small">${esc(L.pricingNote)}</p></div>
       </section>
-      <div class="footer center">${esc(L.disclaimer)}</div>`;
+      <div class="footer center">${esc(L.disclaimer)}<br><a href="#/contact">${t("contact.link")}</a></div>`;
       mountDemo(app.querySelector("[data-demo]"));
       return;
     }
@@ -214,6 +215,23 @@
     return t(e.state === "lapsed" ? "lapsed" : "trialExpired");
   }
 
+  function renderContact() {
+    stopSummaryPolling(state.stock); stopSummaryPolling(state.demo);
+    const C = t("contact"); const u = state.user;
+    app.innerHTML = `<div class="panel form"><h2>${C.title}</h2><p class="muted">${C.lead}</p><div id="formError"></div>
+      <form id="authForm">
+        <label>${C.name}<input name="name" required maxlength="100" value="${esc(u ? u.username : "")}" autocomplete="name"></label>
+        <label>${t("email")}<input name="email" type="email" required value="${esc(u && !u.builtin ? u.email : "")}" autocomplete="email"></label>
+        <label>${C.message}<textarea name="message" required minlength="10" maxlength="4000" rows="7"></textarea></label>
+        <input name="website" tabindex="-1" autocomplete="off" style="position:absolute;left:-9999px" aria-hidden="true">
+        <button class="btn primary" type="submit">${C.send}</button>
+      </form></div>`;
+    $("#authForm").addEventListener("submit", async (ev) => {
+      ev.preventDefault(); const f = ev.target; const btn = f.querySelector("button"); btn.disabled = true;
+      try { await api("/api/contact", { method: "POST", body: { name: f.name.value, email: f.email.value, message: f.message.value, website: f.website.value } }); f.outerHTML = `<p>${esc(C.sent)}</p>`; }
+      catch (e) { $("#formError").innerHTML = `<div class="error">${esc(t(`errors.${e.code}`) !== `errors.${e.code}` ? t(`errors.${e.code}`) : e.message)}</div>`; btn.disabled = false; }
+    });
+  }
   function renderForgot() {
     stopSummaryPolling(state.stock); stopSummaryPolling(state.demo);
     const P = t("pw");
@@ -306,6 +324,7 @@
       <section class="card"><h3 class="sec">Daily activity (30 days)<span class="sec-extra">views + demo (light)</span></h3><div class="bars">${bars}</div></section>
       <div class="grid2b">
         <section class="card"><h3 class="sec">Top tickers (30 days)</h3>${wrap(`<table class="tbl"><tbody>${d.topSymbols.map((x) => `<tr><th><a href="#/s/${esc(x.symbol)}">${esc(x.symbol)}</a></th><td class="num">${x.views}</td></tr>`).join("") || "<tr><td>—</td></tr>"}</tbody></table>`)}</section>
+        ${d.contact && d.contact.length ? `<section class="card"><h3 class="sec">Contact messages</h3>${wrap(`<table class="tbl"><tbody>${d.contact.map((m) => `<tr><th>${esc(m.createdAt.slice(0, 16).replace("T", " "))}</th><td>${esc(m.name)}<br><a href="mailto:${esc(m.email)}">${esc(m.email)}</a>${m.username ? `<br><span class="muted">user ${esc(m.username)}</span>` : ""}</td><td style="white-space:pre-wrap">${esc(m.message)}</td><td class="muted">${m.sent ? "emailed" : "stored"}</td></tr>`).join("")}</tbody></table>`)}</section>` : ""}
         ${d.mail && d.mail.pendingResets.length ? `<section class="card"><h3 class="sec">Password reset links${d.mail.configured ? "" : " (email not configured: send these by hand)"}</h3>${wrap(`<table class="tbl"><tbody>${d.mail.pendingResets.map((r) => `<tr><th>${esc(r.username)}</th><td>${esc(r.email)}</td><td><a href="${esc(r.link)}">${esc(r.link)}</a></td><td class="muted">${esc(new Date(r.expiresAt).toISOString().slice(11, 16))} UTC</td></tr>`).join("")}</tbody></table>`)}</section>` : ""}
         <section class="card"><h3 class="sec">Recent activity</h3>${wrap(`<table class="tbl"><tbody>${d.recent.map((e) => `<tr><th>${esc(new Date(e.ts).toISOString().slice(5, 16).replace("T", " "))}</th><td>${esc(e.user)}</td><td>${esc(e.action)}</td><td>${esc(e.detail)}</td></tr>`).join("")}</tbody></table>`)}</section>
       </div>
@@ -361,7 +380,7 @@
       } catch {}
     }
     document.title = `${symbol} | ${t("siteName")}`;
-    app.innerHTML = `<div data-stock></div><div class="footer">${t("aiNote")}<br>${t("disclaimer")}</div>`;
+    app.innerHTML = `<div data-stock></div><div class="footer">${t("aiNote")}<br>${t("disclaimer")}<br><a href="#/contact">${t("contact.link")}</a></div>`;
     mountStock(app.querySelector("[data-stock]"), c);
     loadSummary(c);
   }
