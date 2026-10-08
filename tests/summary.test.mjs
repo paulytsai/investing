@@ -11,3 +11,13 @@ test("missing technical levels fail", () => assert.equal(isComplete({ ...full, t
 test("null fails", () => assert.equal(isComplete(null), false));
 test("placeholder comment fails", () => assert.equal(isComplete({ ...full, technical: { ...full.technical, comment: "x" } }), false));
 test("short body fails", () => assert.equal(isComplete({ ...full, bull: { headline: "h", body: "too short" } }), false));
+
+test("shortDescription keeps the first sentence or two and stays under 200 characters", async () => {
+  const { shortDescription } = await import("../netlify/lib/sectoranalysis.mjs");
+  const text = "JPMorgan Chase & Co. operates as a financial services company worldwide. It operates through four segments: Consumer & Community Banking, Corporate & Investment Bank, Commercial Banking, and Asset & Wealth Management. The company offers deposit, investment and lending products.";
+  const d = shortDescription(text);
+  assert.equal(d, "JPMorgan Chase & Co. operates as a financial services company worldwide.");
+  assert.ok(shortDescription("Short one. Second short one. Third.").startsWith("Short one. Second short one."));
+  assert.ok(d.length <= 200);
+  assert.equal(shortDescription(""), null);
+});

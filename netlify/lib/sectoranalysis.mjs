@@ -76,12 +76,30 @@ async function sectorQuotes(sector) {
   }, { version: "2" }).catch(() => ({}));
 }
 
+/** First sentence or two of a company description, up to about 180 characters. */
+export function shortDescription(text) {
+  const t = String(text || "").replace(/\s+/g, " ").trim();
+  if (!t) return null;
+  let out = "";
+  for (const sentence of t.split(/(?<=[.!?])\s+/)) { if (out && (out + " " + sentence).length > 180) break; out = out ? `${out} ${sentence}` : sentence; if (out.length > 120) break; }
+  return out.length > 200 ? out.slice(0, 197).replace(/\s+\S*$/, "") + "…" : out;
+}
+
+/** Company profile (name, country, description) for names the warmer has not built, cached for a week. */
+async function liteProfile(symbol) {
+  return cached(`profile-lite:${symbol}`, 7 * 24 * 3600, async () => {
+    const p = await provider().profile(symbol);
+    return p ? { name: p.name, country: p.country, exchange: p.exchange, sector: p.sector, industry: p.industry, description: shortDescription(p.description) } : {};
+  }, { version: "1" }).catch(() => ({}));
+}
+
 async function constituentRow(symbol, { full, layersOf, quote, lang }) {
   try {
     let b = await stockBundle(symbol, { peek: !full });
     if (!b) {
       const q = quote || await liveQuote(symbol).catch(() => ({}));
-      return { symbol, name: q.name || symbol, exchange: q.exchange || null, country: null, marketCapM: q.marketCap ? Math.round(q.marketCap / 1e6) : null, price: q.price ?? null, changePct: q.changePct ?? null, peForward: null, evEbitda: null, opMarginPct: null, grossMarginPct: null, roicPct: null, revenueGrowthPct: null, growthLabel: null, yearHigh: q.yearHigh ?? null, yearLow: q.yearLow ?? null, layers: layersOf(symbol), feature: null, storyHeadline: null, pending: true, _en: null, _fin: null, _rev: "" };
+      const p = await liteProfile(symbol);
+      return { symbol, name: p.name || q.name || symbol, exchange: q.exchange || p.exchange || null, country: p.country || null, marketCapM: q.marketCap ? Math.round(q.marketCap / 1e6) : null, price: q.price ?? null, changePct: q.changePct ?? null, peForward: null, evEbitda: null, opMarginPct: null, grossMarginPct: null, roicPct: null, revenueGrowthPct: null, growthLabel: null, yearHigh: q.yearHigh ?? null, yearLow: q.yearLow ?? null, layers: layersOf(symbol), feature: p.description || null, storyHeadline: null, pending: true, _en: null, _fin: null, _rev: "" };
     }
     {
       const v = b.valuation || {}, m = b.market || {};
@@ -89,7 +107,7 @@ async function constituentRow(symbol, { full, layersOf, quote, lang }) {
       const growth = (b.growth && b.growth.salesGrowth && b.growth.salesGrowth[b.growth.salesGrowth.length - 1]) || null;
       const s = lang === "en" ? null : await getCachedSummary(symbol, lang, b.latestTranscriptDate).catch(() => null);
       const en = await getCachedSummary(symbol, "en", b.latestTranscriptDate).catch(() => null);
-      return { symbol, name: b.company.name, exchange: b.company.exchange, country: b.company.country || "US", marketCapM: m.marketCapM, price: m.price, changePct: m.changePct, peForward: v.peForward, evEbitda: v.evEbitda, opMarginPct: v.opMarginPct, grossMarginPct: v.grossMarginPct, roicPct: v.roicPct, revenueGrowthPct: growth ? growth.pct : null, growthLabel: growth ? growth.label : null, yearHigh: v.yearHigh, yearLow: v.yearLow, layers: layersOf(symbol), feature: s ? s.feature : (en ? en.feature : null), storyHeadline: s && s.story ? s.story.headline : null,
+      return { symbol, name: b.company.name, exchange: b.company.exchange, country: b.company.country || "US", marketCapM: m.marketCapM, price: m.price, changePct: m.changePct, peForward: v.peForward, evEbitda: v.evEbitda, opMarginPct: v.opMarginPct, grossMarginPct: v.grossMarginPct, roicPct: v.roicPct, revenueGrowthPct: growth ? growth.pct : null, growthLabel: growth ? growth.label : null, yearHigh: v.yearHigh, yearLow: v.yearLow, layers: layersOf(symbol), feature: s ? s.feature : (en ? en.feature : shortDescription(b.company.description)), storyHeadline: s && s.story ? s.story.headline : null,
         _en: en ? { feature: en.feature, story: en.story, longTerm: en.longTerm && en.longTerm.headline, recent: en.recent && en.recent.headline, bull: en.bull && en.bull.headline, bear: en.bear && en.bear.headline } : null, _pe5: b.valuation && b.valuation.history && b.valuation.history.range5 && b.valuation.history.range5.pe ? b.valuation.history.range5.pe : null, _fin: b.financials ? { netDebtToEbitda: b.financials.netDebtToEbitda, capex: b.indicators && b.indicators.capex, rnd: b.indicators && b.indicators.rnd } : null, _rev: (b.performance || []).slice(0, 7).map((r) => `${r.kind === "estimate" ? "E" : ""}${r.label}:${r.revenue}`).join(" ") };
     }
   } catch (e) { return { symbol, error: e.message }; }
