@@ -165,6 +165,10 @@
         <h2>${esc(L.samplesTitle)}</h2><p class="lead">${esc(L.samplesLead)}</p>
         <div class="demo-frame" data-demo></div>
       </section>
+      <section class="land spec">
+        <h2>${esc(L.spec.title)}</h2><p class="lead">${esc(L.spec.lead)}</p>
+        <ul class="spec-list">${L.spec.bullets.map((b) => `<li>${esc(b)}</li>`).join("")}</ul>
+      </section>
       <section class="land bio">
         <h2>${esc(L.bio.title)}</h2>
         <div class="bio-row"><img class="bio-photo" src="/img/paul-tsai.jpg" alt="${esc(L.bio.name)}" loading="lazy" width="240" height="320">

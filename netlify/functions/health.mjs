@@ -1,7 +1,7 @@
 // Deployment self-check: which secrets are present and whether the data providers answer.
 import { json, handler } from "../lib/http.mjs";
 import { cfg } from "../lib/config.mjs";
-import { fmp } from "../lib/fmp.mjs";
+import { provider, providerId } from "../lib/providers/index.mjs";
 import { edgar } from "../lib/edgar.mjs";
 import { openStore } from "../lib/store.mjs";
 
@@ -28,11 +28,11 @@ export default handler(async () => {
     locales: cfg.locales(),
   };
   const [fmpProfile, edgarHealth, blobs] = await Promise.all([
-    probe(async () => { const r = await fmp("profile", { symbol: "AAPL" }); return { rows: Array.isArray(r) ? r.length : 0 }; }),
+    probe(async () => ({ provider: providerId(), ...(await provider().health()) })),
     probe(async () => { const r = await edgar("health"); return { status: r?.status }; }),
     probe(async () => { const s = await openStore("healthcheck"); await s.set("ping", { t: Date.now() }); return { value: !!(await s.get("ping")) }; }),
   ]);
-  return json({ env, fmp: fmpProfile, edgar: edgarHealth, blobs });
+  return json({ env, marketData: fmpProfile, edgar: edgarHealth, blobs });
 });
 
 export const config = { path: "/api/health" };

@@ -5,7 +5,7 @@ import { openStore, cached } from "./store.mjs";
 import { cfg } from "./config.mjs";
 import { logEvent } from "./events.mjs";
 import { stockBundle, liveQuote } from "./stockdata.mjs";
-import { fmpSoft } from "./fmp.mjs";
+import { provider, soft } from "./providers/index.mjs";
 import { getCachedSummary, runJson } from "./summarize.mjs";
 import { DEEP_SCHEMA, DEEP_SECTION_KEYS, LANG_NAMES, normalizeAssessment } from "./prompts.mjs";
 import { sectorById, AI_LAYERS } from "./sectors.mjs";
@@ -69,11 +69,11 @@ async function sectorQuotes(sector) {
   return cached(`sector-quotes:${sector.id}`, 300, async () => {
     const out = {};
     for (let i = 0; i < sector.members.length; i += 60) {
-      const rows = await fmpSoft("batch-quote", { symbols: sector.members.slice(i, i + 60).join(",") });
+      const rows = await soft(provider().quotes(sector.members.slice(i, i + 60)));
       for (const q of Array.isArray(rows) ? rows : []) if (q.symbol) out[String(q.symbol).toUpperCase().replace(/\./g, "-")] = q;
     }
     return out;
-  }, { version: "1" }).catch(() => ({}));
+  }, { version: "2" }).catch(() => ({}));
 }
 
 async function constituentRow(symbol, { full, layersOf, quote }) {
@@ -81,7 +81,7 @@ async function constituentRow(symbol, { full, layersOf, quote }) {
     let b = await stockBundle(symbol, { peek: !full });
     if (!b) {
       const q = quote || await liveQuote(symbol).catch(() => ({}));
-      return { symbol, name: q.name || symbol, exchange: q.exchange || null, country: null, marketCapM: q.marketCap ? Math.round(q.marketCap / 1e6) : null, price: q.price ?? null, changePct: q.changePercentage ?? q.changesPercentage ?? null, peForward: null, evEbitda: null, opMarginPct: null, grossMarginPct: null, roicPct: null, revenueGrowthPct: null, growthLabel: null, yearHigh: q.yearHigh ?? null, yearLow: q.yearLow ?? null, layers: layersOf(symbol), feature: null, storyHeadline: null, pending: true, _en: null, _fin: null, _rev: "" };
+      return { symbol, name: q.name || symbol, exchange: q.exchange || null, country: null, marketCapM: q.marketCap ? Math.round(q.marketCap / 1e6) : null, price: q.price ?? null, changePct: q.changePct ?? null, peForward: null, evEbitda: null, opMarginPct: null, grossMarginPct: null, roicPct: null, revenueGrowthPct: null, growthLabel: null, yearHigh: q.yearHigh ?? null, yearLow: q.yearLow ?? null, layers: layersOf(symbol), feature: null, storyHeadline: null, pending: true, _en: null, _fin: null, _rev: "" };
     }
     {
       const v = b.valuation || {}, m = b.market || {};

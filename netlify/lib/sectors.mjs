@@ -4,7 +4,7 @@
 // from its GICS sector. The GICS sectors hold the S&P 500; the AI layers are curated and
 // include non-US names (TSM, ASML, ARM) where a layer needs them.
 import { cached } from "./store.mjs";
-import { fmpSoft } from "./fmp.mjs";
+import { provider, soft } from "./providers/index.mjs";
 
 export const AI_LAYERS = [
   { id: "ai-energy", layer: 1, name: { ja: "AI 第1層：エネルギー", en: "AI layer 1: Energy", "zh-TW": "AI 第1層：能源" }, desc: { ja: "データセンターに電力を供給する発電・電力設備", en: "Power generation and electrical equipment feeding AI data centers", "zh-TW": "供應資料中心電力的發電與電力設備" }, members: ["VST", "CEG", "GEV", "NEE", "ETN", "SO", "DUK"] },
@@ -16,28 +16,29 @@ export const AI_LAYERS = [
 
 export const AI_STACK = { id: "ai", name: { ja: "AIスタック（5層ケーキ）", en: "The AI stack (five-layer cake)", "zh-TW": "AI 堆疊（五層蛋糕）" }, desc: { ja: "エネルギー、半導体、インフラ、モデル、アプリケーションの5層で見るAI産業全体", en: "The whole AI industry seen as five layers: energy, chips, infrastructure, models, applications", "zh-TW": "以能源、晶片、基礎設施、模型、應用五層檢視整個 AI 產業" } };
 
-// GICS-style sectors. Members are the current S&P 500 constituents (Financial Modeling
-// Prep's list, refreshed daily) grouped by FMP's sector field, minus every AI-layer name.
+// GICS-style sectors. Members are the current S&P 500 constituents (the provider's index
+// list, refreshed daily) grouped by the provider's sector label, minus every AI-layer name.
+// `labels` lists the sector names providers use (FMP's own taxonomy and the GICS names).
 export const GICS = [
-  { id: "tech", fmp: ["Technology"], name: { ja: "情報技術（AI除く）", en: "Information Technology (ex-AI)", "zh-TW": "資訊科技（不含AI）" } },
-  { id: "comm", fmp: ["Communication Services"], name: { ja: "コミュニケーション・サービス（AI除く）", en: "Communication Services (ex-AI)", "zh-TW": "通訊服務（不含AI）" } },
-  { id: "discretionary", fmp: ["Consumer Cyclical"], name: { ja: "一般消費財（AI除く）", en: "Consumer Discretionary (ex-AI)", "zh-TW": "非必需消費（不含AI）" } },
-  { id: "staples", fmp: ["Consumer Defensive"], name: { ja: "生活必需品", en: "Consumer Staples", "zh-TW": "必需消費" } },
-  { id: "health", fmp: ["Healthcare"], name: { ja: "ヘルスケア", en: "Health Care", "zh-TW": "醫療保健" } },
-  { id: "financials", fmp: ["Financial Services"], name: { ja: "金融", en: "Financials", "zh-TW": "金融" } },
-  { id: "industrials", fmp: ["Industrials"], name: { ja: "資本財・サービス（AI除く）", en: "Industrials (ex-AI)", "zh-TW": "工業（不含AI）" } },
-  { id: "energy", fmp: ["Energy"], name: { ja: "エネルギー", en: "Energy", "zh-TW": "能源" } },
-  { id: "materials", fmp: ["Basic Materials"], name: { ja: "素材", en: "Materials", "zh-TW": "原材料" } },
-  { id: "utilities", fmp: ["Utilities"], name: { ja: "公益事業（AI除く）", en: "Utilities (ex-AI)", "zh-TW": "公用事業（不含AI）" } },
-  { id: "realestate", fmp: ["Real Estate"], name: { ja: "不動産", en: "Real Estate", "zh-TW": "不動產" } },
+  { id: "tech", labels: ["Technology", "Information Technology"], name: { ja: "情報技術（AI除く）", en: "Information Technology (ex-AI)", "zh-TW": "資訊科技（不含AI）" } },
+  { id: "comm", labels: ["Communication Services"], name: { ja: "コミュニケーション・サービス（AI除く）", en: "Communication Services (ex-AI)", "zh-TW": "通訊服務（不含AI）" } },
+  { id: "discretionary", labels: ["Consumer Cyclical", "Consumer Discretionary"], name: { ja: "一般消費財（AI除く）", en: "Consumer Discretionary (ex-AI)", "zh-TW": "非必需消費（不含AI）" } },
+  { id: "staples", labels: ["Consumer Defensive", "Consumer Staples"], name: { ja: "生活必需品", en: "Consumer Staples", "zh-TW": "必需消費" } },
+  { id: "health", labels: ["Healthcare", "Health Care"], name: { ja: "ヘルスケア", en: "Health Care", "zh-TW": "醫療保健" } },
+  { id: "financials", labels: ["Financial Services", "Financials"], name: { ja: "金融", en: "Financials", "zh-TW": "金融" } },
+  { id: "industrials", labels: ["Industrials"], name: { ja: "資本財・サービス（AI除く）", en: "Industrials (ex-AI)", "zh-TW": "工業（不含AI）" } },
+  { id: "energy", labels: ["Energy"], name: { ja: "エネルギー", en: "Energy", "zh-TW": "能源" } },
+  { id: "materials", labels: ["Basic Materials", "Materials"], name: { ja: "素材", en: "Materials", "zh-TW": "原材料" } },
+  { id: "utilities", labels: ["Utilities"], name: { ja: "公益事業（AI除く）", en: "Utilities (ex-AI)", "zh-TW": "公用事業（不含AI）" } },
+  { id: "realestate", labels: ["Real Estate"], name: { ja: "不動産", en: "Real Estate", "zh-TW": "不動產" } },
 ];
 
 const norm = (x) => String(x || "").toUpperCase().replace(/\./g, "-");
 
-/** S&P 500 constituents by FMP sector, cached for a day. */
+/** S&P 500 constituents by the provider's sector label, cached for a day. */
 export async function sp500BySector() {
   return cached("sp500-sectors", 24 * 3600, async () => {
-    const list = await fmpSoft("sp500-constituent", {});
+    const list = await soft(provider().indexConstituents("sp500"));
     const out = {};
     for (const c of Array.isArray(list) ? list : []) if (c.symbol) (out[c.sector || "Other"] ||= []).push(norm(c.symbol));
     if (!Object.keys(out).length) throw new Error("empty S&P 500 list");
@@ -52,7 +53,7 @@ export async function allSectors() {
   try { bySector = await sp500BySector(); } catch (e) { console.warn("S&P 500 list unavailable:", e.message); }
   return [{ ...AI_STACK, group: "ai", members: [...aiNames], layers: AI_LAYERS.map((l) => ({ id: l.id, layer: l.layer, name: l.name, members: l.members })) },
     ...AI_LAYERS.map((l) => ({ ...l, group: "ai" })),
-    ...GICS.map((g) => ({ ...g, group: "gics", members: [...new Set(g.fmp.flatMap((f) => bySector[f] || []))].filter((sym) => !aiNames.has(sym)) })).filter((g) => g.members.length)];
+    ...GICS.map((g) => ({ ...g, group: "gics", members: [...new Set(g.labels.flatMap((f) => bySector[f] || []))].filter((sym) => !aiNames.has(sym)) })).filter((g) => g.members.length)];
 }
 
 export async function sectorById(id) {

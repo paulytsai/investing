@@ -12,7 +12,7 @@ export default handler(async (req, context) => {
   try {
     const q = await liveQuote(symbol);
     if (q?.price) {
-      bundle.market = { ...bundle.market, price: q.price, change: q.change, changePct: q.changePercentage, dayHigh: q.dayHigh, dayLow: q.dayLow, volume: q.volume, marketCapM: Math.round((q.marketCap || 0) / 1e6) || bundle.market.marketCapM, quoteTime: q.timestamp ? new Date(q.timestamp * 1000).toISOString() : bundle.market.quoteTime };
+      bundle.market = { ...bundle.market, price: q.price, change: q.change, changePct: q.changePct, dayHigh: q.dayHigh, dayLow: q.dayLow, volume: q.volume, marketCapM: Math.round((q.marketCap || 0) / 1e6) || bundle.market.marketCapM, quoteTime: q.time || bundle.market.quoteTime };
     }
   } catch {}
   return json(bundle);

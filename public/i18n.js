@@ -98,6 +98,7 @@ window.I18N = {
       ctaPrimary: "7日間無料で試す",
       ctaSecondary: "ログイン",
       ctaNote: "クレジットカード不要。トライアル後は月額 {price}（現地通貨換算）、いつでも解約可。",
+      spec: { title: "汎用AIの文章ではなく、966行の調査仕様書に基づく分析", lead: "深掘り分析とセクター・レポートは、ポール・サイがフィデリティでの調査手法をまとめた「企業調査仕様書」（966行・約17,000語・14の調査モジュール）をAIに適用して生成しています。同じ決算資料を読んでも、問いの立て方と検証の手順が違えば、出てくる分析は違います。", bullets: ["企業の質・方向性・市場の期待を3つの独立した所見として判定し、平均化しない", "10年の財務再構築、財務諸表の探偵的検証、経済的利益の分配、モート、サイクル、経営陣、バリュエーション、コンセンサスの14モジュールを順番に実行", "DCFと逆DCFは再現可能な計算規則で統一。推奨も総合スコアも出さず、何が結論を覆すかを常に明記"] },
       samplesTitle: "サンプルページ",
       samplesLead: "Apple（AAPL）の実際の画面です。ティッカーを入力するだけで、どの米国株でも同じ形式で表示されます。",
       samples: [
@@ -213,6 +214,7 @@ window.I18N = {
       ctaPrimary: "Start 7-day free trial",
       ctaSecondary: "Log in",
       ctaNote: "No card needed for the trial. Then {price}, billed in your local currency, cancel anytime.",
+      spec: { title: "Not generic AI text: a 966-line research specification", lead: "The deep dives and the sector reports apply Paul Tsai's Company Research Specification, the method he used at Fidelity, written down in 966 lines, about 17,000 words and 14 research modules. The same filings read by a different set of questions, with a different order of checks, produce a different analysis.", bullets: ["Business quality, trajectory and market expectations are judged as three independent findings and never averaged into a score", "Fourteen modules in sequence: ten-year reconstruction, the financial-statement detective pass, who captures the industry's profit, moat mechanisms, cycle, management, valuation and consensus", "DCF and reverse DCF follow fixed, reproducible calculation conventions; no recommendation, and every finding names what would overturn it"] },
       samplesTitle: "Sample pages",
       samplesLead: "Real screens for Apple (AAPL). Type any US ticker and you get the same layout.",
       samples: [
@@ -328,6 +330,7 @@ window.I18N = {
       ctaPrimary: "免費試用7天",
       ctaSecondary: "登入",
       ctaNote: "試用不需信用卡。之後每月 {price}，以當地貨幣計價，隨時可取消。",
+      spec: { title: "不是一般的 AI 文字：966 行的研究規範", lead: "深度分析與產業報告皆依 Paul Tsai 在富達使用的研究方法寫成的《公司研究規範》（966 行、約 17,000 字、14 個研究模組）由 AI 執行。同樣的財報，用不同的提問與檢核順序，得到的分析並不相同。", bullets: ["企業品質、走向與市場預期為三項獨立結論，絕不平均成一個分數", "依序執行 14 個模組：十年財務重建、財報偵探檢核、產業利潤由誰取得、護城河機制、週期、經營層、估值與市場共識", "DCF 與反向 DCF 採固定且可重現的計算規則；不提供建議，每項結論都註明什麼會推翻它"] },
       samplesTitle: "範例頁面",
       samplesLead: "以下是 Apple（AAPL）的實際畫面。輸入任何美股代號都會以相同格式呈現。",
       samples: [

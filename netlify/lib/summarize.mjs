@@ -2,7 +2,7 @@
 // history; Japanese and Traditional Chinese are translations of the English record.
 import Anthropic from "@anthropic-ai/sdk";
 import { cfg } from "./config.mjs";
-import { fmpSoft } from "./fmp.mjs";
+import { provider, soft } from "./providers/index.mjs";
 import { openStore } from "./store.mjs";
 import { dailyPrices } from "./stockdata.mjs";
 import { logEvent } from "./events.mjs";
@@ -87,8 +87,7 @@ export async function fetchTranscripts(symbol, transcripts) {
   const picks = transcripts.slice(0, TRANSCRIPTS_TO_USE);
   const results = await Promise.all(
     picks.map(async (t) => {
-      const rows = await fmpSoft("earning-call-transcript", { symbol, year: t.fiscalYear, quarter: t.quarter });
-      const row = Array.isArray(rows) ? rows[0] : null;
+      const row = await soft(provider().transcript(symbol, t.fiscalYear, t.quarter), null);
       if (!row?.content) return null;
       return { period: `Q${t.quarter} FY${t.fiscalYear}`, date: row.date || t.date, content: String(row.content).slice(0, MAX_TRANSCRIPT_CHARS) };
     }),
@@ -117,7 +116,7 @@ export function financialDigest(bundle) {
 
 export function newsDigest(news) {
   return (Array.isArray(news) ? news : []).slice(0, 25)
-    .map((n) => `- ${String(n.publishedDate || "").slice(0, 10)} [${n.publisher || n.site || ""}] ${n.title}${n.text ? ` — ${String(n.text).slice(0, 240)}` : ""}`)
+    .map((n) => `- ${String(n.date || "").slice(0, 10)} [${n.publisher || ""}] ${n.title}${n.text ? ` — ${String(n.text).slice(0, 240)}` : ""}`)
     .join("\n");
 }
 
@@ -164,22 +163,23 @@ function priceDigest(daily, bundle) {
   ].filter(Boolean).join("\n");
 }
 
-async function resolveCompetitors(symbol, list) {
+export async function resolveCompetitors(symbol, list) {
   try {
     const syms = [...new Set((list || []).map((x) => String(x).toUpperCase().trim().replace(/[^A-Z0-9.\-]/g, "")).filter((x) => x && x !== symbol))].slice(0, 12);
-    const profiles = await Promise.all(syms.map((x) => fmpSoft("profile", { symbol: x }).then((r) => (Array.isArray(r) ? r[0] : null))));
+    const P = provider();
+    const profiles = await Promise.all(syms.map((x) => soft(P.profile(x), null)));
     const valid = profiles.filter((p) => p && p.marketCap > 0 && p.isActivelyTrading !== false && !p.isEtf && !p.isFund);
     const currencies = [...new Set(valid.map((p) => p.currency).filter((c) => c && c !== "USD"))];
     const fx = { USD: 1 };
     if (currencies.length) {
-      const rows = await fmpSoft("batch-quote", { symbols: currencies.map((c) => `USD${c.replace("GBp", "GBP")}`).join(",") });
+      const rows = await soft(P.quotes(currencies.map((c) => `USD${c.replace("GBp", "GBP")}`)));
       for (const r of Array.isArray(rows) ? rows : []) if (r.symbol && r.price > 0) fx[r.symbol.slice(3)] = r.price;
       if (fx.GBP) fx.GBp = fx.GBP * 100;
     }
     return valid.map((p) => {
       const rate = fx[p.currency]; const capUsd = rate ? p.marketCap / rate : null;
       const us = ["NASDAQ", "NYSE", "AMEX"].some((x) => String(p.exchange || "").toUpperCase().startsWith(x));
-      return { symbol: p.symbol, name: p.companyName, exchange: p.exchange, country: p.country, currency: p.currency, marketCapM: capUsd ? Math.round(capUsd / 1e6) : null, price: p.price, changePct: p.changePercentage ?? null, us };
+      return { symbol: p.symbol, name: p.name, exchange: p.exchange, country: p.country, currency: p.currency, marketCapM: capUsd ? Math.round(capUsd / 1e6) : null, price: p.price, changePct: p.changePct ?? null, us };
     }).filter((c) => c.marketCapM).sort((a, b) => b.marketCapM - a.marketCapM);
   } catch (e) {
     console.warn("competitor lookup failed", e.message);
@@ -191,7 +191,7 @@ async function resolveCompetitors(symbol, list) {
 export async function generateEnglish(symbol, bundle) {
   const [transcripts, news, daily] = await Promise.all([
     fetchTranscripts(symbol, bundle.transcripts || []),
-    fmpSoft("news/stock", { symbols: symbol, limit: 30 }),
+    soft(provider().news(symbol, 30)),
     dailyPrices(symbol).catch(() => []),
   ]);
   const materials = [

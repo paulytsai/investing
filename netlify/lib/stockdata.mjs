@@ -1,10 +1,11 @@
-// Assembles the Shikiho-style data bundle for one US ticker from FMP + edgar.tools.
-import { fmp, fmpSoft, first } from "./fmp.mjs";
+// Assembles the Shikiho-style data bundle for one US ticker from the market-data provider + edgar.tools.
+import { provider, soft } from "./providers/index.mjs";
 import { edgarCompany, edgarFilings, edgarMaterialEvents, edgarRatios } from "./edgar.mjs";
 import { cached } from "./store.mjs";
 import { HttpError } from "./http.mjs";
 import { damodaranDcf, dcfSensitivity } from "./dcf.mjs";
 
+const P = provider();
 const M = 1e6;
 const SYMBOL_RE = /^[A-Z0-9.\-]{1,10}$/;
 
@@ -62,9 +63,9 @@ export async function dailyPrices(symbol) {
     const from = new Date();
     from.setUTCFullYear(from.getUTCFullYear() - 10);
     from.setUTCDate(from.getUTCDate() - 7);
-    const rows = await fmp("historical-price-eod/light", { symbol, from: from.toISOString().slice(0, 10) });
+    const rows = await P.dailyPrices(symbol, from.toISOString().slice(0, 10));
     if (!Array.isArray(rows) || !rows.length) throw new HttpError(404, "no_price_history");
-    return rows.map((r) => ({ d: r.date, p: num(r.price), v: num(r.volume) }));
+    return rows.map((r) => ({ d: r.date, p: num(r.close), v: num(r.volume) }));
   });
 }
 
@@ -154,7 +155,7 @@ function dividendsInWindow(divs, startExclusive, endInclusive) {
   let any = false;
   for (const d of divs) {
     if (d.date > startExclusive && d.date <= endInclusive) {
-      total += num(d.adjDividend ?? d.dividend) || 0;
+      total += num(d.amount) || 0;
       any = true;
     }
   }
@@ -165,26 +166,26 @@ async function institutionalHolders(symbol) {
   let q = lastCompletedQuarter();
   for (let i = 0; i < 3; i++) {
     const [holders, summary] = await Promise.all([
-      fmpSoft("institutional-ownership/extract-analytics/holder", { symbol, year: q.year, quarter: q.quarter, limit: 10 }),
-      fmpSoft("institutional-ownership/symbol-positions-summary", { symbol, year: q.year, quarter: q.quarter }),
+      soft(P.institutionalHolders(symbol, q.year, q.quarter, 10)),
+      soft(P.institutionalSummary(symbol, q.year, q.quarter), null),
     ]);
     if (Array.isArray(holders) && holders.length) {
       return {
         asOf: holders[0].date,
         holders: holders.map((h) => ({
-          name: h.investorName,
-          sharesM: Math.round((num(h.sharesNumber) || 0) / M * 10) / 10,
-          ownershipPct: r2(h.ownership),
-          changeShares: num(h.changeInSharesNumber),
+          name: h.name,
+          sharesM: Math.round((num(h.shares) || 0) / M * 10) / 10,
+          ownershipPct: r2(h.ownershipPct),
+          changeShares: num(h.changeShares),
         })),
-        summary: first(summary)
+        summary: summary
           ? {
-              investorsHolding: num(first(summary).investorsHolding),
-              ownershipPct: r2(first(summary).ownershipPercent),
-              newPositions: num(first(summary).newPositions),
-              closedPositions: num(first(summary).closedPositions),
-              increased: num(first(summary).increasedPositions),
-              reduced: num(first(summary).reducedPositions),
+              investorsHolding: num(summary.investorsHolding),
+              ownershipPct: r2(summary.ownershipPct),
+              newPositions: num(summary.newPositions),
+              closedPositions: num(summary.closedPositions),
+              increased: num(summary.increased),
+              reduced: num(summary.reduced),
             }
           : null,
       };
@@ -194,36 +195,33 @@ async function institutionalHolders(symbol) {
   return { asOf: null, holders: [], summary: null };
 }
 
-/** Competitors: FMP peers plus the largest US-listed names in the same industry, verified via batch quote. */
+/** Competitors: the provider's peers plus the largest US-listed names in the same industry, verified via batch quote. */
 async function competitors(symbol, industry, peersRaw) {
   const candidates = new Map();
-  for (const p of Array.isArray(peersRaw) ? peersRaw : []) if (p.symbol && p.symbol !== symbol && !p.symbol.includes(".")) candidates.set(p.symbol, p.companyName);
+  for (const p of Array.isArray(peersRaw) ? peersRaw : []) if (p.symbol && p.symbol !== symbol && !p.symbol.includes(".")) candidates.set(p.symbol, p.name);
   if (industry) {
-    const rows = await fmpSoft("company-screener", { industry, exchange: "NASDAQ,NYSE,AMEX", limit: 15, isEtf: false, isFund: false });
-    for (const r of Array.isArray(rows) ? rows : []) if (r.symbol && r.symbol !== symbol && !r.symbol.includes(".") && !candidates.has(r.symbol)) candidates.set(r.symbol, r.companyName);
+    const rows = await soft(P.screenIndustry(industry, 15));
+    for (const r of Array.isArray(rows) ? rows : []) if (r.symbol && r.symbol !== symbol && !r.symbol.includes(".") && !candidates.has(r.symbol)) candidates.set(r.symbol, r.name);
   }
   const syms = [...candidates.keys()].slice(0, 25);
   if (!syms.length) return [];
-  const quotes = await fmpSoft("batch-quote", { symbols: syms.join(",") });
+  const quotes = await soft(P.quotes(syms));
   const usEx = (e) => ["NASDAQ", "NYSE", "AMEX"].some((x) => String(e || "").toUpperCase().startsWith(x));
   return (Array.isArray(quotes) ? quotes : [])
     .filter((q) => q.symbol && usEx(q.exchange) && num(q.marketCap) > 0 && !/^[A-Z]{5}$/.test(q.symbol))
     .sort((a, b) => b.marketCap - a.marketCap)
     .slice(0, 10)
-    .map((q) => ({ symbol: q.symbol, name: q.name || candidates.get(q.symbol), marketCapM: mm(q.marketCap), price: num(q.price), changePct: r2(q.changePercentage) }));
+    .map((q) => ({ symbol: q.symbol, name: q.name || candidates.get(q.symbol), marketCapM: mm(q.marketCap), price: num(q.price), changePct: r2(q.changePct) }));
 }
 
 async function riskFreeRate() {
-  const to = new Date().toISOString().slice(0, 10);
-  const from = new Date(Date.now() - 14 * 86400000).toISOString().slice(0, 10);
-  const rows = await fmpSoft("treasury-rates", { from, to });
-  const r = first(rows);
-  return r ? { rate: num(r.year10), date: r.date } : { rate: 4.5, date: null };
+  const r = await soft(P.treasury10y(), null);
+  return r ? { rate: num(r.rate), date: r.date } : { rate: 4.5, date: null };
 }
 
 async function buildBundle(symbol) {
-  const profile = first(await fmp("profile", { symbol }));
-  if (!profile || !profile.companyName) throw new HttpError(404, "symbol_not_found");
+  const profile = await P.profile(symbol);
+  if (!profile || !profile.name) throw new HttpError(404, "symbol_not_found");
   if (profile.isEtf || profile.isFund) throw new HttpError(400, "not_a_company");
 
   const [
@@ -255,28 +253,28 @@ async function buildBundle(symbol) {
     rf,
     indices,
   ] = await Promise.all([
-    fmpSoft("quote", { symbol }),
-    fmpSoft("income-statement", { symbol, period: "annual", limit: 10 }),
-    fmpSoft("income-statement", { symbol, period: "quarter", limit: 8 }),
-    fmpSoft("balance-sheet-statement", { symbol, period: "annual", limit: 2 }),
-    fmpSoft("balance-sheet-statement", { symbol, period: "quarter", limit: 1 }),
-    fmpSoft("cash-flow-statement", { symbol, period: "annual", limit: 10 }),
-    fmpSoft("key-metrics", { symbol, period: "annual", limit: 2 }),
-    fmpSoft("key-metrics-ttm", { symbol }),
-    fmpSoft("ratios-ttm", { symbol }),
-    fmpSoft("dividends", { symbol, limit: 60 }),
-    fmpSoft("splits", { symbol }),
-    fmpSoft("key-executives", { symbol }),
-    fmpSoft("analyst-estimates", { symbol, period: "annual", limit: 12 }),
-    fmpSoft("stock-peers", { symbol }),
-    fmpSoft("employee-count", { symbol, limit: 1 }),
-    fmpSoft("shares-float", { symbol }),
-    fmpSoft("revenue-product-segmentation", { symbol, limit: 1 }),
-    fmpSoft("earnings", { symbol, limit: 8 }),
-    fmpSoft("grades-consensus", { symbol }),
-    fmpSoft("price-target-consensus", { symbol }),
-    fmpSoft("insider-trading/statistics", { symbol }),
-    fmpSoft("earning-call-transcript-dates", { symbol }),
+    soft(P.quote(symbol), null),
+    soft(P.incomeStatements(symbol, { period: "annual", limit: 10 })),
+    soft(P.incomeStatements(symbol, { period: "quarter", limit: 8 })),
+    soft(P.balanceSheets(symbol, { period: "annual", limit: 2 })),
+    soft(P.balanceSheets(symbol, { period: "quarter", limit: 1 })),
+    soft(P.cashFlows(symbol, { period: "annual", limit: 10 })),
+    soft(P.keyMetrics(symbol, { period: "annual", limit: 2 })),
+    soft(P.keyMetricsTtm(symbol), null),
+    soft(P.ratiosTtm(symbol), null),
+    soft(P.dividends(symbol, 60)),
+    soft(P.splits(symbol)),
+    soft(P.executives(symbol)),
+    soft(P.estimates(symbol, 12)),
+    soft(P.peers(symbol)),
+    soft(P.employees(symbol), null),
+    soft(P.sharesFloat(symbol), null),
+    soft(P.revenueSegments(symbol, 1)),
+    soft(P.earnings(symbol, 8)),
+    soft(P.analystRating(symbol), null),
+    soft(P.priceTarget(symbol), null),
+    soft(P.insiderStats(symbol), null),
+    soft(P.transcriptDates(symbol)),
     dailyPrices(symbol).catch(() => []),
     institutionalHolders(symbol),
     edgarCompany(symbol),
@@ -290,21 +288,20 @@ async function buildBundle(symbol) {
     ? await Promise.all([edgarFilings(cik, { limit: 8 }), edgarMaterialEvents(cik, { days: 365, limit: 10 }), edgarRatios(cik)])
     : [[], [], null];
 
-  const q = first(quote) || {};
+  const q = quote || {};
   const annual = (Array.isArray(incomeA) ? incomeA : []).slice().sort((a, b) => a.date.localeCompare(b.date));
   const quarters = (Array.isArray(incomeQ) ? incomeQ : []).slice().sort((a, b) => a.date.localeCompare(b.date));
   const divs = Array.isArray(dividends) ? dividends : [];
   const cash = (Array.isArray(cashA) ? cashA : []).slice().sort((a, b) => a.date.localeCompare(b.date));
   const latestFY = annual[annual.length - 1] || null;
   const prevFY = annual[annual.length - 2] || null;
-  const bsQ = first(balanceQ);
-  const bsA = first(balanceA);
+  const bsQ = balanceQ[0] || null;
+  const bsA = balanceA[0] || null;
   const bs = bsQ || bsA;
-  const km = first(metricsA);
-  const kmPrev = Array.isArray(metricsA) ? metricsA[1] : null;
-  const kmTTM = first(metricsTTM);
-  const rtTTM = first(ratiosTTM);
-  const sharesOut = num(first(sharesFloat)?.outstandingShares) || num(q.sharesOutstanding) || (num(profile.marketCap) && num(q.price) ? profile.marketCap / q.price : null);
+  const km = metricsA[0] || null;
+  const kmTTM = metricsTTM;
+  const rtTTM = ratiosTTM;
+  const sharesOut = num(sharesFloat?.outstanding) || num(q.sharesOutstanding) || (num(profile.marketCap) && num(q.price) ? profile.marketCap / q.price : null);
 
   // ---- 業績 table ----
   const performance = [];
@@ -316,7 +313,7 @@ async function buildBundle(symbol) {
       date: r.date,
       revenue: mm(r.revenue),
       operatingIncome: mm(r.operatingIncome),
-      pretaxIncome: mm(r.incomeBeforeTax),
+      pretaxIncome: mm(r.pretaxIncome),
       netIncome: mm(r.netIncome),
       eps: r2(r.epsDiluted ?? r.eps),
       dps: dividendsInWindow(divs, prevDate, r.date),
@@ -331,13 +328,13 @@ async function buildBundle(symbol) {
       kind: "estimate",
       label: fyLabel(e.date),
       date: e.date,
-      revenue: mm(e.revenueAvg),
-      operatingIncome: mm(e.ebitAvg),
+      revenue: mm(e.revenue),
+      operatingIncome: mm(e.ebit),
       pretaxIncome: null,
-      netIncome: mm(e.netIncomeAvg),
-      eps: r2(e.epsAvg),
+      netIncome: mm(e.netIncome),
+      eps: r2(e.eps),
       dps: null,
-      analysts: num(e.numAnalystsEps),
+      analysts: num(e.analysts),
     });
   }
   const recentQuarters = quarters.slice(-4);
@@ -348,7 +345,7 @@ async function buildBundle(symbol) {
       date: r.date,
       revenue: mm(r.revenue),
       operatingIncome: mm(r.operatingIncome),
-      pretaxIncome: mm(r.incomeBeforeTax),
+      pretaxIncome: mm(r.pretaxIncome),
       netIncome: mm(r.netIncome),
       eps: r2(r.epsDiluted ?? r.eps),
       dps: null,
@@ -367,11 +364,11 @@ async function buildBundle(symbol) {
   })();
 
   // ---- 配当 ----
-  const dividendHistory = divs.slice(0, 8).map((d) => ({ date: d.date, paymentDate: d.paymentDate, amount: r2(d.adjDividend ?? d.dividend) }));
-  const ttmDividend = divs.filter((d) => d.date > new Date(Date.now() - 366 * 86400000).toISOString().slice(0, 10)).reduce((s, d) => s + (num(d.adjDividend ?? d.dividend) || 0), 0);
+  const dividendHistory = divs.slice(0, 8).map((d) => ({ date: d.date, paymentDate: d.paymentDate, amount: r2(d.amount) }));
+  const ttmDividend = divs.filter((d) => d.date > new Date(Date.now() - 366 * 86400000).toISOString().slice(0, 10)).reduce((s, d) => s + (num(d.amount) || 0), 0);
   const price = num(q.price) || num(profile.price);
   const dividendYieldPct = price && ttmDividend ? r2((ttmDividend / price) * 100) : null;
-  const bps = bs && sharesOut ? r2(num(bs.totalStockholdersEquity) / sharesOut) : null;
+  const bps = bs && sharesOut ? r2(num(bs.equity) / sharesOut) : null;
 
   // ---- 指標 ----
   const maxNet = annual.reduce((a, r) => (num(r.netIncome) !== null && (a === null || r.netIncome > a.netIncome) ? r : a), null);
@@ -379,36 +376,36 @@ async function buildBundle(symbol) {
   const prevCF = cash[cash.length - 2] || null;
   const indicators = {
     fiscalYear: latestFY ? fyLabel(latestFY.date) : null,
-    roePct: pct(km?.returnOnEquity),
-    roeTTMPct: pct(kmTTM?.returnOnEquityTTM),
-    roaPct: pct(km?.returnOnAssets),
-    roaTTMPct: pct(kmTTM?.returnOnAssetsTTM),
+    roePct: pct(km?.roe),
+    roeTTMPct: pct(kmTTM?.roe),
+    roaPct: pct(km?.roa),
+    roaTTMPct: pct(kmTTM?.roa),
     maxNetIncome: maxNet ? { label: fyLabel(maxNet.date), value: mm(maxNet.netIncome) } : null,
-    capex: latestCF ? mm(Math.abs(num(latestCF.capitalExpenditure) || 0)) : null,
-    capexPrev: prevCF ? mm(Math.abs(num(prevCF.capitalExpenditure) || 0)) : null,
-    depreciation: latestCF ? mm(latestCF.depreciationAndAmortization) : null,
-    depreciationPrev: prevCF ? mm(prevCF.depreciationAndAmortization) : null,
-    rnd: latestFY ? mm(latestFY.researchAndDevelopmentExpenses) : null,
-    rndPrev: prevFY ? mm(prevFY.researchAndDevelopmentExpenses) : null,
-    per: r2(rtTTM?.priceToEarningsRatioTTM),
-    pbr: r2(rtTTM?.priceToBookRatioTTM),
-    evToEbitda: r2(kmTTM?.evToEBITDATTM),
+    capex: latestCF ? mm(Math.abs(num(latestCF.capex) || 0)) : null,
+    capexPrev: prevCF ? mm(Math.abs(num(prevCF.capex) || 0)) : null,
+    depreciation: latestCF ? mm(latestCF.depreciation) : null,
+    depreciationPrev: prevCF ? mm(prevCF.depreciation) : null,
+    rnd: latestFY ? mm(latestFY.rnd) : null,
+    rndPrev: prevFY ? mm(prevFY.rnd) : null,
+    per: r2(rtTTM?.pe),
+    pbr: r2(rtTTM?.pb),
+    evToEbitda: r2(kmTTM?.evToEbitda),
   };
 
   const cashflow = latestCF
     ? {
         fiscalYear: fyLabel(latestCF.date),
-        operating: mm(latestCF.netCashProvidedByOperatingActivities),
-        operatingPrev: prevCF ? mm(prevCF.netCashProvidedByOperatingActivities) : null,
-        investing: mm(latestCF.netCashProvidedByInvestingActivities),
-        investingPrev: prevCF ? mm(prevCF.netCashProvidedByInvestingActivities) : null,
-        financing: mm(latestCF.netCashProvidedByFinancingActivities),
-        financingPrev: prevCF ? mm(prevCF.netCashProvidedByFinancingActivities) : null,
-        cash: mm(latestCF.cashAtEndOfPeriod),
-        cashPrev: prevCF ? mm(prevCF.cashAtEndOfPeriod) : null,
+        operating: mm(latestCF.operating),
+        operatingPrev: prevCF ? mm(prevCF.operating) : null,
+        investing: mm(latestCF.investing),
+        investingPrev: prevCF ? mm(prevCF.investing) : null,
+        financing: mm(latestCF.financing),
+        financingPrev: prevCF ? mm(prevCF.financing) : null,
+        cash: mm(latestCF.cashEnd),
+        cashPrev: prevCF ? mm(prevCF.cashEnd) : null,
         freeCashFlow: mm(latestCF.freeCashFlow),
-        buybacks: mm(Math.abs(num(latestCF.commonStockRepurchased) || 0)),
-        dividendsPaid: mm(Math.abs(num(latestCF.netDividendsPaid) || 0)),
+        buybacks: mm(Math.abs(num(latestCF.buybacks) || 0)),
+        dividendsPaid: mm(Math.abs(num(latestCF.dividendsPaid) || 0)),
       }
     : null;
 
@@ -416,40 +413,40 @@ async function buildBundle(symbol) {
   const ebitdaFY = num(latestFY?.ebitda);
   const ebitFY = num(latestFY?.operatingIncome);
   const interestFY = num(latestFY?.interestExpense);
-  const prevDebt = Array.isArray(balanceA) && balanceA[1] ? num(balanceA[1].totalDebt) : null;
+  const prevDebt = balanceA[1] ? num(balanceA[1].totalDebt) : null;
   const avgDebt = bs && num(bs.totalDebt) !== null ? (prevDebt !== null ? (num(bs.totalDebt) + prevDebt) / 2 : num(bs.totalDebt)) : null;
-  const shsNow = num(latestFY?.weightedAverageShsOutDil);
-  const shsPrev = num(prevFY?.weightedAverageShsOutDil);
+  const shsNow = num(latestFY?.dilutedShares);
+  const shsPrev = num(prevFY?.dilutedShares);
   const financials = bs
     ? {
         asOf: bs.date,
         period: bs.period,
         totalAssets: mm(bs.totalAssets),
-        equity: mm(bs.totalStockholdersEquity),
-        equityRatioPct: num(bs.totalAssets) ? pct(num(bs.totalStockholdersEquity) / num(bs.totalAssets)) : null,
+        equity: mm(bs.equity),
+        equityRatioPct: num(bs.totalAssets) ? pct(num(bs.equity) / num(bs.totalAssets)) : null,
         retainedEarnings: mm(bs.retainedEarnings),
-        cashAndShortTerm: mm(bs.cashAndShortTermInvestments),
+        cashAndShortTerm: mm(bs.cashAndShortTerm),
         totalDebt: mm(bs.totalDebt),
-        netDebt: num(bs.totalDebt) !== null ? mm(num(bs.totalDebt) - (num(bs.cashAndShortTermInvestments) || 0)) : null,
-        debtToEquity: num(bs.totalStockholdersEquity) > 0 ? r2(num(bs.totalDebt) / num(bs.totalStockholdersEquity)) : null,
+        netDebt: num(bs.totalDebt) !== null ? mm(num(bs.totalDebt) - (num(bs.cashAndShortTerm) || 0)) : null,
+        debtToEquity: num(bs.equity) > 0 ? r2(num(bs.totalDebt) / num(bs.equity)) : null,
         debtToEbitda: ebitdaFY > 0 ? r2(num(bs.totalDebt) / ebitdaFY) : null,
-        netDebtToEbitda: ebitdaFY > 0 ? r2((num(bs.totalDebt) - (num(bs.cashAndShortTermInvestments) || 0)) / ebitdaFY) : null,
+        netDebtToEbitda: ebitdaFY > 0 ? r2((num(bs.totalDebt) - (num(bs.cashAndShortTerm) || 0)) / ebitdaFY) : null,
         interestExpense: mm(interestFY),
         interestCoverage: interestFY > 0 && ebitFY !== null ? r2(ebitFY / interestFY) : null,
         interestToEbitPct: interestFY !== null && ebitFY > 0 ? pct(interestFY / ebitFY) : null,
         avgInterestRatePct: interestFY !== null && avgDebt > 0 ? pct(interestFY / avgDebt, 2) : null,
-        currentRatio: num(bs.totalCurrentLiabilities) > 0 ? r2(num(bs.totalCurrentAssets) / num(bs.totalCurrentLiabilities)) : null,
-        goodwillIntangibles: mm(bs.goodwillAndIntangibleAssets),
-        goodwillPct: num(bs.totalAssets) ? pct((num(bs.goodwillAndIntangibleAssets) || 0) / num(bs.totalAssets)) : null,
+        currentRatio: num(bs.currentLiabilities) > 0 ? r2(num(bs.currentAssets) / num(bs.currentLiabilities)) : null,
+        goodwillIntangibles: mm(bs.goodwillAndIntangibles),
+        goodwillPct: num(bs.totalAssets) ? pct((num(bs.goodwillAndIntangibles) || 0) / num(bs.totalAssets)) : null,
         sharesChangePct: shsNow && shsPrev ? pct(shsNow / shsPrev - 1) : null,
-        roicPct: pct(kmTTM?.returnOnInvestedCapitalTTM),
+        roicPct: pct(kmTTM?.roic),
         ebitda: mm(ebitdaFY),
         fiscalYear: latestFY ? fyLabel(latestFY.date) : null,
       }
     : null;
 
   // ---- segments ----
-  const seg = first(segments);
+  const seg = segments[0] || null;
   let segmentList = [];
   if (seg?.data && typeof seg.data === "object") {
     const total = Object.values(seg.data).reduce((s, v) => s + (num(v) || 0), 0);
@@ -462,20 +459,20 @@ async function buildBundle(symbol) {
   // ---- capital changes ----
   const capitalChanges = (Array.isArray(splits) ? splits : [])
     .slice(0, 10)
-    .map((s) => ({ date: s.date, numerator: num(s.numerator), denominator: num(s.denominator), type: s.splitType }));
+    .map((s) => ({ date: s.date, numerator: num(s.numerator), denominator: num(s.denominator), type: s.type }));
 
   const officers = (Array.isArray(executives) ? executives : [])
     .filter((e) => e.active !== false)
     .slice(0, 12)
-    .map((e) => ({ name: e.name, title: e.title, since: e.titleSince || null }));
+    .map((e) => ({ name: e.name, title: e.title, since: e.since || null }));
 
   const peerList = (Array.isArray(peers) ? peers : [])
     .filter((p) => p.symbol && !p.symbol.includes(".") && p.symbol !== symbol && !/^[A-Z]{5}$/.test(p.symbol))
     .slice(0, 5)
-    .map((p) => ({ symbol: p.symbol, name: p.companyName }));
+    .map((p) => ({ symbol: p.symbol, name: p.name }));
 
-  const latestInsider = first(insider);
-  const emp = first(employees);
+  const latestInsider = insider;
+  const emp = employees;
   const fyEnd = edgarCo?.fiscalYearEnd ? Number(edgarCo.fiscalYearEnd.slice(0, 2)) : latestFY ? month(latestFY.date) : null;
   const opMargin = latestFY && num(latestFY.revenue) ? pct(num(latestFY.operatingIncome) / num(latestFY.revenue)) : null;
   const opMarginPrev = prevFY && num(prevFY.revenue) ? pct(num(prevFY.operatingIncome) / num(prevFY.revenue)) : null;
@@ -485,9 +482,9 @@ async function buildBundle(symbol) {
 
   // ---- valuation metrics (TTM) ----
   const nextEst = (Array.isArray(estimates) ? estimates : []).filter((e) => latestFY && e.date > latestFY.date).sort((a, b) => a.date.localeCompare(b.date));
-  const fwdEps = num(nextEst[0]?.epsAvg);
-  const fwdEps2 = num(nextEst[1]?.epsAvg);
-  const epsTTM = num(rtTTM?.netIncomePerShareTTM);
+  const fwdEps = num(nextEst[0]?.eps);
+  const fwdEps2 = num(nextEst[1]?.eps);
+  const epsTTM = num(rtTTM?.epsTtm);
   // Next-twelve-month EPS: blend FY1 and FY2 consensus by months remaining in FY1.
   let epsNtm = null;
   if (fwdEps && nextEst[0]?.date) {
@@ -503,34 +500,34 @@ async function buildBundle(symbol) {
   const ath = dailyArr.reduce((a, r) => (a === null || r.p > a.p ? r : a), null);
   const epsGrowthFwd = fwdEps && epsTTM && epsTTM > 0 ? (fwdEps / epsTTM - 1) * 100 : null;
   const valuation = {
-    price, marketCapM: mm(q.marketCap || profile.marketCap), enterpriseValueM: mm(kmTTM?.enterpriseValueTTM),
-    pe: r2(rtTTM?.priceToEarningsRatioTTM), peForward: fwdEps && price ? r2(price / fwdEps) : null, peForward2: fwdEps2 && price ? r2(price / fwdEps2) : null,
-    peg: r2(rtTTM?.priceToEarningsGrowthRatioTTM), pegForward: epsGrowthFwd && epsGrowthFwd > 0 && price && fwdEps ? r2(price / fwdEps / epsGrowthFwd) : null,
-    ps: r2(rtTTM?.priceToSalesRatioTTM), pb: r2(rtTTM?.priceToBookRatioTTM), pfcf: r2(rtTTM?.priceToFreeCashFlowRatioTTM), pocf: r2(rtTTM?.priceToOperatingCashFlowRatioTTM),
-    evSales: r2(kmTTM?.evToSalesTTM), evEbitda: r2(kmTTM?.evToEBITDATTM), evOcf: r2(kmTTM?.evToOperatingCashFlowTTM), evFcf: r2(kmTTM?.evToFreeCashFlowTTM),
-    earningsYieldPct: pct(kmTTM?.earningsYieldTTM), fcfYieldPct: pct(kmTTM?.freeCashFlowYieldTTM), dividendYieldPct, payoutPct: pct(rtTTM?.dividendPayoutRatioTTM),
-    epsTTM: r2(epsTTM), epsNtm: r2(epsNtm), epsForward: r2(fwdEps), epsForward2: r2(fwdEps2), epsGrowthFwdPct: r2(epsGrowthFwd), bvps: r2(rtTTM?.bookValuePerShareTTM), fcfps: r2(rtTTM?.freeCashFlowPerShareTTM), revenuePerShare: r2(rtTTM?.revenuePerShareTTM),
-    grossMarginPct: pct(rtTTM?.grossProfitMarginTTM), opMarginPct: pct(rtTTM?.operatingProfitMarginTTM), netMarginPct: pct(rtTTM?.netProfitMarginTTM),
-    roePct: pct(kmTTM?.returnOnEquityTTM), roicPct: pct(kmTTM?.returnOnInvestedCapitalTTM), roaPct: pct(kmTTM?.returnOnAssetsTTM),
-    netDebtEbitda: r2(kmTTM?.netDebtToEBITDATTM), debtEquity: r2(rtTTM?.debtToEquityRatioTTM), interestCoverage: r2(rtTTM?.interestCoverageRatioTTM), currentRatio: r2(rtTTM?.currentRatioTTM),
+    price, marketCapM: mm(q.marketCap || profile.marketCap), enterpriseValueM: mm(kmTTM?.enterpriseValue),
+    pe: r2(rtTTM?.pe), peForward: fwdEps && price ? r2(price / fwdEps) : null, peForward2: fwdEps2 && price ? r2(price / fwdEps2) : null,
+    peg: r2(rtTTM?.peg), pegForward: epsGrowthFwd && epsGrowthFwd > 0 && price && fwdEps ? r2(price / fwdEps / epsGrowthFwd) : null,
+    ps: r2(rtTTM?.ps), pb: r2(rtTTM?.pb), pfcf: r2(rtTTM?.pfcf), pocf: r2(rtTTM?.pocf),
+    evSales: r2(kmTTM?.evToSales), evEbitda: r2(kmTTM?.evToEbitda), evOcf: r2(kmTTM?.evToOcf), evFcf: r2(kmTTM?.evToFcf),
+    earningsYieldPct: pct(kmTTM?.earningsYield), fcfYieldPct: pct(kmTTM?.fcfYield), dividendYieldPct, payoutPct: pct(rtTTM?.payout),
+    epsTTM: r2(epsTTM), epsNtm: r2(epsNtm), epsForward: r2(fwdEps), epsForward2: r2(fwdEps2), epsGrowthFwdPct: r2(epsGrowthFwd), bvps: r2(rtTTM?.bvps), fcfps: r2(rtTTM?.fcfps), revenuePerShare: r2(rtTTM?.revenuePerShare),
+    grossMarginPct: pct(rtTTM?.grossMargin), opMarginPct: pct(rtTTM?.opMargin), netMarginPct: pct(rtTTM?.netMargin),
+    roePct: pct(kmTTM?.roe), roicPct: pct(kmTTM?.roic), roaPct: pct(kmTTM?.roa),
+    netDebtEbitda: r2(kmTTM?.netDebtToEbitda), debtEquity: r2(rtTTM?.debtToEquity), interestCoverage: r2(rtTTM?.interestCoverage), currentRatio: r2(rtTTM?.currentRatio),
     beta: r2(profile.beta), yearHigh: num(q.yearHigh), yearLow: num(q.yearLow), priceAvg50: num(q.priceAvg50), priceAvg200: num(q.priceAvg200),
     yearHighDate: hi52?.d || null, yearLowDate: lo52?.d || null, yearHighClose: hi52?.p ?? null, yearLowClose: lo52?.p ?? null,
     allTimeHigh: ath ? { price: ath.p, date: ath.d } : null,
-    analystTarget: first(targets) ? { high: num(first(targets).targetHigh), low: num(first(targets).targetLow), consensus: num(first(targets).targetConsensus), upsidePct: price && num(first(targets).targetConsensus) ? r2((first(targets).targetConsensus / price - 1) * 100) : null } : null,
+    analystTarget: targets ? { high: num(targets.high), low: num(targets.low), consensus: num(targets.consensus), upsidePct: price && num(targets.consensus) ? r2((targets.consensus / price - 1) * 100) : null } : null,
   };
   // ---- DCF (Damodaran FCFF) ----
   let dcf = null;
   try {
-    const taxRate = latestFY && num(latestFY.incomeBeforeTax) > 0 ? (num(latestFY.incomeTaxExpense) / num(latestFY.incomeBeforeTax)) * 100 : null;
+    const taxRate = latestFY && num(latestFY.pretaxIncome) > 0 ? (num(latestFY.incomeTax) / num(latestFY.pretaxIncome)) * 100 : null;
     // Accumulated operating losses from the reported years shelter early profits from tax.
     let nol = 0;
     for (const r of annual.slice(-5)) { const oi = num(r.operatingIncome) || 0; nol = oi < 0 ? nol - oi : Math.max(0, nol - oi); }
     const dcfInput = {
-      price, sharesOut, dilutedShares: num(latestFY?.weightedAverageShsOutDil), marketCap: num(q.marketCap || profile.marketCap),
-      totalDebt: num(bs?.totalDebt), leases: num(bs?.capitalLeaseObligations), cash: num(bs?.cashAndShortTermInvestments), nonOperatingAssets: num(bs?.longTermInvestments), minorityInterest: num(bs?.minorityInterest),
-      nol, beta: num(profile.beta), roic: pct(kmTTM?.returnOnInvestedCapitalTTM), riskFree: rf.rate, erp: Number(process.env.DCF_ERP || 4.5),
-      latest: { revenue: num(latestFY?.revenue), ebit: num(latestFY?.operatingIncome), taxRate, interestExpense: num(latestFY?.interestExpense), investedCapital: num(km?.investedCapital) || (bs ? (num(bs.totalDebt) || 0) + (num(bs.totalStockholdersEquity) || 0) - (num(bs.cashAndShortTermInvestments) || 0) : null) },
-      estimates: nextEst.map((e) => ({ date: e.date, revenue: num(e.revenueAvg), ebit: num(e.ebitAvg) })),
+      price, sharesOut, dilutedShares: num(latestFY?.dilutedShares), marketCap: num(q.marketCap || profile.marketCap),
+      totalDebt: num(bs?.totalDebt), leases: num(bs?.leases), cash: num(bs?.cashAndShortTerm), nonOperatingAssets: num(bs?.longTermInvestments), minorityInterest: num(bs?.minorityInterest),
+      nol, beta: num(profile.beta), roic: pct(kmTTM?.roic), riskFree: rf.rate, erp: Number(process.env.DCF_ERP || 4.5),
+      latest: { revenue: num(latestFY?.revenue), ebit: num(latestFY?.operatingIncome), taxRate, interestExpense: num(latestFY?.interestExpense), investedCapital: num(km?.investedCapital) || (bs ? (num(bs.totalDebt) || 0) + (num(bs.equity) || 0) - (num(bs.cashAndShortTerm) || 0) : null) },
+      estimates: nextEst.map((e) => ({ date: e.date, revenue: num(e.revenue), ebit: num(e.ebit) })),
     };
     const base = damodaranDcf(dcfInput);
     if (base) dcf = { ...base, riskFreeDate: rf.date, sensitivity: dcfSensitivity(dcfInput, base) };
@@ -544,7 +541,7 @@ async function buildBundle(symbol) {
     symbol,
     asOf: new Date().toISOString(),
     company: {
-      name: profile.companyName,
+      name: profile.name,
       exchange: profile.exchange,
       exchangeFullName: profile.exchangeFullName,
       currency: profile.currency,
@@ -566,8 +563,8 @@ async function buildBundle(symbol) {
       filerCategory: edgarCo?.filerCategory || null,
       indices,
       fiscalYearEndMonth: fyEnd,
-      employees: num(emp?.employeeCount) || num(profile.fullTimeEmployees),
-      employeesAsOf: emp?.periodOfReport || null,
+      employees: num(emp?.count) || num(profile.employees),
+      employeesAsOf: emp?.asOf || null,
       segments: segmentList,
       segmentsFiscalYear: seg?.fiscalYear || null,
       peers: peerList,
@@ -576,7 +573,7 @@ async function buildBundle(symbol) {
     market: {
       price,
       change: num(q.change),
-      changePct: r2(q.changePercentage),
+      changePct: r2(q.changePct),
       dayHigh: num(q.dayHigh),
       dayLow: num(q.dayLow),
       yearHigh: num(q.yearHigh),
@@ -585,18 +582,18 @@ async function buildBundle(symbol) {
       avgVolume: num(profile.averageVolume),
       marketCapM: mm(q.marketCap || profile.marketCap),
       sharesOutstandingM: sharesOut ? Math.round(sharesOut / M) : null,
-      freeFloatPct: r2(first(sharesFloat)?.freeFloat),
+      freeFloatPct: r2(sharesFloat?.freeFloatPct),
       beta: r2(profile.beta),
       priceAvg50: num(q.priceAvg50),
       priceAvg200: num(q.priceAvg200),
-      quoteTime: q.timestamp ? new Date(q.timestamp * 1000).toISOString() : null,
+      quoteTime: q.time || null,
       per: indicators.per,
       pbr: indicators.pbr,
       dividendYieldPct,
       bps,
-      analystTarget: first(targets) ? { high: num(first(targets).targetHigh), low: num(first(targets).targetLow), consensus: num(first(targets).targetConsensus) } : null,
-      analystRating: first(grades)
-        ? { consensus: first(grades).consensus, buy: (num(first(grades).strongBuy) || 0) + (num(first(grades).buy) || 0), hold: num(first(grades).hold), sell: (num(first(grades).sell) || 0) + (num(first(grades).strongSell) || 0) }
+      analystTarget: targets ? { high: num(targets.high), low: num(targets.low), consensus: num(targets.consensus) } : null,
+      analystRating: grades
+        ? { consensus: grades.consensus, buy: (num(grades.strongBuy) || 0) + (num(grades.buy) || 0), hold: num(grades.hold), sell: (num(grades.sell) || 0) + (num(grades.strongSell) || 0) }
         : null,
     },
     performance,
@@ -613,10 +610,10 @@ async function buildBundle(symbol) {
       ? {
           year: num(latestInsider.year),
           quarter: num(latestInsider.quarter),
-          purchases: num(latestInsider.totalPurchases),
-          sales: num(latestInsider.totalSales),
-          acquiredShares: num(latestInsider.totalAcquired),
-          disposedShares: num(latestInsider.totalDisposed),
+          purchases: num(latestInsider.purchases),
+          sales: num(latestInsider.sales),
+          acquiredShares: num(latestInsider.acquiredShares),
+          disposedShares: num(latestInsider.disposedShares),
         }
       : null,
     earningsHistory: (Array.isArray(earnings) ? earnings : [])
@@ -637,16 +634,16 @@ async function buildBundle(symbol) {
 
 /** Full bundle, cached for 12 hours per symbol. */
 
-/** Index membership and weights (S&P 500 / Nasdaq 100 / Dow 30) from FMP constituent lists and the tracking ETFs, cached daily. */
+/** Index membership and weights (S&P 500 / Nasdaq 100 / Dow 30) from the constituent lists and the tracking ETFs, cached daily. */
 async function indexTables() {
   return cached("index-tables", 24 * 3600, async () => {
-    const sets = [["S&P 500", "sp500-constituent", "SPY"], ["Nasdaq 100", "nasdaq-constituent", "QQQ"], ["Dow 30", "dowjones-constituent", "DIA"]];
+    const sets = [["S&P 500", "sp500", "SPY"], ["Nasdaq 100", "nasdaq100", "QQQ"], ["Dow 30", "dow30", "DIA"]];
     const out = {};
     const norm = (x) => String(x || "").toUpperCase().replace(/\./g, "-");
-    for (const [name, listEp, etf] of sets) {
-      const [list, holdings] = await Promise.all([fmpSoft(listEp, {}), fmpSoft("etf/holdings", { symbol: etf })]);
+    for (const [name, index, etf] of sets) {
+      const [list, holdings] = await Promise.all([soft(P.indexConstituents(index)), soft(P.etfHoldings(etf))]);
       const weights = {};
-      for (const h of Array.isArray(holdings) ? holdings : []) if (h.asset && Number.isFinite(Number(h.weightPercentage))) weights[norm(h.asset)] = Number(h.weightPercentage);
+      for (const h of Array.isArray(holdings) ? holdings : []) if (h.symbol && Number.isFinite(Number(h.weightPct))) weights[norm(h.symbol)] = Number(h.weightPct);
       for (const c of Array.isArray(list) ? list : []) { const sym = norm(c.symbol); (out[sym] ||= []).push({ index: name, weightPct: weights[sym] ?? null }); }
     }
     return out;
@@ -661,25 +658,25 @@ export async function stockBundle(symbol, { force = false, peek = false } = {}) 
   return cached(`stock:${symbol}`, 12 * 3600, () => buildBundle(symbol), { version: "11", force, peek });
 }
 
-/** Newest earnings-call transcript date FMP lists for a symbol (one light request). */
+/** Newest earnings-call transcript date the provider lists for a symbol (one light request). */
 export async function latestTranscriptDate(symbol) {
-  const rows = await fmpSoft("earning-call-transcript-dates", { symbol });
+  const rows = await soft(P.transcriptDates(symbol));
   const dates = (Array.isArray(rows) ? rows : []).map((t) => t.date).filter(Boolean).sort();
   return dates.length ? dates[dates.length - 1] : null;
 }
 
-/** Light, frequently refreshed quote (5 minutes). */
+/** Light, frequently refreshed quote (5 minutes); the contract's quote shape (price, change, changePct, marketCap, time ...). */
 export async function liveQuote(symbol) {
-  return cached(`quote:${symbol}`, 300, async () => first(await fmp("quote", { symbol })) || {});
+  return cached(`quote:${symbol}`, 300, async () => (await P.quote(symbol)) || {}, { version: "2" });
 }
 
 export async function searchSymbols(q) {
   const query = String(q || "").trim();
   if (query.length < 1) return [];
-  const [bySymbol, byName] = await Promise.all([fmpSoft("search-symbol", { query, limit: 20 }), fmpSoft("search-name", { query, limit: 20 })]);
+  const rows = await soft(P.search(query, 20));
   const seen = new Set();
   const usExchange = (r) => ["NASDAQ", "NYSE", "AMEX"].some((x) => (r.exchange || "").toUpperCase().startsWith(x));
-  return [...bySymbol, ...byName]
+  return rows
     .filter((r) => r.symbol && r.currency === "USD" && usExchange(r) && !r.symbol.includes(".") && !/-P[A-Z]?$/.test(r.symbol) && !/\b(ETF|Fund|Trust|Notes?|Warrant|Units?)\b/i.test(r.name || ""))
     .filter((r) => (seen.has(r.symbol) ? false : seen.add(r.symbol)))
     .slice(0, 8)

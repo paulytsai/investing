@@ -1,6 +1,6 @@
 // Deep-dive fundamental analysis (the fifth tab): generated in English from the
 // transcripts, financials, geography, peer metrics and news, then translated.
-import { fmpSoft } from "./fmp.mjs";
+import { provider, soft } from "./providers/index.mjs";
 import { openStore } from "./store.mjs";
 import { logEvent } from "./events.mjs";
 import { runJson, fetchTranscripts, financialDigest, newsDigest, getCachedSummary } from "./summarize.mjs";
@@ -57,22 +57,21 @@ const pct = (v) => (v === null || v === undefined || Number.isNaN(Number(v)) ? "
 const dec = (v) => (v === null || v === undefined || Number.isNaN(Number(v)) ? "-" : Number(v).toFixed(2));
 
 /** Peer operating metrics (TTM) for the company and its closest competitors. */
-async function peerTable(symbol, bundle) {
+export async function peerTable(symbol, bundle) {
   const en = await getCachedSummary(symbol, "en", bundle.latestTranscriptDate).catch(() => null);
   const peers = ((en && en.competitors) || bundle.company.competitors || []).map((c) => c.symbol).filter(Boolean).slice(0, 8);
   const rows = await Promise.all([symbol, ...peers].map(async (s) => {
-    const [r, k, g] = await Promise.all([fmpSoft("ratios-ttm", { symbol: s }), fmpSoft("key-metrics-ttm", { symbol: s }), fmpSoft("income-statement-growth", { symbol: s, limit: 1 })]);
-    const R = Array.isArray(r) ? r[0] : null, K = Array.isArray(k) ? k[0] : null, G = Array.isArray(g) ? g[0] : null;
+    const P = provider();
+    const [R, K, G] = await Promise.all([soft(P.ratiosTtm(s), null), soft(P.keyMetricsTtm(s), null), soft(P.incomeGrowth(s), null)]);
     if (!R && !K) return null;
-    return `${s}${s === symbol ? " (this company)" : ""}: gross margin ${pct(R?.grossProfitMarginTTM)}, operating margin ${pct(R?.operatingProfitMarginTTM)}, net margin ${pct(R?.netProfitMarginTTM)}, R&D/revenue ${pct(K?.researchAndDevelopementToRevenueTTM)}, SG&A/revenue ${pct(K?.salesGeneralAndAdministrativeToRevenueTTM)}, capex/revenue ${pct(K?.capexToRevenueTTM)}, asset turnover ${dec(R?.assetTurnoverTTM)}, inventory days ${dec(K?.daysOfInventoryOutstandingTTM)}, ROIC ${pct(K?.returnOnInvestedCapitalTTM)}, EV/EBITDA ${dec(K?.evToEBITDATTM)}, revenue growth (latest FY) ${pct(G?.growthRevenue)}, operating income growth ${pct(G?.growthOperatingIncome)}`;
+    return `${s}${s === symbol ? " (this company)" : ""}: gross margin ${pct(R?.grossMargin)}, operating margin ${pct(R?.opMargin)}, net margin ${pct(R?.netMargin)}, R&D/revenue ${pct(K?.rndToRevenue)}, SG&A/revenue ${pct(K?.sgaToRevenue)}, capex/revenue ${pct(K?.capexToRevenue)}, asset turnover ${dec(R?.assetTurnover)}, inventory days ${dec(K?.inventoryDays)}, ROIC ${pct(K?.roic)}, EV/EBITDA ${dec(K?.evToEbitda)}, revenue growth (latest FY) ${pct(G?.revenueGrowth)}, operating income growth ${pct(G?.operatingIncomeGrowth)}`;
   }));
   return rows.filter(Boolean).join("\n") || "(no peer data)";
 }
 
 /** Revenue by geography for the last two fiscal years. */
-async function geoDigest(symbol) {
-  const rows = await fmpSoft("revenue-geographic-segmentation", { symbol, structure: "flat" });
-  const list = (Array.isArray(rows) ? rows : []).slice(0, 2);
+export async function geoDigest(symbol) {
+  const list = (await soft(provider().revenueGeography(symbol, 2))).slice(0, 2);
   return list.map((r) => { const total = Object.values(r.data || {}).reduce((a, v) => a + (Number(v) || 0), 0); return `FY${r.fiscalYear}: ${Object.entries(r.data || {}).map(([k, v]) => `${k} ${Math.round(Number(v) / 1e6)}M (${total ? ((Number(v) / total) * 100).toFixed(0) : "?"}%)`).join(", ")}`; }).join("\n") || "(none)";
 }
 
@@ -80,26 +79,26 @@ const M = (v) => (v === null || v === undefined || Number.isNaN(Number(v)) ? "-"
 const n2 = (v, d = 2) => (v === null || v === undefined || Number.isNaN(Number(v)) ? "-" : Number(v).toFixed(d));
 
 /** Ten fiscal years of statements and returns, oldest first (for the historical reconstruction and detective pass). */
-async function historyDigest(symbol) {
+export async function historyDigest(symbol) {
+  const P = provider();
   const [inc, cf, bs, km] = await Promise.all([
-    fmpSoft("income-statement", { symbol, period: "annual", limit: 10 }), fmpSoft("cash-flow-statement", { symbol, period: "annual", limit: 10 }),
-    fmpSoft("balance-sheet-statement", { symbol, period: "annual", limit: 10 }), fmpSoft("key-metrics", { symbol, period: "annual", limit: 10 }),
+    soft(P.incomeStatements(symbol, { period: "annual", limit: 10 })), soft(P.cashFlows(symbol, { period: "annual", limit: 10 })),
+    soft(P.balanceSheets(symbol, { period: "annual", limit: 10 })), soft(P.keyMetrics(symbol, { period: "annual", limit: 10 })),
   ]);
-  const by = (rows) => Object.fromEntries((Array.isArray(rows) ? rows : []).map((r) => [String(r.fiscalYear || r.calendarYear || String(r.date).slice(0, 4)), r]));
+  const by = (rows) => Object.fromEntries((Array.isArray(rows) ? rows : []).map((r) => [String(r.fiscalYear || String(r.date).slice(0, 4)), r]));
   const I = by(inc), C = by(cf), B = by(bs), K = by(km);
   const years = Object.keys(I).sort();
   if (!years.length) return "(no history)";
   return ["FY: revenue, gross margin, operating income (margin), net income, diluted EPS, diluted shares, OCF, capex, FCF, buybacks, dividends, acquisitions, cash+ST inv, total debt, equity, ROIC, capex/revenue, R&D/revenue",
     ...years.map((y) => { const i = I[y] || {}, c = C[y] || {}, b = B[y] || {}, k = K[y] || {};
-      return `FY${y}: ${M(i.revenue)}, GM ${pct(i.grossProfit && i.revenue ? i.grossProfit / i.revenue : null)}, OI ${M(i.operatingIncome)} (${pct(i.operatingIncome && i.revenue ? i.operatingIncome / i.revenue : null)}), NI ${M(i.netIncome)}, EPS ${n2(i.epsDiluted ?? i.eps)}, shares ${M(i.weightedAverageShsOutDil)}, OCF ${M(c.operatingCashFlow)}, capex ${M(c.capitalExpenditure)}, FCF ${M(c.freeCashFlow)}, buybacks ${M(c.commonStockRepurchased)}, dividends ${M(c.dividendsPaid ?? c.commonDividendsPaid)}, acquisitions ${M(c.acquisitionsNet)}, cash ${M(b.cashAndShortTermInvestments)}, debt ${M(b.totalDebt)}, equity ${M(b.totalStockholdersEquity)}, ROIC ${pct(k.returnOnInvestedCapital)}, capex/rev ${pct(k.capexToRevenue)}, R&D/rev ${pct(k.researchAndDevelopementToRevenue)}`; })].join("\n");
+      return `FY${y}: ${M(i.revenue)}, GM ${pct(i.grossProfit && i.revenue ? i.grossProfit / i.revenue : null)}, OI ${M(i.operatingIncome)} (${pct(i.operatingIncome && i.revenue ? i.operatingIncome / i.revenue : null)}), NI ${M(i.netIncome)}, EPS ${n2(i.epsDiluted ?? i.eps)}, shares ${M(i.dilutedShares)}, OCF ${M(c.operating)}, capex ${M(c.capex)}, FCF ${M(c.freeCashFlow)}, buybacks ${M(c.buybacks)}, dividends ${M(c.commonDividendsPaid ?? c.dividendsPaid)}, acquisitions ${M(c.acquisitions)}, cash ${M(b.cashAndShortTerm)}, debt ${M(b.totalDebt)}, equity ${M(b.equity)}, ROIC ${pct(k.roic)}, capex/rev ${pct(k.capexToRevenue)}, R&D/rev ${pct(k.rndToRevenue)}`; })].join("\n");
 }
 
-async function compensationDigest(symbol) {
-  const rows = await fmpSoft("governance-executive-compensation", { symbol });
-  const list = Array.isArray(rows) ? rows : [];
+export async function compensationDigest(symbol) {
+  const list = await soft(provider().compensation(symbol));
   const latest = Math.max(...list.map((r) => Number(r.year) || 0));
   return list.filter((r) => Number(r.year) === latest).sort((a, b) => (b.total || 0) - (a.total || 0)).slice(0, 4)
-    .map((r) => `${latest} ${r.nameAndPosition}: total ${M(r.total)} (salary ${M(r.salary)}, stock awards ${M(r.stockAward)}, incentive ${M(r.incentivePlanCompensation)})`).join("\n") || "(none)";
+    .map((r) => `${latest} ${r.name}: total ${M(r.total)} (salary ${M(r.salary)}, stock awards ${M(r.stockAward)}, incentive ${M(r.incentive)})`).join("\n") || "(none)";
 }
 
 function marketDigest(bundle) {
@@ -122,7 +121,7 @@ function marketDigest(bundle) {
 export async function generateDeepEnglish(symbol, bundle) {
   const [transcripts, news, peers, geo, history, comp] = await Promise.all([
     fetchTranscripts(symbol, bundle.transcripts || []),
-    fmpSoft("news/stock", { symbols: symbol, limit: 30 }),
+    soft(provider().news(symbol, 30)),
     peerTable(symbol, bundle).catch(() => "(no peer data)"),
     geoDigest(symbol).catch(() => "(none)"),
     historyDigest(symbol).catch(() => "(no history)"),

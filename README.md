@@ -126,6 +126,22 @@ key figures, JSON-LD) that the app upgrades to the full page for subscribers;
 creator, and `#/about` (linked from every footer next to Contact) repeats it with
 a short description of the site.
 
+### Market-data provider
+
+All vendor access goes through `netlify/lib/providers/`. `provider()` returns the
+adapter named by `MARKET_DATA_PROVIDER` (default `fmp`); the rest of the code
+only sees the normalised records in `providers/CONTRACT.md` (35 methods: profile,
+quotes, statements, TTM metrics, estimates, holders, transcripts, prices, news,
+index lists, search). To switch vendors, copy `providers/template.mjs` to
+`providers/<vendor>.mjs`, implement the contract, register it in `REGISTRY` in
+`providers/index.mjs`, set `MARKET_DATA_PROVIDER=<vendor>`, and bump the bundle
+cache version in `stockdata.mjs` so cached bundles rebuild. `tests/provider.test.mjs`
+checks that the adapter exports every method. To verify an adapter against the
+current one, record every upstream response for a few tickers (wrap
+`globalThis.fetch`, key by URL without the API key), build the bundles, swap the
+provider, replay the recordings and diff the bundles; only quote-level drift
+should remain. EDGAR access (`netlify/lib/edgar.mjs`) is separate.
+
 ### Project layout
 
 ```
@@ -149,7 +165,8 @@ netlify/functions/      Netlify Functions v2 (Request -> Response)
   lemonsqueezy-webhook.mjs          /api/webhooks/lemonsqueezy
   config.mjs            /api/config (locales, price label, feature flags)
 netlify/lib/            store (Blobs + local file fallback), users, session,
-                        entitlement, fmp, edgar, stockdata, summarize, prompts, lemonsqueezy
+                        entitlement, edgar, stockdata, summarize, prompts, lemonsqueezy
+  providers/            market-data adapters (index, fmp, template, CONTRACT.md)
 scripts/dev.mjs         local dev server (no Netlify CLI needed)
 tests/                  node:test unit tests
 ```
