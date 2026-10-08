@@ -55,6 +55,11 @@ not a translation.
   is granted for `active`, `on_trial`, `past_due`, and `cancelled` until
   `ends_at`.
 
+### Admin maintenance endpoints
+
+- `POST /api/admin/rebuild?symbol=TSM` (admin cookie) force-rebuilds one ticker's bundle and drops its AI records so the warmer regenerates them.
+- `POST /api/admin/sector-rebuild?id=financials` drops that sector's AI report in every language so the next member view regenerates it. Report generation builds the bundle of every constituent first (about 5 seconds per 4 names).
+
 ### Built-in accounts and the admin panel
 
 `ADMIN_PASSWORD` and `FRIEND_PASSWORD` (with optional `ADMIN_USERNAME`,
