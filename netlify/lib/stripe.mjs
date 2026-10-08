@@ -50,8 +50,8 @@ export async function createCheckoutSession(user, { siteUrl, plan = "monthly" })
     metadata: { user_id: user.id, username: user.username, plan },
     subscription_data: { metadata: { user_id: user.id, plan } },
     allow_promotion_codes: true,
-    // Charge in the site's own currency: no automatic conversion to the visitor's local currency.
-    adaptive_pricing: { enabled: false },
+    // Managed Payments requires adaptive pricing: the price is set in the site's currency and
+    // visitors abroad see their own currency with a selector to switch back.
     locale: CHECKOUT_LOCALES[user.locale] || "auto",
   };
   if (s.managedPayments) params.managed_payments = { enabled: true };
