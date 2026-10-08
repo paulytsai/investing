@@ -91,6 +91,7 @@
     if (state.demo.b) { state.demo.s = null; state.demo.summaryStatus = null; state.demo.d = null; state.demo.deepStatus = null; }
     $("#searchInput").placeholder = t("searchPlaceholder");
     $("#searchBtn").textContent = t("search");
+    $("#sectorsBtn").textContent = t("sectors.button");
     try { localStorage.setItem("locale", loc); } catch {}
     if (persist && state.user && state.user.locale !== loc) api("/api/auth/locale", { method: "POST", body: { locale: loc } }).then((r) => { state.user = r.user; }).catch(() => {});
     renderUserMenu();
@@ -108,7 +109,7 @@
     } else {
       right = `<a href="#/login">${t("login")}</a><a class="btn small primary" href="#/signup">${t("signup")}</a>`;
     }
-    $("#userMenu").innerHTML = `<a class="btn small sectors-btn" href="#/sectors">${t("sectors.button")}</a>` + langs + right;
+    $("#userMenu").innerHTML = langs + right;
     document.querySelectorAll("#userMenu [data-lang]").forEach((b) => b.addEventListener("click", () => setLocale(b.dataset.lang)));
     const lo = $("#logoutBtn");
     if (lo) lo.addEventListener("click", async () => { await api("/api/auth/logout", { method: "POST" }); state.user = null; state.ent = null; location.hash = "#/"; renderUserMenu(); render(); });
