@@ -179,12 +179,30 @@ export default handler(async (req, context) => {
 
   // Create a complimentary member (family, friends, press): never billed, no trial clock.
   // POST /api/admin/member  body {username, email, password, note?}
+  // An email is optional: without one the account gets a local placeholder (no password resets by mail).
   if (action === "member" && req.method === "POST") {
     let body = {}; try { body = await req.json(); } catch {}
-    const user = await createUser({ username: String(body.username || "").trim(), email: String(body.email || "").trim(), password: body.password, locale: cfg.defaultLocale() });
+    const username = String(body.username || "").trim();
+    const email = String(body.email || "").trim() || `${username.toLowerCase()}@${cfg.brand().id || "site"}.local`;
+    const user = await createUser({ username, email, password: body.password, locale: cfg.defaultLocale() });
     user.plan = "free"; user.note = String(body.note || "").slice(0, 120) || "complimentary";
     await saveUser(user);
     return json({ user: { username: user.username, email: user.email, plan: user.plan, entitlement: entitlement(user) } }, 201);
+  }
+  // Change (or remove) a member's email: POST /api/admin/member-email body {username, email} (empty email = placeholder).
+  if (action === "member-email" && req.method === "POST") {
+    let body = {}; try { body = await req.json(); } catch {}
+    const user = await findUserByLogin(String(body.username || "").trim());
+    if (!user) throw new HttpError(404, "not_found");
+    const email = String(body.email || "").trim().toLowerCase() || `${user.username.toLowerCase()}@${cfg.brand().id || "site"}.local`;
+    const users = await openStore("users");
+    if (email !== user.email) {
+      const r = await users.set(`email:${email}`, { id: user.id }, { onlyIfNew: true });
+      if (!r.modified) throw new HttpError(409, "email_taken");
+      await users.delete(`email:${user.email}`).catch(() => {});
+      user.email = email; await saveUser(user);
+    }
+    return json({ user: { username: user.username, email: user.email } });
   }
 
   // Access codes (free months, no card): list, create or update, deactivate.
