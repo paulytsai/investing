@@ -429,6 +429,7 @@
       ${row(t("sector"), `${esc(co.sector || "")} / ${esc(co.industry || "")}${co.sicDescription ? `　<span class="muted">${t("sic")}: ${esc(co.sicDescription)} (${esc(co.sicCode)})</span>` : ""}`)}
       ${row(`<b>${t("longTerm")}</b>`, aiBox(c, "longTerm"))}
       ${row(`<b>${t("recent")}</b>`, aiBox(c, "recent"))}
+      ${row(`<b>${t("change")}</b>`, aiBox(c, "change"))}
       ${row(`<b>${t("bull")}</b>`, aiBox(c, "bull"))}
       ${row(`<b>${t("bear")}</b>`, aiBox(c, "bear"))}
       ${row(t("hq"), esc(co.address || NA))}

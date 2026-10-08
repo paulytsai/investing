@@ -10,7 +10,7 @@ import { englishSystemPrompt, translateSystemPrompt, OUTPUT_SCHEMA, TEXT_SCHEMA 
 
 const MAX_TRANSCRIPT_CHARS = 60000;
 const TRANSCRIPTS_TO_USE = 4;
-const VERSION = "v7"; // English generation
+const VERSION = "v8"; // English generation
 const TRANSLATION_VERSION = "2"; // bump to re-translate without regenerating English
 
 export function summaryKey(symbol, lang, latestTranscriptDate) {
@@ -204,7 +204,7 @@ export async function generateEnglish(symbol, bundle) {
 
 /** Translate the English record into `lang` and store it. */
 export async function translateSummary(en, lang, bundle) {
-  const source = { feature: en.feature, longTerm: en.longTerm, recent: en.recent, bull: en.bull, bear: en.bear, technical: en.technical, asOf: en.asOf };
+  const source = { feature: en.feature, longTerm: en.longTerm, recent: en.recent, change: en.change, bull: en.bull, bear: en.bear, technical: en.technical, asOf: en.asOf };
   const { parsed, message } = await runJson({
     system: translateSystemPrompt(lang),
     user: `Translate this JSON. Return JSON only.\n\n${JSON.stringify(source)}`,

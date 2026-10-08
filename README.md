@@ -76,7 +76,8 @@ portal) or delete the account outright after re-entering the password.
   incorporation, fiscal year end, 10-K business summary), filing list, 8-K
   material events, filing-derived ratios.
 * **Claude** (`claude-opus-5-5` via the Anthropic SDK) writes the English
-  commentary (profile, long-term trend, recent quarters, bull and bear cases,
+  commentary (profile, long-term trend, recent quarters, what changed versus
+  the trend, bull and bear cases,
   a technical read of support and resistance, and a worldwide competitor
   list) from the last four transcripts, ~25 news items, the financial table
   and a digest of the price history. Japanese and Traditional Chinese are
