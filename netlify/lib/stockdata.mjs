@@ -628,8 +628,15 @@ async function buildBundle(symbol) {
 }
 
 /** Full bundle, cached for 12 hours per symbol. */
-export async function stockBundle(symbol) {
-  return cached(`stock:${symbol}`, 12 * 3600, () => buildBundle(symbol), { version: "9" });
+export async function stockBundle(symbol, { force = false } = {}) {
+  return cached(`stock:${symbol}`, 12 * 3600, () => buildBundle(symbol), { version: "9", force });
+}
+
+/** Newest earnings-call transcript date FMP lists for a symbol (one light request). */
+export async function latestTranscriptDate(symbol) {
+  const rows = await fmpSoft("earning-call-transcript-dates", { symbol });
+  const dates = (Array.isArray(rows) ? rows : []).map((t) => t.date).filter(Boolean).sort();
+  return dates.length ? dates[dates.length - 1] : null;
 }
 
 /** Light, frequently refreshed quote (5 minutes). */

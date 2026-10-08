@@ -76,8 +76,8 @@ portal) or delete the account outright after re-entering the password.
   incorporation, fiscal year end, 10-K business summary), filing list, 8-K
   material events, filing-derived ratios.
 * **Claude** (`claude-opus-5-5` via the Anthropic SDK) writes the English
-  commentary (profile, long-term trend, recent quarters, what changed versus
-  the trend, bull and bear cases,
+  commentary (profile, long-term trend, recent quarters, the past year's
+  story, bull and bear cases,
   a technical read of support and resistance, and a worldwide competitor
   list) from the last four transcripts, ~25 news items, the financial table
   and a digest of the price history. Japanese and Traditional Chinese are
@@ -85,18 +85,22 @@ portal) or delete the account outright after re-entering the password.
   languages say the same thing. Output is schema-constrained JSON. Generation runs in a
   Netlify **background function** (up to 15 min) and the page polls until it is
   ready; results are cached until a newer transcript appears. One generation
-  costs roughly US$0.30 (≈66k input tokens).
+  costs roughly US$0.60 (≈70k input tokens, high effort).
 
 Caching (Netlify Blobs): stock bundle 12 h, daily prices 6 h, quote 5 min.
 
-**Pre-generation.** `warm-schedule` runs hourly and starts `warm-background`
-(up to 15 minutes), which walks the S&P 100 (`netlify/lib/universe.mjs`, plus
-`WARM_SYMBOLS`), refreshes each bundle and generates any missing commentary in
-English and the site's locales, at most `WARM_PER_RUN` new English generations
-per run (default 8, so the full list fills in about half a day). Because the
-cache key includes the date of the latest earnings call, a new call makes the
-warmer regenerate that stock on its next pass. `GET /api/warm` shows the last
-run; `POST /api/warm?key=<INTERNAL_SECRET>` starts one on demand.
+**Pre-generation.** `warm-schedule` runs hourly and dispatches a sharded run:
+`WARM_SHARDS` (default 4) `warm-background` functions, each walking its slice of
+the S&P 100 (`netlify/lib/universe.mjs`, plus `WARM_SYMBOLS`) with
+`WARM_CONCURRENCY` tickers in flight (default 2). Every ticker is checked for a
+newer earnings-call transcript each hour; when one has appeared the bundle is
+rebuilt and the commentary regenerated, so digests follow the calls one by one.
+Missing commentary is generated in English and the site's locales, at most
+`WARM_PER_RUN` new English generations per shard per hour. The admin panel's
+"Generate everything missing now" (or `POST /api/warm?key=<INTERNAL_SECRET>&full=1`)
+dispatches `WARM_FULL_SHARDS` (default 10) shards with no cap, which fills the
+whole universe in one pass of roughly 10-15 minutes. `GET /api/warm` shows the
+aggregated status of the last run.
 
 ### Project layout
 

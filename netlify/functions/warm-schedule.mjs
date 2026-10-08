@@ -1,10 +1,9 @@
-// Hourly scheduled trigger: kicks off one background warm run.
-import { cfg } from "../lib/config.mjs";
+// Hourly scheduled trigger: dispatches one background warm run (sharded).
+import { dispatchWarm } from "../lib/warmer.mjs";
 
 export default async () => {
-  const url = `${cfg.siteUrl().replace(/\/$/, "")}/.netlify/functions/warm-background`;
-  const res = await fetch(url, { method: "POST", headers: { "x-internal-secret": cfg.internalSecret() } });
-  return new Response(`warm dispatched: ${res.status}`, { status: 200 });
+  const r = await dispatchWarm({ full: false });
+  return new Response(`warm dispatched: ${JSON.stringify(r)}`, { status: 200 });
 };
 
 export const config = { schedule: "17 * * * *" };

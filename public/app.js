@@ -258,9 +258,9 @@
     const states = Object.entries(T.states).map(([k, v]) => `${k} ${v}`).join(" · ");
     const w = d.warm.last;
     app.innerHTML = `<div class="admin">
-      <h2>${t("billing.adminPanel")} <span class="muted small">${esc(fmtDate(d.generatedAt))}</span> <button class="btn small" id="warmBtn">Run warmer now</button></h2>
+      <h2>${t("billing.adminPanel")} <span class="muted small">${esc(fmtDate(d.generatedAt))}</span> <button class="btn small" id="warmBtn">Run warmer now</button> <button class="btn small" id="warmAllBtn">Generate everything missing now</button></h2>
       <div class="stats stats-admin">${tile("Users", fmtInt(T.users), esc(states))}${tile("Signups 7d / 30d", `${T.signups7d} / ${T.signups30d}`)}${tile("Active today / 7d / 30d", `${T.activeToday} / ${T.active7d} / ${T.active30d}`)}${tile("Page views 30d", fmtInt(T.views30d), `demo ${fmtInt(T.demo30d)}`)}${tile("AI runs 30d", `${T.aiGenerations30d} gen / ${T.aiTranslations30d} tr`, `≈ US$${fmtDec(T.aiCostUsd30d, 2)}`)}${tile("Warmer", w ? (w.running ? "running" : "idle") : "never ran", w ? `${esc((w.finishedAt || w.startedAt).slice(0, 16).replace("T", " "))} · gen ${w.generated.length} · tr ${w.translated.length} · err ${w.errors.length}` : `${d.warm.universe} tickers, ${d.warm.perRun}/run`)}</div>
-      <section class="card"><h3 class="sec">AI digest coverage (S&amp;P 100)<span class="sec-extra">${w && w.running ? `running · now ${esc(d.warm.current || "")}` : "idle"} · next hourly run at :17 · ${d.warm.perRun} new per run</span></h3>
+      <section class="card"><h3 class="sec">AI digest coverage (S&amp;P 100)<span class="sec-extra">${w && w.running ? `running (${w.shards || 1} shards) · now ${esc(d.warm.current || "")}` : "idle"} · hourly at :17 · ${d.warm.settings ? `${d.warm.settings.shards} shards × ${d.warm.perRun} new` : `${d.warm.perRun} new`} per run · new transcripts regenerate automatically</span></h3>
         ${d.warm.langs.map((l) => { const n = d.warm.coverage[l] || 0; const p = Math.round((n / d.warm.universe) * 100); return `<div class="cov"><span class="cov-l">${esc(l)}</span><div class="cov-bar"><div class="cov-fill" style="width:${p}%"></div></div><span class="cov-n">${n} / ${d.warm.universe}</span></div>`; }).join("")}
         <p class="note">${d.warm.pending.length ? `Pending (${d.warm.pending.length}): ${d.warm.pending.map((x) => esc(x)).join(", ")}` : "All tickers have every language."}</p>
       </section>
@@ -272,7 +272,8 @@
       <section class="card"><h3 class="sec">Users</h3>${wrap(`<table class="tbl"><thead><tr><th>User</th><th>Email</th><th>Signed up</th><th>Status</th><th>Last seen (30d)</th></tr></thead><tbody>${d.users.map((u) => `<tr><td>${esc(u.username)}${u.role ? ` <span class="pill">${esc(u.role)}</span>` : ""}</td><td>${esc(u.email)}</td><td>${esc(fmtDate(new Date(u.createdAt).toISOString()))}</td><td>${esc(u.state)}${u.status ? ` (${esc(u.status)})` : ""}</td><td>${u.lastSeen ? esc(new Date(u.lastSeen).toISOString().slice(0, 16).replace("T", " ")) : "—"}</td></tr>`).join("")}</tbody></table>`)}</section>
       ${w && w.errors.length ? `<section class="card"><h3 class="sec">Warmer errors</h3><ul>${w.errors.map((x) => `<li>${esc(x)}</li>`).join("")}</ul></section>` : ""}
     </div>`;
-    $("#warmBtn").addEventListener("click", async () => { $("#warmBtn").disabled = true; try { await api("/api/admin/warm", { method: "POST" }); $("#warmBtn").textContent = "Warmer started"; } catch (e) { $("#warmBtn").textContent = e.message; } });
+    const warmClick = (id, url, label) => $(id).addEventListener("click", async () => { $(id).disabled = true; try { const r = await api(url, { method: "POST" }); $(id).textContent = `${label} (${r.shards} shards)`; } catch (e) { $(id).textContent = e.message; } });
+    warmClick("#warmBtn", "/api/admin/warm", "Warmer started"); warmClick("#warmAllBtn", "/api/admin/warm?full=1", "Full run started");
   }
 
   function renderPaywall() {
@@ -429,7 +430,7 @@
       ${row(t("sector"), `${esc(co.sector || "")} / ${esc(co.industry || "")}${co.sicDescription ? `　<span class="muted">${t("sic")}: ${esc(co.sicDescription)} (${esc(co.sicCode)})</span>` : ""}`)}
       ${row(`<b>${t("longTerm")}</b>`, aiBox(c, "longTerm"))}
       ${row(`<b>${t("recent")}</b>`, aiBox(c, "recent"))}
-      ${row(`<b>${t("change")}</b>`, aiBox(c, "change"))}
+      ${row(`<b>${t("story")}</b>`, aiBox(c, "story"))}
       ${row(`<b>${t("bull")}</b>`, aiBox(c, "bull"))}
       ${row(`<b>${t("bear")}</b>`, aiBox(c, "bear"))}
       ${row(t("hq"), esc(co.address || NA))}

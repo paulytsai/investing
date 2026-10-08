@@ -6,6 +6,7 @@ import { listEvents } from "../lib/events.mjs";
 import { openStore } from "../lib/store.mjs";
 import { cfg } from "../lib/config.mjs";
 import { warmUniverse } from "../lib/universe.mjs";
+import { dispatchWarm, warmStatus, warmCoverage, warmSettings } from "../lib/warmer.mjs";
 
 const PRICE_IN = 4 / 1e6, PRICE_OUT = 20 / 1e6; // claude-opus-5-5 list prices per token
 
@@ -41,8 +42,8 @@ export default handler(async (req, context) => {
     const activeIn = (ms) => new Set(events.filter((e) => now - e.ts < ms && e.user && e.user !== "anon" && e.user !== "system").map((e) => e.user)).size;
     const states = {};
     for (const u of users) { const st = entitlement(u).state; states[st] = (states[st] || 0) + 1; }
-    const warm = await jobs.get("warm:last");
-    const coverage = (await jobs.get("warm:coverage")) || {};
+    const warm = (await warmStatus()).last;
+    const coverage = await warmCoverage();
     const universe = warmUniverse();
     const langs = [...new Set(["en", ...cfg.locales()])];
     const covCounts = Object.fromEntries(langs.map((l) => [l, universe.filter((sym) => coverage[sym]?.ready?.[l]).length]));
@@ -53,15 +54,13 @@ export default handler(async (req, context) => {
       series,
       topSymbols: Object.entries(bySymbol).sort((a, b) => b[1] - a[1]).slice(0, 25).map(([symbol, views]) => ({ symbol, views })),
       recent: events.slice(0, 60),
-      warm: { universe: universe.length, perRun: Number(process.env.WARM_PER_RUN || 8), last: warm, langs, coverage: covCounts, pending, current: warm?.running ? warm.current : null },
+      warm: { universe: universe.length, perRun: warmSettings().perRun, settings: warmSettings(), last: warm, langs, coverage: covCounts, pending, current: warm?.running ? [].concat(warm.current || []).join(", ") : null },
       users: allUsers.slice(0, 200).map((u) => ({ username: u.username, email: u.email, createdAt: u.createdAt, state: entitlement(u).state, status: u.subscription?.status || null, role: u.role || null, lastSeen: lastSeen[u.username] || null })),
     });
   }
 
   if (action === "warm" && req.method === "POST") {
-    const url = `${cfg.siteUrl().replace(/\/$/, "")}/.netlify/functions/warm-background`;
-    const res = await fetch(url, { method: "POST", headers: { "x-internal-secret": cfg.internalSecret() } });
-    return json({ dispatched: res.status === 202 || res.ok });
+    return json(await dispatchWarm({ full: query(req).get("full") === "1" }));
   }
 
   throw new HttpError(404, "not_found");

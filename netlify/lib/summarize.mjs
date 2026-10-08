@@ -10,7 +10,7 @@ import { englishSystemPrompt, translateSystemPrompt, OUTPUT_SCHEMA, TEXT_SCHEMA 
 
 const MAX_TRANSCRIPT_CHARS = 60000;
 const TRANSCRIPTS_TO_USE = 4;
-const VERSION = "v8"; // English generation
+const VERSION = "v9"; // English generation
 const TRANSLATION_VERSION = "2"; // bump to re-translate without regenerating English
 
 export function summaryKey(symbol, lang, latestTranscriptDate) {
@@ -18,7 +18,7 @@ export function summaryKey(symbol, lang, latestTranscriptDate) {
   return `${v}:${symbol}:${lang}:${latestTranscriptDate || "none"}`;
 }
 
-const PIECES = ["longTerm", "recent", "change", "bull", "bear"];
+const PIECES = ["longTerm", "recent", "story", "bull", "bear"];
 const filled = (v) => typeof v === "string" && v.trim().length > 0;
 
 /** True when every piece of commentary is present; a record with empty strings is treated as missing. */
@@ -205,7 +205,7 @@ export async function generateEnglish(symbol, bundle) {
   if (!isComplete({ ...parsed, competitors: [] })) {
     // The model occasionally returns empty strings for some pieces; ask once more, explicitly.
     console.warn(`incomplete commentary for ${symbol}; retrying`);
-    ({ parsed, message } = await request(" Every piece (feature, longTerm, recent, change, bull, bear, technical with support and resistance levels, competitors) must be filled in; empty strings are not acceptable."));
+    ({ parsed, message } = await request(" Every piece (feature, longTerm, recent, story, bull, bear, technical with support and resistance levels, competitors) must be filled in; empty strings are not acceptable."));
     if (!isComplete({ ...parsed, competitors: [] })) throw new Error("Model returned incomplete commentary");
   }
   const competitors = await resolveCompetitors(symbol, parsed.competitors);
@@ -224,7 +224,7 @@ export async function generateEnglish(symbol, bundle) {
 
 /** Translate the English record into `lang` and store it. */
 export async function translateSummary(en, lang, bundle) {
-  const source = { feature: en.feature, longTerm: en.longTerm, recent: en.recent, change: en.change, bull: en.bull, bear: en.bear, technical: en.technical, asOf: en.asOf };
+  const source = { feature: en.feature, longTerm: en.longTerm, recent: en.recent, story: en.story, bull: en.bull, bear: en.bear, technical: en.technical, asOf: en.asOf };
   const { parsed, message } = await runJson({
     system: translateSystemPrompt(lang),
     user: `Translate this JSON. Return JSON only.\n\n${JSON.stringify(source)}`,
