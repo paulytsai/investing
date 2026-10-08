@@ -423,3 +423,12 @@ table.deep-bf tbody th { white-space: normal; font-weight: 600; }
   table.deep-bf td { border: 0; padding: 2px 8px 6px; }
   table.deep-bf td::before { content: attr(data-l); display: block; font-size: 12px; color: var(--muted); }
 }
+
+/* ---------- technical tab ---------- */
+.tech-chart { margin: 0 8px; }
+.lvl-label { font-size: 11px; font-weight: 600; }
+.legend { margin: 6px 8px 0; }
+.lg { display: inline-block; width: 22px; height: 0; border-top: 2px dashed; vertical-align: middle; margin-right: 4px; }
+.lg.res { border-color: #c93c37; } .lg.sup { border-color: #1a7f37; } .lg.ma50 { border-color: #d08c1a; border-top-style: dotted; } .lg.ma200 { border-color: #6b4fbb; border-top-style: dotted; } .lg.px { border-color: #1f2328; border-top-style: solid; }
+.lvl { font-weight: 600; } .lvl.res { color: #c93c37; } .lvl.sup { color: #1a7f37; }
+[data-techranges] { margin: 8px 8px 4px; }

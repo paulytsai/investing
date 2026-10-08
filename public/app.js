@@ -368,9 +368,10 @@
   }
   function renderTab(c) {
     const body = c.root && c.root.querySelector("[data-tabbody]"); if (!body) return;
-    body.innerHTML = [tabOverview, tabFinancials, tabValuation, tabHolders, tabDeep][c.tab](c);
+    body.innerHTML = [tabOverview, tabFinancials, tabValuation, tabTechnical, tabHolders, tabDeep][c.tab](c);
     if (c.tab === 2) bindTarget(c);
-    if (c.tab === 4 && !c.d && c.deepStatus !== "pending" && c.deepStatus !== "disabled") loadDeep(c);
+    if (c.tab === 3) { body.querySelectorAll("[data-techranges] button").forEach((btn) => btn.addEventListener("click", () => { c.techRange = btn.dataset.range; body.querySelectorAll("[data-techranges] button").forEach((x) => x.classList.toggle("active", x === btn)); loadTechChart(c); })); loadTechChart(c); }
+    if (c.tab === 5 && !c.d && c.deepStatus !== "pending" && c.deepStatus !== "disabled") loadDeep(c);
     markScrollable(body);
   }
 
@@ -441,7 +442,7 @@
       ${row(`<b>${t("bear")}</b>`, aiBox(c, "bear"))}
       ${row(t("hq"), esc(co.address || NA))}
       ${row(t("employees"), co.employees ? `${fmtInt(co.employees)}${isCJK() ? "名" : ""}${co.employeesAsOf ? ` <${yymm(co.employeesAsOf)}>` : ""}` : NA)}
-      ${row(t("exchange"), `${esc(co.exchangeFullName || co.exchange)}${co.filerCategory ? `　<span class="muted">${esc(co.filerCategory)}</span>` : ""}`)}
+      ${row(t("exchange"), `${esc(co.exchangeFullName || co.exchange)}${co.filerCategory ? `　<span class="muted">${esc(co.filerCategory)}</span>` : ""}${co.indices && co.indices.length ? `<br><span class="muted">${t("indexMember")}:</span> ${co.indices.map((x) => `<b>${esc(x.index)}</b>${x.weightPct !== null ? ` ${fmtDec(x.weightPct, 2)}%` : ""}`).join("　")}` : ""}`)}
       ${row(t("url"), co.website ? `<a href="${esc(co.website)}" target="_blank" rel="noopener">${esc(co.website)}</a>` : NA)}
       ${row(t("shares"), `${t("sharesOut")} ${fmtInt(m.sharesOutstandingM)}${t("millionShares")}　${t("marketCap")} ${fmtBig(m.marketCapM)}　${t("val.peFwd")} ${fmtDec(v.peForward, 1)}　${t("val.pe")} ${fmtDec(v.pe, 1)}　${t("pbr")} ${fmtDec(m.pbr, 1)}　${t("val.divYield")} ${fmtPct(m.dividendYieldPct, 2)}`)}
       ${row(t("opMargin"), `${fmtPct(b.growth.operatingMarginPct)}${b.growth.operatingMarginPrevPct !== null ? `(${b.growth.operatingMarginPct - b.growth.operatingMarginPrevPct >= 0 ? "+" : ""}${fmtDec(b.growth.operatingMarginPct - b.growth.operatingMarginPrevPct, 1)}pt)` : ""}　<span class="muted">${t("salesGrowth3y")}:</span> ${sg || NA}`)}
@@ -540,12 +541,7 @@
         <dt><label for="tpe-${esc(b.symbol)}">${T.multiple}</label></dt><dd><input id="tpe-${esc(b.symbol)}" class="tpe" type="number" min="1" max="500" step="0.5" value="${def}" inputmode="decimal"> <span class="muted small">${T.presets}: ${refs}</span></dd>
         <dt>${T.price}</dt><dd><b class="tp-price"></b> <span class="tp-up"></span></dd></dl><p class="note">${esc(T.note)}</p></div>`;
     }
-    const K = t("tech"); const tech = c.s && c.s.technical;
-    const lv = (rows) => rows && rows.length ? `<table class="tbl"><thead><tr><th class="num">${K.level}</th><th>${K.reason}</th></tr></thead><tbody>${rows.slice().sort((p, q) => q.level - p.level).map((r) => `<tr><td class="num">$${fmtDec(r.level, 1)}</td><td>${esc(r.reason)}</td></tr>`).join("")}</tbody></table>` : `<p class="muted">${NA}</p>`;
-    const techHtml = tech
-      ? `<div class="grid2b"><div><h4 class="sub">${K.resistance}</h4>${wrap(lv(tech.resistance))}</div><div><h4 class="sub">${K.support}</h4>${wrap(lv(tech.support))}</div></div><p class="tech-comment">${esc(tech.comment)}</p>`
-      : `<p class="muted">${c.summaryStatus === "pending" || c.summaryStatus === null ? t("generating") : t("summaryError")}</p>`;
-    return `${sec(T.title, targetHtml)}${sec(K.title, techHtml, `$${fmtDec(v.price, 2)}`)}${sec(V.dcfTitle, dcfHtml, d && d.riskFreeDate ? `${V.rf}: ${fmtPct(d.inputs.riskFree, 2)} (${esc(d.riskFreeDate)})` : "")}<h3 class="sec plain">${V.title}</h3>${metrics}`;
+    return `${sec(T.title, targetHtml)}${sec(V.dcfTitle, dcfHtml, d && d.riskFreeDate ? `${V.rf}: ${fmtPct(d.inputs.riskFree, 2)} (${esc(d.riskFreeDate)})` : "")}<h3 class="sec plain">${V.title}</h3>${metrics}`;
   }
   function bindTarget(c) {
     const root = c.root; if (!root) return;
@@ -565,6 +561,32 @@
     update();
   }
 
+  function tabTechnical(c) {
+    const b = c.b; const v = b.valuation || {}; const K = t("tech"); const tech = c.s && c.s.technical;
+    const lv = (rows, kind) => rows && rows.length ? `<table class="tbl"><thead><tr><th class="num">${K.level}</th><th>${K.reason}</th></tr></thead><tbody>${rows.slice().sort((p, q) => q.level - p.level).map((r) => `<tr><td class="num"><span class="lvl ${kind}">$${fmtDec(r.level, 1)}</span></td><td>${esc(r.reason)}</td></tr>`).join("")}</tbody></table>` : `<p class="muted">${NA}</p>`;
+    const chart = `<div class="ranges" data-techranges>${["3m", "6m", "1y", "3y"].map((r) => `<button data-range="${r}" class="${r === (c.techRange || "1y") ? "active" : ""}">${t("ranges")[r]}</button>`).join("")}</div><div class="chart tech-chart" data-techchart></div>
+      <p class="note legend"><span class="lg res"></span>${K.resistance}　<span class="lg sup"></span>${K.support}　<span class="lg ma50"></span>${K.ma50}　<span class="lg ma200"></span>${K.ma200}　<span class="lg px"></span>${K.current} $${fmtDec(v.price, 2)}</p>`;
+    const ctx = kv([[K.current, `$${fmtDec(v.price, 2)}`], [K.high52, `$${fmtDec(v.yearHigh, 2)}${v.yearHighDate ? ` <span class="muted">(${fmtDate(v.yearHighDate)})</span>` : ""}`], [K.low52, `$${fmtDec(v.yearLow, 2)}${v.yearLowDate ? ` <span class="muted">(${fmtDate(v.yearLowDate)})</span>` : ""}`], v.allTimeHigh ? [K.ath, `$${fmtDec(v.allTimeHigh.price, 2)} <span class="muted">(${fmtDate(v.allTimeHigh.date)})</span>`] : null, [K.ma50, `$${fmtDec(v.priceAvg50, 2)}`], [K.ma200, `$${fmtDec(v.priceAvg200, 2)}`]]);
+    const read = tech
+      ? `<div class="grid2b"><div><h4 class="sub">${K.resistance}</h4>${wrap(lv(tech.resistance, "res"))}</div><div><h4 class="sub">${K.support}</h4>${wrap(lv(tech.support, "sup"))}</div></div><p class="tech-comment">${esc(tech.comment)}</p>${updatedNote(c)}`
+      : `<p class="muted" style="margin:8px">${c.summaryStatus === "pending" || c.summaryStatus === null ? t("generating") : t("summaryError")}</p>`;
+    return `${sec(K.title, chart + read, `$${fmtDec(v.price, 2)}`)}${sec(K.context, ctx)}`;
+  }
+  async function loadTechChart(c) {
+    const el = c.root && c.root.querySelector("[data-techchart]"); if (!el) return;
+    const range = c.techRange || "1y"; const key = `${c.b.symbol}:${range}`;
+    if (!c.chartCache[key]) {
+      el.innerHTML = `<div class="spinner">…</div>`;
+      try { c.chartCache[key] = (await api(`/api/chart/${encodeURIComponent(c.b.symbol)}?range=${range}`)).points; } catch (e) { el.innerHTML = `<div class="error">${t("loadError")}</div>`; return; }
+      if (!document.body.contains(el)) return;
+    }
+    const v = c.b.valuation || {}; const K = t("tech"); const tech = c.s && c.s.technical;
+    const levels = [];
+    if (tech) { for (const r of tech.resistance || []) levels.push({ price: r.level, kind: "res", label: `R $${fmtDec(r.level, 1)}` }); for (const r of tech.support || []) levels.push({ price: r.level, kind: "sup", label: `S $${fmtDec(r.level, 1)}` }); }
+    if (v.priceAvg50) levels.push({ price: v.priceAvg50, kind: "ma50", label: `${K.ma50} $${fmtDec(v.priceAvg50, 1)}`, series: "ma", window: 50 });
+    if (v.priceAvg200) levels.push({ price: v.priceAvg200, kind: "ma200", label: `${K.ma200} $${fmtDec(v.priceAvg200, 1)}`, series: "ma", window: 200 });
+    window.renderChart(el, c.chartCache[key], { locale: state.locale, height: el.clientWidth < 600 ? 320 : 420, levels, current: v.price, daily: c.chartCache[`${c.b.symbol}:10y`] || null });
+  }
   function tabDeep(c) {
     const D = t("deep"); const d = c.d;
     if (!d) {
@@ -588,7 +610,7 @@
   function applySummary(c, r, lang) {
     c.summaryStatus = r.status;
     if (r.status === "ready") { c.s = r.summary; c.tries = 0; }
-    if (c.root && (c.tab === 0 || c.tab === 2)) renderTab(c);
+    if (c.root && (c.tab === 0 || c.tab === 2 || c.tab === 3)) renderTab(c);
     if (r.status === "pending" && c.tries < 40) { c.tries++; c.timer = setTimeout(() => loadSummary(c), 6000); }
   }
   async function loadSummary(c) {
@@ -609,20 +631,20 @@
   function applyDeep(c, r) {
     c.deepStatus = r.status;
     if (r.status === "ready") { c.d = r.summary; c.deepTries = 0; }
-    if (c.root && c.tab === 4) renderTab(c);
+    if (c.root && c.tab === 5) renderTab(c);
     if (r.status === "pending" && (c.deepTries || 0) < 40) { c.deepTries = (c.deepTries || 0) + 1; c.deepTimer = setTimeout(() => loadDeep(c), 6000); }
   }
   async function loadDeep(c) {
     stopDeepPolling(c);
     const symbol = c.b && c.b.symbol; const lang = state.locale;
     if (!symbol) return;
-    if (!state.config.summariesEnabled) { c.deepStatus = "disabled"; if (c.root && c.tab === 4) renderTab(c); return; }
+    if (!state.config.summariesEnabled) { c.deepStatus = "disabled"; if (c.root && c.tab === 5) renderTab(c); return; }
     try {
       const r = c.demo ? (await api(`/api/demo?lang=${encodeURIComponent(lang)}`)).deep : await api(`/api/deep/${encodeURIComponent(symbol)}?lang=${encodeURIComponent(lang)}`);
       if (c.b.symbol !== symbol || lang !== state.locale) return;
       applyDeep(c, r || { status: "error" });
     } catch (e) {
-      c.deepStatus = "error"; if (c.root && c.tab === 4) renderTab(c);
+      c.deepStatus = "error"; if (c.root && c.tab === 5) renderTab(c);
     }
   }
 

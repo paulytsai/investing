@@ -37,6 +37,11 @@
     const ys = points.map((p) => p[1]);
     let min = Math.min(...ys), max = Math.max(...ys);
     if (max === min) { max += 1; min -= 1; }
+    const span0 = max - min;
+    // Horizontal reference levels (support, resistance, averages): widen the scale to show
+    // those near the price range; levels far outside it are left out rather than squashing the chart.
+    const levels = (opts.levels || []).filter((l) => Number.isFinite(l.price) && l.price > min - span0 * 0.35 && l.price < max + span0 * 0.35);
+    for (const l of levels) { if (l.price < min) min = l.price; if (l.price > max) max = l.price; }
     const span = max - min;
     min -= span * 0.05; max += span * 0.05;
     const x = (i) => pad.l + (i / (points.length - 1)) * iw;
@@ -64,6 +69,22 @@
       const i = Math.round((k / (nx - 1)) * (points.length - 1));
       const t = el("text", { x: x(i), y: H - 8, class: "chart-label", "text-anchor": k === 0 ? "start" : k === nx - 1 ? "end" : "middle" }, svg);
       t.textContent = fmtDate(points[i][0], opts.locale, true);
+    }
+    // reference levels: dashed lines with labels at the right edge, nudged apart when they collide
+    const styles = { res: { stroke: "#c93c37", dash: "6 4" }, sup: { stroke: "#1a7f37", dash: "6 4" }, ma50: { stroke: "#d08c1a", dash: "2 3" }, ma200: { stroke: "#6b4fbb", dash: "2 3" }, px: { stroke: "#1f2328", dash: "" } };
+    const drawn = levels.map((l) => ({ ...l, y: y(l.price) }));
+    if (Number.isFinite(opts.current)) drawn.push({ price: opts.current, kind: "px", label: `$${fmtPrice(opts.current)}`, y: y(opts.current), thin: true });
+    drawn.sort((a, b) => a.y - b.y);
+    let lastLabelY = -99;
+    for (const l of drawn) {
+      const st = styles[l.kind] || styles.res;
+      el("line", { x1: pad.l, x2: W - pad.r, y1: l.y, y2: l.y, stroke: st.stroke, "stroke-width": l.thin ? 1 : 1.3, "stroke-dasharray": st.dash, opacity: 0.9 }, svg);
+      if (!l.label) continue;
+      let ly = l.y - 4; if (ly < lastLabelY + 12) ly = lastLabelY + 12; lastLabelY = ly;
+      const tw = l.label.length * 6.2 + 8;
+      el("rect", { x: W - pad.r - tw - 2, y: ly - 10, width: tw, height: 13, fill: "#fff", opacity: 0.85, rx: 2 }, svg);
+      const t = el("text", { x: W - pad.r - 6, y: ly, class: "chart-label lvl-label", "text-anchor": "end", fill: st.stroke }, svg);
+      t.textContent = l.label;
     }
     const path = points.map((p, i) => `${i ? "L" : "M"}${x(i).toFixed(1)},${y(p[1]).toFixed(1)}`).join("");
     el("path", { d: `${path}L${x(points.length - 1).toFixed(1)},${(pad.t + ih).toFixed(1)}L${pad.l},${(pad.t + ih).toFixed(1)}Z`, fill: `url(#${gradId})` }, svg);

@@ -248,6 +248,7 @@ async function buildBundle(symbol) {
     inst,
     edgarCo,
     rf,
+    indices,
   ] = await Promise.all([
     fmpSoft("quote", { symbol }),
     fmpSoft("income-statement", { symbol, period: "annual", limit: 10 }),
@@ -275,6 +276,7 @@ async function buildBundle(symbol) {
     institutionalHolders(symbol),
     edgarCompany(symbol),
     riskFreeRate(),
+    indexMembership(symbol),
   ]);
   const competitorList = await competitors(symbol, profile.industry, peers);
 
@@ -557,6 +559,7 @@ async function buildBundle(symbol) {
       ipoDate: profile.ipoDate,
       stateOfIncorporation: edgarCo?.stateOfIncorporation || null,
       filerCategory: edgarCo?.filerCategory || null,
+      indices,
       fiscalYearEndMonth: fyEnd,
       employees: num(emp?.employeeCount) || num(profile.fullTimeEmployees),
       employeesAsOf: emp?.periodOfReport || null,
@@ -628,8 +631,29 @@ async function buildBundle(symbol) {
 }
 
 /** Full bundle, cached for 12 hours per symbol. */
+
+/** Index membership and weights (S&P 500 / Nasdaq 100 / Dow 30) from FMP constituent lists and the tracking ETFs, cached daily. */
+async function indexTables() {
+  return cached("index-tables", 24 * 3600, async () => {
+    const sets = [["S&P 500", "sp500-constituent", "SPY"], ["Nasdaq 100", "nasdaq-constituent", "QQQ"], ["Dow 30", "dowjones-constituent", "DIA"]];
+    const out = {};
+    const norm = (x) => String(x || "").toUpperCase().replace(/\./g, "-");
+    for (const [name, listEp, etf] of sets) {
+      const [list, holdings] = await Promise.all([fmpSoft(listEp, {}), fmpSoft("etf/holdings", { symbol: etf })]);
+      const weights = {};
+      for (const h of Array.isArray(holdings) ? holdings : []) if (h.asset && Number.isFinite(Number(h.weightPercentage))) weights[norm(h.asset)] = Number(h.weightPercentage);
+      for (const c of Array.isArray(list) ? list : []) { const sym = norm(c.symbol); (out[sym] ||= []).push({ index: name, weightPct: weights[sym] ?? null }); }
+    }
+    return out;
+  }, { version: "1" });
+}
+
+export async function indexMembership(symbol) {
+  try { const t = await indexTables(); return t[String(symbol).toUpperCase().replace(/\./g, "-")] || []; } catch { return []; }
+}
+
 export async function stockBundle(symbol, { force = false } = {}) {
-  return cached(`stock:${symbol}`, 12 * 3600, () => buildBundle(symbol), { version: "9", force });
+  return cached(`stock:${symbol}`, 12 * 3600, () => buildBundle(symbol), { version: "10", force });
 }
 
 /** Newest earnings-call transcript date FMP lists for a symbol (one light request). */
