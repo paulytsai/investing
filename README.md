@@ -71,6 +71,15 @@ not a translation.
 
 Caching (Netlify Blobs): stock bundle 12 h, daily prices 6 h, quote 5 min.
 
+**Pre-generation.** `warm-schedule` runs hourly and starts `warm-background`
+(up to 15 minutes), which walks the S&P 100 (`netlify/lib/universe.mjs`, plus
+`WARM_SYMBOLS`), refreshes each bundle and generates any missing commentary in
+English and the site's locales, at most `WARM_PER_RUN` new English generations
+per run (default 8, so the full list fills in about half a day). Because the
+cache key includes the date of the latest earnings call, a new call makes the
+warmer regenerate that stock on its next pass. `GET /api/warm` shows the last
+run; `POST /api/warm?key=<INTERNAL_SECRET>` starts one on demand.
+
 ### Project layout
 
 ```
