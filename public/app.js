@@ -702,9 +702,10 @@
   // Insider buying or selling in the latest quarter, from the bundle's insider statistics
   function insiderSignal(b) {
     const i = b && b.insider; if (!i) return null; const I = t("simpleUi").insider;
-    const net = (i.acquiredShares || 0) - (i.disposedShares || 0);
-    const tone = net > 0 ? "good" : net < 0 ? "bad" : "na";
-    const text = net > 0 ? I.buying : net < 0 ? I.selling : I.flat;
+    // Open-market buys versus sales by count: share totals include stock awards, which are not purchases.
+    const buys = i.purchases || 0, sells = i.sales || 0;
+    const tone = buys > sells ? "good" : sells > buys ? "bad" : "na";
+    const text = buys > sells ? I.buying : sells > buys ? I.selling : I.flat;
     const detail = I.detail.replace("{y}", i.year).replace("{q}", i.quarter).replace("{b}", fmtInt(i.purchases || 0)).replace("{bs}", fmtInt(i.acquiredShares || 0)).replace("{s}", fmtInt(i.sales || 0)).replace("{ss}", fmtInt(i.disposedShares || 0));
     return { tone, text, detail, html: `<span class="chip ${tone}" title="${esc(detail)}"><span class="chip-v">${esc(text)}</span></span>` };
   }
