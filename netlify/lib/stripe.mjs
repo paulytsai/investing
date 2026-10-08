@@ -36,6 +36,7 @@ async function call(method, path, body, { idempotencyKey } = {}) {
 }
 
 /** Hosted Checkout for the monthly plan. Returns the URL to send the user to. */
+const CHECKOUT_LOCALES = { ja: "ja", en: "en", "zh-TW": "zh-TW" };
 export async function createCheckoutSession(user, { siteUrl, plan = "monthly" }) {
   const s = cfg.stripe();
   const base = siteUrl.replace(/\/$/, "");
@@ -49,6 +50,9 @@ export async function createCheckoutSession(user, { siteUrl, plan = "monthly" })
     metadata: { user_id: user.id, username: user.username, plan },
     subscription_data: { metadata: { user_id: user.id, plan } },
     allow_promotion_codes: true,
+    // Charge in the site's own currency: no automatic conversion to the visitor's local currency.
+    adaptive_pricing: { enabled: false },
+    locale: CHECKOUT_LOCALES[user.locale] || "auto",
   };
   if (s.managedPayments) params.managed_payments = { enabled: true };
   const existing = user.subscription && user.subscription.provider === "stripe" && user.subscription.customerId;
