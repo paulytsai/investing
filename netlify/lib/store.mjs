@@ -120,15 +120,15 @@ class BlobStore {
 const cache = new Map();
 
 /** Open a named store ("users", "cache", "jobs", ...). */
+// Stores are created per call rather than cached: a warm function instance that kept a
+// store object across invocations would carry an expired Blobs token ("Token expired").
 export async function openStore(name) {
-  if (cache.has(name)) return cache.get(name);
-  let impl;
   if (await blobsReady()) {
     const { getStore } = await loadBlobs();
-    impl = new BlobStore(getStore({ name, consistency: "strong" }));
-  } else {
-    impl = new FileStore(name);
+    return new BlobStore(getStore({ name, consistency: "strong" }));
   }
+  if (cache.has(name)) return cache.get(name);
+  const impl = new FileStore(name);
   cache.set(name, impl);
   return impl;
 }
