@@ -348,6 +348,7 @@
     else if (A.status === "disabled") analysis = `<section class="card"><p class="muted" style="margin:8px">${t("summaryDisabled")}</p></section>`;
     else analysis = `<section class="card"><p class="muted" style="margin:8px">${t("summaryError")}${A.message ? ` <span class="small">(${esc(A.message)})</span>` : ""}</p></section>`;
     if (A.sample) analysis = `<section class="card sample-note"><p>${esc(X.sampleNote)}</p><a class="btn primary" href="#/signup">${t("teaser").cta}</a> <a class="btn" href="#/login">${t("login")}</a></section>` + analysis;
+    if (A.status === "ready" && viewMode() === "simple") api(`/api/gist/sector/${encodeURIComponent(id)}?lang=${encodeURIComponent(state.locale)}`).then((g) => { if (g.status === "ready" && state.route.view === "sector" && state.route.id === id) applyGists(app, g.gists); }).catch(() => {});
     app.innerHTML = `<div class="panel"><div class="title-row"><h1>${esc(name(sx.name))}</h1><a class="btn small" href="#/sectors">← ${esc(X.title)}</a></div>${sx.desc ? `<p class="muted">${esc(name(sx.desc))}</p>` : ""}${layers}</div>
       ${sec(X.reportTitle, `<p class="muted deep-intro">${esc(X.reportIntro)}</p>`)}
       ${analysis}
@@ -643,7 +644,7 @@
   async function loadStock(symbol) {
     stopSummaryPolling(state.stock); stopDeepPolling(state.stock);
     const c = state.stock;
-    if (state.symbol !== symbol) { c.b = null; c.chartCache = {}; c.techCache = {}; c.s = null; c.summaryStatus = null; c.d = null; c.deepStatus = null; c.tab = 0; }
+    if (state.symbol !== symbol) { c.b = null; c.chartCache = {}; c.techCache = {}; c.s = null; c.summaryStatus = null; c.d = null; c.deepStatus = null; c.gists = null; c.simple = null; c.simpleStatus = null; c.tab = 0; }
     state.symbol = symbol;
     if (!c.b) {
       app.innerHTML = `<div class="panel spinner">${esc(symbol)} …</div>`;
@@ -681,25 +682,22 @@
         <div class="chart" data-chart></div>
       </div>
       <div data-simple></div>
-      ${viewMode() === "simple" ? sectionsHtml(c) : `<div class="tabs" data-tabs>${t("tabs").map((x, i) => `<button data-tab="${i}" class="${i === c.tab ? "active" : ""}">${esc(x)}</button>`).join("")}</div>
-      <div data-tabbody></div>`}`;
+      <div class="tabs" data-tabs>${t("tabs").map((x, i) => `<button data-tab="${i}" class="${i === c.tab ? "active" : ""}">${esc(x)}</button>`).join("")}</div>
+      <div class="take-strip" data-take></div>
+      <div data-tabbody></div>`;
     renderSimple(c);
-    container.querySelectorAll("details.dsec").forEach((d) => d.addEventListener("toggle", () => { if (d.open) { const i = Number(d.dataset.dsec); if (!d.dataset.rendered) { d.dataset.rendered = "1"; renderPanel(c, i); } if (!c.demo) track("tab", `${state.symbol}_${TAB_KEYS[i] || i}`); } }));
     container.querySelectorAll("[data-ranges] button").forEach((btn) => btn.addEventListener("click", () => { c.chartRange = btn.dataset.range; if (!c.demo) track("range", `${state.symbol}_${c.chartRange}`); container.querySelectorAll("[data-ranges] button").forEach((x) => x.classList.toggle("active", x === btn)); loadChart(c); }));
     container.querySelectorAll("[data-tabs] button").forEach((btn) => btn.addEventListener("click", () => { c.tab = Number(btn.dataset.tab); if (!c.demo) track("tab", `${state.symbol}_${TAB_KEYS[c.tab] || c.tab}`); container.querySelectorAll("[data-tabs] button").forEach((x) => x.classList.toggle("active", x === btn)); renderTab(c); if (!c.demo) window.scrollTo({ top: container.querySelector("[data-tabs]").offsetTop - 8, behavior: "smooth" }); }));
-    if (viewMode() === "simple") { const first = container.querySelector('details.dsec[open]'); if (first) { first.dataset.rendered = "1"; renderPanel(c, Number(first.dataset.dsec)); } } else renderTab(c);
+    renderTab(c);
     loadChart(c);
     if (!c.demo) { loadSimple(c); loadDeepPeek(c); }
   }
 
-  // ---- simple view: stacked sections with a one-line takeaway each ----
-  function sectionsHtml(c) {
-    const tabs = t("tabs");
-    return `<div class="dsecs" data-sections>${tabs.map((name, i) => `<details class="dsec" data-dsec="${i}"${i === 0 ? " open" : ""}><summary><span class="d-title">${esc(name)}</span><span class="d-take">${takeaway(c, i)}</span></summary><div class="d-body" data-tabpanel="${i}"></div></details>`).join("")}</div>`;
-  }
+  // ---- one-line takeaway for the active tab, shown under the tab bar ----
   function refreshTakeaways(c) {
-    if (!c.root) return;
-    c.root.querySelectorAll("details.dsec").forEach((d) => { const el = d.querySelector(".d-take"); if (el) el.innerHTML = takeaway(c, Number(d.dataset.dsec)); });
+    const el = c.root && c.root.querySelector("[data-take]"); if (!el) return;
+    const tk = c.tab === 0 ? "" : takeaway(c, c.tab);
+    el.innerHTML = tk ? `<span class="take-l">${esc(t("simpleUi").takeLabel)}</span> ${tk}` : ""; el.hidden = !tk;
   }
   const sgnPct = (v, d = 1) => (v === null || v === undefined ? NA : `${v > 0 ? "+" : ""}${fmtDec(v, d)}%`);
   function rangePos(r, S) {
@@ -741,8 +739,6 @@
   }
   function openTab(c, i) {
     if (!c.root) return;
-    const d = c.root.querySelector(`details.dsec[data-dsec="${i}"]`);
-    if (d) { d.open = true; d.scrollIntoView({ behavior: "smooth", block: "start" }); return; }
     const btn = c.root.querySelector(`[data-tabs] button[data-tab="${i}"]`); if (btn) { btn.click(); btn.scrollIntoView({ behavior: "smooth", block: "start" }); }
   }
   function applySimple(c, r) {
@@ -757,6 +753,12 @@
     if (!state.config.summariesEnabled) { c.simpleStatus = "disabled"; renderSimple(c); return; }
     try { const r = c.demo ? (await api(`/api/demo?lang=${encodeURIComponent(lang)}`)).simple : await api(`/api/simple/${encodeURIComponent(symbol)}?lang=${encodeURIComponent(lang)}`); if (c.b.symbol !== symbol || lang !== state.locale) return; applySimple(c, r || { status: "error" }); }
     catch { c.simpleStatus = "error"; renderSimple(c); }
+  }
+  async function loadGist(c) {
+    const symbol = c.b && c.b.symbol; const lang = state.locale; if (!symbol || c.gistLoading) return;
+    c.gistLoading = true;
+    try { const r = await api(`/api/gist/deep/${encodeURIComponent(symbol)}?lang=${encodeURIComponent(lang)}`); if (c.b.symbol !== symbol || lang !== state.locale) return; if (r.status === "ready") { c.gists = r.gists; applyGists(c.root, r.gists); } }
+    catch {} finally { c.gistLoading = false; }
   }
   async function loadDeepPeek(c) {
     if (c.d) return;
@@ -788,23 +790,20 @@
     if (i === 2) bindTarget(c);
     if (i === 3) { body.querySelectorAll("[data-techranges] button").forEach((btn) => btn.addEventListener("click", () => { c.techRange = btn.dataset.range; if (!c.demo) track("techrange", `${state.symbol}_${c.techRange}`); body.querySelectorAll("[data-techranges] button").forEach((x) => x.classList.toggle("active", x === btn)); loadTechChart(c); })); loadTechChart(c); }
     if (i === 5 && !c.d && c.deepStatus !== "pending" && c.deepStatus !== "disabled") loadDeep(c);
+    if (i === 5 && c.d && !c.gists && viewMode() === "simple") loadGist(c);
     if (i === 0 || i === 1 || i === 2) addHelp(body);
+    if (viewMode() === "simple") { const cards = body.querySelectorAll("details.card"); if (cards[0] && !body.querySelector("details.card[open]")) cards[0].open = true; body.querySelectorAll("details.card, details.ai-d").forEach((d) => d.addEventListener("toggle", () => { if (d.open && !c.demo) track("expand", `${state.symbol}_${TAB_KEYS[i] || i}`); })); }
     markScrollable(body);
   }
   function renderTab(c) {
     const body = c.root && c.root.querySelector("[data-tabbody]"); if (!body) return;
     body.innerHTML = tabHtml(c, c.tab); bindTabBody(c, c.tab, body);
+    refreshTakeaways(c);
   }
-  function renderPanel(c, i) {
-    const body = c.root && c.root.querySelector(`[data-tabpanel="${i}"]`); if (!body) return;
-    body.innerHTML = tabHtml(c, i); bindTabBody(c, i, body);
-  }
-  /** Re-render whichever of these tabs is currently visible (the active tab, or the open sections in the simple layout). */
+  /** Re-render the active tab when it is one of these. */
   function refreshTabs(c, tabs) {
     if (!c.root) return;
-    if (c.root.querySelector("[data-tabbody]")) { if (tabs.includes(c.tab)) renderTab(c); return; }
-    for (const i of tabs) { const d = c.root.querySelector(`details.dsec[data-dsec="${i}"]`); if (d && d.open) { d.dataset.rendered = "1"; renderPanel(c, i); } }
-    refreshTakeaways(c);
+    if (tabs.includes(c.tab)) renderTab(c); else refreshTakeaways(c);
   }
 
   // ---- glossary: "?" buttons on metric labels, with a plain explanation and this company's reading ----
@@ -865,14 +864,27 @@
   }
 
   // ---- small builders ----
-  const sec = (title, inner, extra = "") => `<section class="card"><h3 class="sec"><span class="sec-t">${title}</span>${extra ? `<span class="sec-extra">${extra}</span>` : ""}</h3>${inner}</section>`;
+  // gist: one line shown in the collapsed header (simple view); a string, or { key, text } so it can be filled in later
+  const sec = (title, inner, extra = "", gist = "") => {
+    const g = gist && typeof gist === "object" ? gist : { key: "", text: gist || "" };
+    const gistHtml = viewMode() === "simple" && (g.text || g.key) ? `<span class="gist"${g.key ? ` data-gist="${esc(g.key)}"` : ""}>${g.text}</span>` : "";
+    return viewMode() === "simple" && state.route.view !== "admin"
+      ? `<details class="card dd"><summary class="sec"><span class="sec-t">${title}</span>${extra ? `<span class="sec-extra">${extra}</span>` : ""}${gistHtml}</summary>${inner}</details>`
+      : `<section class="card"><h3 class="sec"><span class="sec-t">${title}</span>${extra ? `<span class="sec-extra">${extra}</span>` : ""}</h3>${inner}</section>`;
+  };
+  const clip = (text, n = 90) => { const x = String(text || "").replace(/\s+/g, " ").trim(); return x.length > n ? x.slice(0, n - 1) + "…" : x; };
+  const firstSentence = (text) => clip(String(text || "").split(/(?<=[.。！!?？])\s*/)[0], 110);
+  /** Fill one-line gists into rendered headers without re-rendering. */
+  function applyGists(root, gists) { if (!root || !gists) return; for (const [k, v] of Object.entries(gists)) { if (!v) continue; root.querySelectorAll(`[data-gist="${k}"]`).forEach((el) => { el.textContent = v; }); } }
   const kv = (rows) => `<dl class="kv2">${rows.filter((r) => r).map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join("")}</dl>`;
   const wrap = (table) => `<div class="tw">${table}</div>`;
   const row = (th, td, cls = "") => `<tr class="${cls}"><th class="rowh">${th}</th><td>${td}</td></tr>`;
 
   function aiBox(c, part) {
     const s = c.s;
-    if (s && s[part] && s[part].body) return `<div class="ai"><span class="hl">${esc(s[part].headline)}</span><span class="body">${esc(s[part].body)}</span></div>`;
+    if (s && s[part] && s[part].body) return viewMode() === "simple"
+      ? `<details class="ai ai-d"><summary><span class="hl">${esc(s[part].headline)}</span></summary><span class="body">${esc(s[part].body)}</span></details>`
+      : `<div class="ai"><span class="hl">${esc(s[part].headline)}</span><span class="body">${esc(s[part].body)}</span></div>`;
     if (c.summaryStatus === "pending" || c.summaryStatus === null) return `<span class="spinner">${t("generating")}</span>`;
     if (c.summaryStatus === "disabled") return `<span class="muted">${t("summaryDisabled")}</span>`;
     return `<span class="muted">${t("summaryError")}</span>`;
@@ -963,8 +975,12 @@
     ]) + `<p class="note">${t("unitM")} · ( ) = ${isCJK() ? "前期" : "prior year"}${fxNote(c.b)}</p>`;
     const cfl = cf ? kv([[t("opCF"), pair(cf.operating, cf.operatingPrev)], [t("invCF"), pair(cf.investing, cf.investingPrev)], [t("finCF"), pair(cf.financing, cf.financingPrev)], [t("cashEq"), pair(cf.cash, cf.cashPrev)], [t("fcf"), fmtInt(cf.freeCashFlow)], [t("buyback"), fmtInt(cf.buybacks)], [t("divPaid"), fmtInt(cf.dividendsPaid)]]) + `<p class="note">FY${esc(cf.fiscalYear)} · ${t("unitM")}</p>` : NA;
     const bal = financeBox(f, c.b) || NA;
-    return `<div class="grid2">${sec(t("performance"), perf)}${sec(t("dividends"), divs)}</div>
-      <div class="grid2b">${sec(t("indicators"), indic, ind.fiscalYear ? `FY${esc(ind.fiscalYear)}` : "")}${sec(t("cashflow"), cfl)}</div>
+    const gPerf = takeaway(c, 1);
+    const gDiv = d.yieldPct !== null && d.yieldPct !== undefined ? `${t("val.divYield")} ${fmtPct(d.yieldPct, 2)}${d.ttm ? ` · ${t("dividendAmount")} $${fmtDec(d.ttm, 2)}` : ""}` : NA;
+    const gInd = `${t("roe")} ${fmtPct(ind.roePct)} · ${t("roa")} ${fmtPct(ind.roaPct)}`;
+    const gCf = cf ? `${t("opCF")} ${fmtBig(cf.operating)} · FCF ${fmtBig(cf.freeCashFlow)} · ${t("buyback")} ${fmtBig(cf.buybacks)}` : "";
+    return `<div class="grid2">${sec(t("performance"), perf, "", gPerf)}${sec(t("dividends"), divs, "", gDiv)}</div>
+      <div class="grid2b">${sec(t("indicators"), indic, ind.fiscalYear ? `FY${esc(ind.fiscalYear)}` : "", gInd)}${sec(t("cashflow"), cfl, "", gCf)}</div>
       ${bal}`;
   }
 
@@ -981,9 +997,13 @@
       wrap(`<table class="tbl"><thead><tr><th></th><th class="num">${t("high")}</th><th class="num">${t("low")}</th><th class="num">${t("volume")}</th></tr></thead><tbody>${monthly}</tbody></table>`);
     const filings = b.filings.map((x) => `<tr><th>${esc(x.filingDate)}</th><td><a href="${esc(x.url)}" target="_blank" rel="noopener">${esc(x.form)}</a> <span class="muted">${esc(x.description || "")}</span></td></tr>`).join("");
     const events = b.materialEvents.map((e) => `<tr><th>${esc(e.filingDate)}</th><td>${esc(e.form)} · ${esc(e.items.join(", "))}</td></tr>`).join("");
-    return `<div class="grid2">${sec(t("holders"), holders)}${sec(t("officers"), officers)}</div>
-      <div class="grid2b">${sec(t("capitalChanges"), wrap(`<table class="tbl"><tbody>${capRows}</tbody></table>`) + prices)}
-      ${sec(t("filings"), wrap(`<table class="tbl"><tbody>${filings || `<tr><td class="c">${NA}</td></tr>`}</tbody></table>`)) + (events ? sec(t("events"), wrap(`<table class="tbl"><tbody>${events}</tbody></table>`)) : "")}</div>`;
+    const gHold = h.summary && h.summary.ownershipPct !== null && h.summary.ownershipPct !== undefined ? `${t("instOwnership")} ${fmtPct(h.summary.ownershipPct)}${h.holders[0] ? ` · ${esc(h.holders[0].name)}` : ""}` : "";
+    const gOff = b.officers.length ? `${esc(b.officers[0].name)}（${esc(b.officers[0].title)}）${b.officers.length > 1 ? ` +${b.officers.length - 1}` : ""}` : "";
+    const gCap = caps.length ? `${caps.length}: ${yymm(caps[0].date)}` : `${t("tech").high52} $${fmtDec((p.yearly[0] || {}).high)}`;
+    const gFil = b.filings[0] ? `${esc(b.filings[0].form)} ${esc(b.filings[0].filingDate || b.filings[0].date || "")}` : "";
+    return `<div class="grid2">${sec(t("holders"), holders, "", gHold)}${sec(t("officers"), officers, "", gOff)}</div>
+      <div class="grid2b">${sec(t("capitalChanges"), wrap(`<table class="tbl"><tbody>${capRows}</tbody></table>`) + prices, "", gCap)}
+      ${sec(t("filings"), wrap(`<table class="tbl"><tbody>${filings || `<tr><td class="c">${NA}</td></tr>`}</tbody></table>`), "", gFil) + (events ? sec(t("events"), wrap(`<table class="tbl"><tbody>${events}</tbody></table>`)) : "")}</div>`;
   }
 
   // Current multiple against its own 5- and 10-year fiscal-year-end range.
@@ -995,7 +1015,8 @@
     const pos = (r) => { if (!r || r.now === null || r.now === undefined) return NA; if (r.now > r.high) return `<span class="down">${H.above}</span>`; if (r.now < r.low) return `<span class="up">${H.below}</span>`; const p = r.percentile; return p === null ? NA : p >= 67 ? H.highEnd : p <= 33 ? H.lowEnd : H.middle; };
     const rows = Object.entries(names).map(([k, label]) => { const r5 = h.range5[k], r10 = h.range10 && h.range10[k]; if (!r5 && !r10) return ""; const r = r5 || r10;
       return `<tr><th>${label}</th><td class="num"><b>${fmtDec(r.now, 1)}</b></td><td class="num">${r5 ? `${fmtDec(r5.low, 1)} / ${fmtDec(r5.median, 1)} / ${fmtDec(r5.high, 1)}` : NA}</td><td class="num">${r10 && r10.n > (r5 ? r5.n : 0) ? `${fmtDec(r10.low, 1)} / ${fmtDec(r10.median, 1)} / ${fmtDec(r10.high, 1)}` : NA}</td><td>${pos(r5 || r10)}</td></tr>`; }).join("");
-    return sec(H.title, wrap(`<table class="tbl hist"><thead><tr><th>${H.metric}</th><th class="num">${H.now}</th><th class="num">${H.range5}</th><th class="num">${H.range10}</th><th>${H.position}</th></tr></thead><tbody>${rows}</tbody></table>`) + `<p class="note">${esc(H.note)}</p>`);
+    const S2 = t("simpleUi"); const gHist = ["pe", "evEbitda", "pfcf"].filter((k) => h.range5[k]).map((k) => `${names[k]} ${rangePos(h.range5[k], S2)}`).join(" · ");
+    return sec(H.title, wrap(`<table class="tbl hist"><thead><tr><th>${H.metric}</th><th class="num">${H.now}</th><th class="num">${H.range5}</th><th class="num">${H.range10}</th><th>${H.position}</th></tr></thead><tbody>${rows}</tbody></table>`) + `<p class="note">${esc(H.note)}</p>`, "", gHist);
   }
   function tabValuation(c) {
     const b = c.b; const v = b.valuation; const d = b.dcf; const V = t("val");
@@ -1008,7 +1029,8 @@
       [V.quality, [[V.gm, fmtPct(v.grossMarginPct)], [V.om, fmtPct(v.opMarginPct)], [V.nm, fmtPct(v.netMarginPct)], [V.roe, fmtPct(v.roePct)], [V.roic, fmtPct(v.roicPct)], [V.roa, fmtPct(v.roaPct)], [V.ndEbitda, x(v.netDebtEbitda, 2)], [V.de, x(v.debtEquity, 2)], [V.cov, x(v.interestCoverage)], [V.cr, x(v.currentRatio, 2)]]],
       [V.market, [[V.beta, x(v.beta, 2)], [t("tech").high52, `$${x(v.yearHigh, 2)}${v.yearHighDate ? ` <span class="muted">(${fmtDate(v.yearHighDate)})</span>` : ""}`], [t("tech").low52, `$${x(v.yearLow, 2)}${v.yearLowDate ? ` <span class="muted">(${fmtDate(v.yearLowDate)})</span>` : ""}`], v.allTimeHigh ? [t("tech").ath, `$${x(v.allTimeHigh.price, 2)} <span class="muted">(${fmtDate(v.allTimeHigh.date)})</span>`] : null, [V.ma, `$${x(v.priceAvg50, 2)} / $${x(v.priceAvg200, 2)}`], [V.target, v.analystTarget ? `$${x(v.analystTarget.consensus, 2)} (${v.analystTarget.upsidePct >= 0 ? "+" : ""}${x(v.analystTarget.upsidePct)}%)` : NA]]],
     ];
-    const metrics = `<div class="grid3">${groups.map(([title, rows]) => sec(title, kv(rows))).join("")}</div>` + multiplesHistoryHtml(v.history, V);
+    const strip = (h) => String(h).replace(/<[^>]+>/g, "");
+    const metrics = `<div class="grid3">${groups.map(([title, rows]) => sec(title, kv(rows), "", clip(rows.filter((r) => r).slice(0, 3).map(([k, val]) => `${strip(k)} ${strip(val)}`).join(" · ")))).join("")}</div>` + multiplesHistoryHtml(v.history, V);
     let dcfHtml;
     if (!d) dcfHtml = `<p class="muted">${V.noDcf}</p>`;
     else {
@@ -1087,7 +1109,9 @@
     const read = tech
       ? `${compo}<div class="grid2b"><div><h4 class="sub">${K.resistance}</h4>${wrap(lv(tech.resistance, "res"))}</div><div><h4 class="sub">${K.support}</h4>${wrap(lv(tech.support, "sup"))}</div></div><p class="tech-comment">${esc(tech.comment)}</p>${updatedNote(c)}`
       : `<p class="muted" style="margin:8px">${c.summaryStatus === "pending" || c.summaryStatus === null ? t("generating") : t("summaryError")}</p>`;
-    return `${sec(K.title, chart + read, `$${fmtDec(v.price, 2)}`)}${sec(K.context, ctx)}`;
+    const gLev = cp && (cp.res || cp.sup) ? `${K.compositeRes} ${cp.res ? `$${fmtDec(cp.res, 2)}` : NA}${cp.upPct !== null && cp.upPct !== undefined ? `（${K.upside} ${cp.upPct >= 0 ? "+" : ""}${fmtDec(cp.upPct, 1)}%）` : ""} · ${K.compositeSup} ${cp.sup ? `$${fmtDec(cp.sup, 2)}` : NA}${cp.downPct !== null && cp.downPct !== undefined ? `（${K.downside} ${fmtDec(cp.downPct, 1)}%）` : ""}` : takeaway(c, 3);
+    const gCtx = `${K.high52} $${fmtDec(v.yearHigh, 2)} · ${K.low52} $${fmtDec(v.yearLow, 2)} · ${K.ma50} $${fmtDec(v.priceAvg50, 2)} · ${K.ma200} $${fmtDec(v.priceAvg200, 2)}`;
+    return `${sec(K.title, chart + read, `$${fmtDec(v.price, 2)}`, gLev)}${sec(K.context, ctx, "", gCtx)}`;
   }
   async function loadTechChart(c) {
     const el = c.root && c.root.querySelector("[data-techchart]"); if (!el) return;
@@ -1118,29 +1142,40 @@
     const FKEYS = { Q: "fQuality", T: "fTrajectory", V: "fValuation" };
     const letter = (x) => ({ Q: names.quality, T: names.trajectory, V: names.valuation }[String(x || "").toUpperCase()] || x);
     const tag = (x) => `<span class="tag">${esc(letter(x))}</span>${FKEYS[String(x || "").toUpperCase()] ? helpBtn(FKEYS[String(x || "").toUpperCase()]) : ""}`;
-    const card = (key, f) => f ? `<details class="finding"${open}><summary class="f-head"><span class="f-title">${names[key]}${helpBtn({ quality: "fQuality", trajectory: "fTrajectory", valuation: "fValuation" }[key])}</span><span class="pill asm ${esc(String(f.assessment).toLowerCase()).replace(/[^a-z]/g, "")}">${esc(D.asm[String(f.assessment).toLowerCase()] || f.assessment)}</span><span class="muted small">${D.conf[String(f.confidence).toLowerCase()] || esc(f.confidence)}</span></summary>
+    const card = (key, f) => f ? `<div class="finding"><div class="f-head"><span class="f-title">${names[key]}${helpBtn({ quality: "fQuality", trajectory: "fTrajectory", valuation: "fValuation" }[key])}</span><span class="pill asm ${esc(String(f.assessment).toLowerCase()).replace(/[^a-z]/g, "")}">${esc(D.asm[String(f.assessment).toLowerCase()] || f.assessment)}</span><span class="muted small">${D.conf[String(f.confidence).toLowerCase()] || esc(f.confidence)}</span></div>
       <p class="f-mech">${esc(f.mechanism)}</p>
-      <p><b>${D.evidence}:</b> ${esc(f.evidence)}</p><p><b>${D.counter}:</b> ${esc(f.counterevidence)}</p><p class="f-dec"><b>${D.decisive}:</b> ${esc(f.decisive)}</p></details>` : "";
+      <p><b>${D.evidence}:</b> ${esc(f.evidence)}</p><p><b>${D.counter}:</b> ${esc(f.counterevidence)}</p><p class="f-dec"><b>${D.decisive}:</b> ${esc(f.decisive)}</p></div>` : "";
     const findings = `<div class="findings">${card("quality", F.quality)}${card("trajectory", F.trajectory)}${card("valuation", F.valuation)}</div>${F.divergences ? `<p class="divergences"><b>${D.divergences}:</b> ${esc(F.divergences)}</p>` : ""}`;
     const bf = wrap(`<table class="tbl deep-bf"><thead><tr><th>${D.segment}</th><th>${D.revenueShare}</th><th>${D.competitors}</th><th>${D.purchaseCriteria}</th><th>${D.position}</th></tr></thead><tbody>${(d.battlefields || []).map((b) => `<tr><th>${esc(b.segment)}</th><td data-l="${D.revenueShare}">${esc(b.revenueShare)}</td><td data-l="${D.competitors}">${esc(b.competitors)}</td><td data-l="${D.purchaseCriteria}">${esc(b.purchaseCriteria)}</td><td data-l="${D.position}">${esc(b.position)}</td></tr>`).join("")}</tbody></table>`);
     const story = d.story ? `<div class="deep-story"><div class="hl">${esc(d.story.headline)}</div><p>${esc(d.story.body)}</p></div>` : "";
     const secs = Object.fromEntries((d.sections || []).map((x) => [x.key, x]));
     const piece = (k) => secs[k] ? `<div class="ai"><span class="hl">${esc(secs[k].headline)}</span><span class="body">${esc(secs[k].body)}</span></div>` : "";
-    const rows = ["history", "detective", "moat", "outlook", "cycle", "management", "valuationDetail", "consensus"].filter((k) => secs[k]).map((k) => `<details class="dd-sec"${open}><summary><b>${D[k]}</b><span class="hl">${esc(secs[k].headline)}</span></summary><p class="body">${esc(secs[k].body)}</p></details>`).join("");
+    const rows = ["history", "detective", "moat", "outlook", "cycle", "management", "valuationDetail", "consensus"].filter((k) => secs[k]).map((k) => row(`<b>${D[k]}</b>`, piece(k))).join("");
     const cons = d.constituents && d.constituents.length ? (wrap(`<table class="tbl"><thead><tr><th>${D.symbol}</th><th>${D.role}</th><th>${D.read}</th></tr></thead><tbody>${d.constituents.map((x) => `<tr><th><a href="#/s/${esc(x.symbol)}">${esc(x.symbol)}</a></th><td>${esc(x.role)}</td><td>${esc(x.read)}</td></tr>`).join("")}</tbody></table>`)) : "";
     const risks = wrap(`<table class="tbl"><thead><tr><th>${D.risk}</th><th>${D.indicator}</th><th>${D.affects}</th></tr></thead><tbody>${(d.risks || []).map((r) => `<tr><td>${esc(r.risk)}</td><td>${esc(r.indicator)}</td><td class="c">${tag(r.finding)}</td></tr>`).join("")}</tbody></table>`);
     const qs = `<ol class="imps">${(d.questions || []).map((q) => `<li>${esc(q)}</li>`).join("")}</ol>`;
     const cps = wrap(`<table class="tbl cps"><thead><tr><th>${D.premise}</th><th>${D.kpi}</th><th>${D.latest}</th><th>${D.failure}</th><th>${D.next}</th></tr></thead><tbody>${(d.checkpoints || []).map((x) => `<tr><td>${esc(x.premise)} ${tag(x.finding)}</td><td>${esc(x.kpi)}</td><td>${esc(x.latest)}</td><td>${esc(x.failure)}</td><td>${esc(x.next)}</td></tr>`).join("")}</tbody></table>`);
     const note = `<p class="note"><b>${D.caveats}:</b> ${esc(d.caveats)}</p><p class="note">${opts.updated || ""} ${esc(D.noAdvice)}</p>`;
-    const dd = (title, inner, isOpen = open) => `<details class="dd"${isOpen}><summary class="sec"><span class="sec-t">${title}</span></summary>${inner}</details>`;
-    return `${sec(opts.storyTitle || D.storyTitle, story)}
-      ${dd(opts.battlefieldsTitle || D.battlefields, bf)}
-      ${sec(D.findingsTitle, findings)}
-      ${dd(D.analysisTitle || "", `<div class="dd-secs">${rows}</div>`, " open")}
-      ${cons ? dd(D.constituentReads, cons) : ""}
-      ${dd(D.risks, risks)}
-      ${dd(D.questions, qs)}
-      ${dd(D.checkpoints, cps)}
+    const G = opts.gists || {};
+    const fb = { // code-derived one-liners until the written ones arrive
+      battlefields: clip((d.battlefields || []).map((b) => `${b.segment}: ${String(b.position || "").split(/[:：]/)[0]}`).join(" · ")),
+      analysis: clip((d.sections || []).map((x) => x.headline).join(" · ")),
+      risks: firstSentence((d.risks || [])[0] && d.risks[0].risk),
+      questions: firstSentence((d.questions || [])[0]),
+      checkpoints: clip((d.checkpoints || []).map((x) => x.kpi).join(" · ")),
+      constituents: clip((d.constituents || []).map((x) => x.symbol).join(", ")),
+    };
+    const gist = (k) => ({ key: k, text: esc(G[k] || fb[k] || "") });
+    const dd = (title, inner, isOpen = open, g = null) => `<details class="dd"${isOpen}><summary class="sec"><span class="sec-t">${title}</span>${g && g.text !== undefined ? `<span class="gist" data-gist="${esc(g.key)}">${g.text}</span>` : ""}</summary>${inner}</details>`;
+    const findingsGist = { key: "", text: `<span class="chips inline">${["quality", "trajectory", "valuation"].map((k) => F[k] ? `<span class="chip ${CHIP_TONE[String(F[k].assessment).toLowerCase()] || "na"}"><span class="chip-k">${names[k]}</span><span class="chip-v">${esc(D.asm[String(F[k].assessment).toLowerCase()] || F[k].assessment)}</span></span>` : "").join("")}</span>` };
+    return `${sec(opts.storyTitle || D.storyTitle, story, "", d.story ? esc(d.story.headline) : "")}
+      ${dd(opts.battlefieldsTitle || D.battlefields, bf, open, gist("battlefields"))}
+      ${sec(D.findingsTitle, findings, "", findingsGist)}
+      ${dd(D.analysisTitle || "", `<table class="shk ov">${rows}</table>`, open, gist("analysis"))}
+      ${cons ? dd(D.constituentReads, cons, open, gist("constituents")) : ""}
+      ${dd(D.risks, risks, open, gist("risks"))}
+      ${dd(D.questions, qs, open, gist("questions"))}
+      ${dd(D.checkpoints, cps, open, gist("checkpoints"))}
       <section class="card">${note}</section>`;
   }
   function tabDeep(c) {
@@ -1150,7 +1185,7 @@
       return `<section class="card"><h3 class="sec"><span class="sec-t">${D.title}</span></h3><p class="muted" style="margin:8px">${esc(D.intro)}</p><p style="margin:8px">${msg}</p></section>`;
     }
     const tr = (d.transcriptsUsed || [])[0];
-    return `${sec(D.title, `<p class="muted deep-intro">${esc(D.intro)} <b>${esc(D.readTime)}</b></p>`)}` + researchHtml(d, D, { updated: esc(t("updatedNote", { period: tr ? tr.period : "—", date: tr ? fmtDate(tr.date) : "—", gen: fmtDate(d.generatedAt) })) });
+    return `${sec(D.title, `<p class="muted deep-intro">${esc(D.intro)} <b>${esc(D.readTime)}</b></p>`, "", esc(D.readTime))}` + researchHtml(d, D, { gists: c.gists, updated: esc(t("updatedNote", { period: tr ? tr.period : "—", date: tr ? fmtDate(tr.date) : "—", gen: fmtDate(d.generatedAt) })) });
   }
   function stopSummaryPolling(c) { if (c && c.timer) clearTimeout(c.timer); if (c) c.timer = null; }
   function applySummary(c, r, lang) {

@@ -577,6 +577,16 @@ span.chips { display: inline-flex; margin: 0; }
 .chip.mid { background: #fff5dc; border-color: #f1dc9c; } .chip.mid .chip-v { color: #8a6100; }
 .chip.bad { background: #fde8e6; border-color: #f3bdb8; } .chip.bad .chip-v { color: #a23a2f; }
 .chip.na { background: #eef0f3; } .chip.na .chip-v { color: var(--muted); }
+.take-strip { margin: -4px 0 10px; font-size: 14px; color: var(--muted); padding: 0 4px; }
+.take-strip .take-l { font-weight: 700; color: var(--logo-sea); margin-right: 6px; }
+.take-strip .chips { display: inline-flex; margin: 0; }
+details.card.dd { padding: 0 0 8px; }
+details.card.dd > summary.sec { margin: 0; }
+details.ai-d > summary { list-style: none; cursor: pointer; }
+details.ai-d > summary::-webkit-details-marker { display: none; }
+details.ai-d > summary::after { content: " ▸"; color: var(--accent); }
+details.ai-d[open] > summary::after { content: " ▾"; }
+details.ai-d > .body { display: block; margin-top: 6px; }
 .dsecs { margin: 0 0 12px; }
 details.dsec { background: var(--panel); border: 1px solid var(--border); margin-bottom: 8px; }
 details.dsec > summary { list-style: none; cursor: pointer; display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 14px; padding: 12px 14px; }
