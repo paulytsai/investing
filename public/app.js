@@ -120,7 +120,8 @@
     const h = location.hash.replace(/^#\/?/, "");
     const [a, b] = h.split("/");
     if (a === "s" && b) return { view: "stock", symbol: decodeURIComponent(b).toUpperCase() };
-    if (["login", "signup", "account", "subscribe", "admin"].includes(a)) return { view: a };
+    if (a === "reset" && b) return { view: "reset", token: b };
+    if (["login", "signup", "account", "subscribe", "admin", "forgot"].includes(a)) return { view: a };
     return { view: "home" };
   }
   window.addEventListener("hashchange", () => { state.route = parseRoute(); render(); });
@@ -129,6 +130,8 @@
     const r = state.route;
     if (r.view === "login") return renderAuth("login");
     if (r.view === "signup") return renderAuth("signup");
+    if (r.view === "forgot") return renderForgot();
+    if (r.view === "reset") return renderReset(r.token);
     if (r.view === "account") return state.user ? renderAccount() : renderAuth("login");
     if (r.view === "subscribe") return renderPaywall();
     if (r.view === "admin") return state.user && state.user.role === "admin" ? renderAdmin() : renderAuth("login");
@@ -180,7 +183,7 @@
         <label>${t("password")}<input name="password" type="password" required minlength="8" autocomplete="${isSignup ? "new-password" : "current-password"}"></label>
         <button class="btn primary" type="submit">${t(isSignup ? "createAccount" : "login")}</button>
       </form>
-      <div class="alt">${isSignup ? `${t("haveAccount")} <a href="#/login">${t("login")}</a>` : `${t("noAccount")} <a href="#/signup">${t("signup")}</a>`}</div></div>`;
+      <div class="alt">${isSignup ? `${t("haveAccount")} <a href="#/login">${t("login")}</a>` : `${t("noAccount")} <a href="#/signup">${t("signup")}</a><br><a href="#/forgot">${t("pw.forgot")}</a>`}</div></div>`;
     $("#authForm").addEventListener("submit", async (ev) => {
       ev.preventDefault();
       const fd = Object.fromEntries(new FormData(ev.target).entries());
@@ -211,6 +214,33 @@
     return t(e.state === "lapsed" ? "lapsed" : "trialExpired");
   }
 
+  function renderForgot() {
+    stopSummaryPolling(state.stock); stopSummaryPolling(state.demo);
+    const P = t("pw");
+    app.innerHTML = `<div class="panel form"><h2>${P.forgotTitle}</h2><p class="muted">${P.forgotLead}</p><div id="formError"></div>
+      <form id="authForm"><label>${t("email")}<input name="email" type="email" required autocomplete="email"></label><button class="btn primary" type="submit">${P.sendLink}</button></form>
+      <div class="alt"><a href="#/login">${t("login")}</a></div></div>`;
+    $("#authForm").addEventListener("submit", async (ev) => {
+      ev.preventDefault(); const btn = ev.target.querySelector("button"); btn.disabled = true;
+      try { const r = await api("/api/auth/forgot", { method: "POST", body: { email: ev.target.email.value } }); $("#authForm").outerHTML = `<p>${esc(r.mail ? P.sent : P.sentNoMail)}</p>`; }
+      catch (e) { $("#formError").innerHTML = `<div class="error">${esc(e.message)}</div>`; btn.disabled = false; }
+    });
+  }
+  function renderReset(token) {
+    stopSummaryPolling(state.stock); stopSummaryPolling(state.demo);
+    const P = t("pw");
+    app.innerHTML = `<div class="panel form"><h2>${P.resetTitle}</h2><div id="formError"></div>
+      <form id="authForm"><label>${P.newPassword}<input name="password" type="password" required minlength="8" autocomplete="new-password"></label>
+      <label>${P.confirm}<input name="confirm" type="password" required minlength="8" autocomplete="new-password"></label>
+      <button class="btn primary" type="submit">${P.setPassword}</button></form></div>`;
+    $("#authForm").addEventListener("submit", async (ev) => {
+      ev.preventDefault(); const f = ev.target; const btn = f.querySelector("button");
+      if (f.password.value !== f.confirm.value) { $("#formError").innerHTML = `<div class="error">${P.mismatch}</div>`; return; }
+      btn.disabled = true;
+      try { const r = await api("/api/auth/reset", { method: "POST", body: { token, password: f.password.value } }); state.user = r.user; state.ent = r.entitlement; renderUserMenu(); location.hash = "#/s/AAPL"; }
+      catch (e) { $("#formError").innerHTML = `<div class="error">${esc(t(`errors.${e.code}`) !== `errors.${e.code}` ? t(`errors.${e.code}`) : e.message)}</div>`; btn.disabled = false; }
+    });
+  }
   function renderAccount() {
     stopSummaryPolling(state.stock); stopSummaryPolling(state.demo);
     const u = state.user; const e = state.ent; const B = t("billing");
@@ -221,12 +251,21 @@
       <div class="kv"><div>${t("username")}</div><div>${esc(u.username)}</div><div>${t("email")}</div><div>${esc(u.email)}</div><div>${t("pricing")}</div><div>${statusLine()}</div></div>
       <div id="formError"></div>
       ${canSubscribe ? `<button class="btn primary" id="subscribeBtn">${t("subscribe")} — ${esc(state.config.priceLabel)}</button>` : ""}
+      ${u.builtin ? "" : `<h3 class="billing-h">${t("pw.changeTitle")}</h3><form id="pwForm"><label>${t("pw.current")}<input name="currentPassword" type="password" required autocomplete="current-password"></label><label>${t("pw.newPassword")}<input name="newPassword" type="password" required minlength="8" autocomplete="new-password"></label><label>${t("pw.confirm")}<input name="confirm" type="password" required minlength="8" autocomplete="new-password"></label><button class="btn" type="submit">${t("pw.change")}</button> <span id="pwMsg" class="muted small"></span></form>`}
       <h3 class="billing-h">${B.title}</h3>
       ${hasSub ? `<button class="btn" id="portalBtn">${t("manageBilling")}</button><p class="muted small">${B.portalHint}</p>` : ""}
       ${canCancel ? `<button class="btn" id="cancelBtn">${B.cancelSub}</button><div id="cancelBox" hidden><p>${B.cancelConfirm}</p><button class="btn danger" id="cancelYes">${B.cancelSub}</button> <button class="btn" id="cancelNo">${B.back}</button></div>` : ""}
       ${u.builtin ? "" : `<button class="btn danger-outline" id="deleteBtn">${B.deleteAcct}</button><div id="deleteBox" hidden><p>${B.deleteConfirm}</p><input type="password" id="deletePw" autocomplete="current-password" placeholder="${t("password")}"><div style="margin-top:8px"><button class="btn danger" id="deleteYes">${B.deleteBtn}</button> <button class="btn" id="deleteNo">${B.back}</button></div></div>`}
       <p class="muted" style="margin-top:14px">${t("priceLine", { price: state.config.priceLabel })}</p></div>`;
     bindBilling();
+    const pf = $("#pwForm"); if (pf) pf.addEventListener("submit", async (ev) => {
+      ev.preventDefault(); const P = t("pw"); const msg = $("#pwMsg");
+      if (pf.newPassword.value !== pf.confirm.value) { msg.textContent = P.mismatch; return; }
+      const btn = pf.querySelector("button"); btn.disabled = true; msg.textContent = "";
+      try { await api("/api/auth/change-password", { method: "POST", body: { currentPassword: pf.currentPassword.value, newPassword: pf.newPassword.value } }); pf.reset(); msg.textContent = P.changed; }
+      catch (e2) { msg.textContent = t(`errors.${e2.code}`) !== `errors.${e2.code}` ? t(`errors.${e2.code}`) : e2.message; }
+      btn.disabled = false;
+    });
     const show = (id, on) => { const el = $(id); if (el) el.hidden = !on; };
     const err = (e2) => { $("#formError").innerHTML = `<div class="error">${esc(t(`errors.${e2.code}`) !== `errors.${e2.code}` ? t(`errors.${e2.code}`) : e2.message)}</div>`; };
     const cb = $("#cancelBtn"); if (cb) cb.addEventListener("click", () => show("#cancelBox", true));
@@ -267,6 +306,7 @@
       <section class="card"><h3 class="sec">Daily activity (30 days)<span class="sec-extra">views + demo (light)</span></h3><div class="bars">${bars}</div></section>
       <div class="grid2b">
         <section class="card"><h3 class="sec">Top tickers (30 days)</h3>${wrap(`<table class="tbl"><tbody>${d.topSymbols.map((x) => `<tr><th><a href="#/s/${esc(x.symbol)}">${esc(x.symbol)}</a></th><td class="num">${x.views}</td></tr>`).join("") || "<tr><td>—</td></tr>"}</tbody></table>`)}</section>
+        ${d.mail && d.mail.pendingResets.length ? `<section class="card"><h3 class="sec">Password reset links${d.mail.configured ? "" : " (email not configured: send these by hand)"}</h3>${wrap(`<table class="tbl"><tbody>${d.mail.pendingResets.map((r) => `<tr><th>${esc(r.username)}</th><td>${esc(r.email)}</td><td><a href="${esc(r.link)}">${esc(r.link)}</a></td><td class="muted">${esc(new Date(r.expiresAt).toISOString().slice(11, 16))} UTC</td></tr>`).join("")}</tbody></table>`)}</section>` : ""}
         <section class="card"><h3 class="sec">Recent activity</h3>${wrap(`<table class="tbl"><tbody>${d.recent.map((e) => `<tr><th>${esc(new Date(e.ts).toISOString().slice(5, 16).replace("T", " "))}</th><td>${esc(e.user)}</td><td>${esc(e.action)}</td><td>${esc(e.detail)}</td></tr>`).join("")}</tbody></table>`)}</section>
       </div>
       <section class="card"><h3 class="sec">Users</h3>${wrap(`<table class="tbl"><thead><tr><th>User</th><th>Email</th><th>Signed up</th><th>Status</th><th>Last seen (30d)</th></tr></thead><tbody>${d.users.map((u) => `<tr><td>${esc(u.username)}${u.role ? ` <span class="pill">${esc(u.role)}</span>` : ""}</td><td>${esc(u.email)}</td><td>${esc(fmtDate(new Date(u.createdAt).toISOString()))}</td><td>${esc(u.state)}${u.status ? ` (${esc(u.status)})` : ""}</td><td>${u.lastSeen ? esc(new Date(u.lastSeen).toISOString().slice(0, 16).replace("T", " ")) : "—"}</td></tr>`).join("")}</tbody></table>`)}</section>

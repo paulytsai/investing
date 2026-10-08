@@ -104,6 +104,13 @@ dispatches `WARM_FULL_SHARDS` (default 10) shards with no cap, which fills the
 whole universe in one pass of roughly 10-15 minutes. `GET /api/warm` shows the
 aggregated status of the last run.
 
+**Passwords.** Users change their password on the account page (current password
+required). "Forgot password" on the login page emails a one-time link valid for
+one hour (`#/reset/<token>`), sent through Resend when `RESEND_API_KEY` and
+`MAIL_FROM` are set; until then the admin panel lists pending reset links so
+they can be sent by hand. Built-in accounts (admin, Friend) keep their
+environment-variable passwords.
+
 ### Project layout
 
 ```

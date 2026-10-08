@@ -132,3 +132,37 @@ export async function listUsers() {
   for (const k of keys) { const u = await users.get(k); if (u) out.push(publicUser(u)); }
   return out.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
 }
+
+// ---- password reset tokens (one-time, 1 hour) ----
+const RESET_TTL_MS = 60 * 60 * 1000;
+const tokenHash = (token) => crypto.createHash("sha256").update(String(token)).digest("hex");
+
+export async function createResetToken(user) {
+  const users = await openStore("users");
+  const token = crypto.randomBytes(32).toString("hex");
+  const rec = { userId: user.id, email: user.email, username: user.username, createdAt: Date.now(), expiresAt: Date.now() + RESET_TTL_MS };
+  await users.set(`reset:${tokenHash(token)}`, rec);
+  await users.set(`resetlog:${user.id}`, { ...rec, token }); // lets an admin hand the link over when email is not configured
+  return token;
+}
+
+export async function consumeResetToken(token) {
+  const users = await openStore("users");
+  const key = `reset:${tokenHash(token)}`;
+  const rec = await users.get(key);
+  if (!rec || rec.expiresAt < Date.now()) return null;
+  await users.delete(key);
+  await users.delete(`resetlog:${rec.userId}`).catch(() => {});
+  return getUser(rec.userId);
+}
+
+export async function pendingResets() {
+  const users = await openStore("users");
+  const out = [];
+  for (const key of await users.list("resetlog:")) { const r = await users.get(key); if (r && r.expiresAt > Date.now()) out.push(r); }
+  return out.sort((a, b) => b.createdAt - a.createdAt);
+}
+
+export function validatePassword(password) {
+  if (typeof password !== "string" || password.length < 8 || password.length > 200) throw new HttpError(400, "weak_password");
+}
