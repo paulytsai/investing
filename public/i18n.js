@@ -87,7 +87,7 @@ window.I18N = {
     language: "言語",
     landing: {
       heroTitle: "米国株という大海原の、あなたの水先案内人。",
-      heroLead: "{brand}は、米国上場企業の業績・財務・株主・役員を1ページに収めた米国株アルマナック。決算説明会の内容と最新ニュースをAIが読み込み、長期トレンドと直近動向を日本語で要約します。",
+      heroLead: "{brand}は、米国上場企業の業績・財務・株主・役員を1ページに収めた米国株アルマナック。EDGARに公開された財務情報と決算説明会のトランスクリプトをAIが読み込み、長期トレンド・直近動向・強気／弱気シナリオを日本語でまとめます。",
       ctaPrimary: "7日間無料で試す",
       ctaSecondary: "ログイン",
       ctaNote: "クレジットカード不要。トライアル後は月額 {price}（現地通貨換算）、いつでも解約可。",
@@ -195,7 +195,7 @@ window.I18N = {
     language: "Language",
     landing: {
       heroTitle: "Your pilot guide for the blue ocean of US stocks.",
-      heroLead: "{brand} is a US stock almanac: results, financials, holders and officers for any US-listed company on one page, with AI digests of the earnings calls and latest news so you can see the long-term trend and the recent quarters at a glance.",
+      heroLead: "{brand} is a US stock almanac: results, financials, holders and officers for any US-listed company on one page. It is built on the public financials filed with EDGAR and on earnings-call transcripts, processed by AI into the long-term trend, the recent quarters and the bull and bear cases.",
       ctaPrimary: "Start 7-day free trial",
       ctaSecondary: "Log in",
       ctaNote: "No card needed for the trial. Then {price}, billed in your local currency, cancel anytime.",
@@ -303,7 +303,7 @@ window.I18N = {
     language: "語言",
     landing: {
       heroTitle: "引領您航向美股藍海的領航指南。",
-      heroLead: "{brand} 是美股年鑑：任何美國上市公司的業績、財務、股東與經營層，一頁看完。AI 讀取財報電話會議與最新新聞，整理出長期趨勢與近期動態。",
+      heroLead: "{brand} 是美股年鑑：任何美國上市公司的業績、財務、股東與經營層，一頁看完。以 EDGAR 公開的財務資料與財報電話會議逐字稿為基礎，由 AI 整理出長期趨勢、近期動態與多空論點。",
       ctaPrimary: "免費試用7天",
       ctaSecondary: "登入",
       ctaNote: "試用不需信用卡。之後每月 {price}，以當地貨幣計價，隨時可取消。",

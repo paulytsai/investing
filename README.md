@@ -19,6 +19,7 @@ One page per ticker, in four tabs:
 | 業績・財務 Results & financials | 5 fiscal years + 2 consensus-estimate years + last 4 quarters (revenue, operating, pretax, net, EPS, DPS); dividends and yield; ROE/ROA/capex/D&A/R&D; cash flow; balance sheet |
 | 株主・役員 Holders & management | Top-10 13F holders, institutional %, float, insider activity, officers, splits, yearly/monthly high-low-volume, SEC filings, 8-K events |
 | バリュエーション Valuation | FCFF DCF on consensus estimates over a 10-year horizon (five value drivers: end-state revenue, target margin, sales-to-capital, cost of capital converging to a mature level, rating-implied probability of failure; value bridge with leases and non-operating assets; revenue × margin and WACC × growth sensitivity grids; collapsible methodology note) and every current valuation metric (P/E trailing and forward, PEG, P/S, P/B, P/FCF, EV multiples, yields, margins, returns, leverage) |
+| 深掘り分析 Deep dive | A 3-5 minute fundamental analysis along an industry-and-company economics framework: battlefields table (segment, revenue share, competitors, purchase criteria, position), profit pools, cost position vs peers (structural vs operational), industry structure and pricing, demand and customers, new markets and megatrends, implications tagged structural/operational with confidence, caveats. Generated in English from transcripts, financials, geography, peer TTM metrics and news, then translated |
 
 Above the tabs: a price chart with 1M / 3M / 6M / 1Y / 3Y / 5Y / 10Y ranges.
 
@@ -112,6 +113,7 @@ public/                 static front end (no build step)
 netlify/functions/      Netlify Functions v2 (Request -> Response)
   auth.mjs              /api/auth/{signup,login,logout,me,locale}
   stock.mjs             /api/stock/:symbol      full data bundle (profile, results, valuation, DCF)
+  deep.mjs              /api/deep/:symbol       deep-dive analysis (cached or background generation)
   chart.mjs             /api/chart/:symbol?range=1m|3m|6m|1y|3y|5y|10y
   summary.mjs           /api/summary/:symbol?lang=ja   cached AI commentary or "pending"
   summary-generate-background.mjs   does the Claude call

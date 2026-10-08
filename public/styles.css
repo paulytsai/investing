@@ -413,4 +413,13 @@ table.deep-bf tbody th { white-space: normal; font-weight: 600; }
 .tag { display: inline-block; padding: 0 7px; border-radius: 9px; font-size: 12px; margin-left: 4px; background: var(--head); color: var(--text); vertical-align: 1px; }
 .tag.structural { background: #e8eef7; color: #0b3d6b; }
 .tag.operational { background: #e7f3ea; color: #1a5c2a; }
-@media (max-width: 640px) { table.deep-bf { font-size: 12.5px; } }
+@media (max-width: 640px) {
+  /* Battlefields: one block per segment on phones */
+  table.deep-bf thead { display: none; }
+  table.deep-bf, table.deep-bf tbody, table.deep-bf tr, table.deep-bf th, table.deep-bf td { display: block; width: auto; }
+  table.deep-bf tr { border-bottom: 2px solid var(--border); }
+  table.deep-bf tr:last-child { border-bottom: 0; }
+  table.deep-bf tbody th { border: 0; padding: 6px 8px 2px; font-size: 15px; }
+  table.deep-bf td { border: 0; padding: 2px 8px 6px; }
+  table.deep-bf td::before { content: attr(data-l); display: block; font-size: 12px; color: var(--muted); }
+}
