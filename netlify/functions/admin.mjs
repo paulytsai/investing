@@ -9,6 +9,7 @@ import { cfg } from "../lib/config.mjs";
 import { warmUniverse } from "../lib/universe.mjs";
 import { dispatchWarm, warmStatus, warmCoverage, warmSettings } from "../lib/warmer.mjs";
 import { pendingResets } from "../lib/users.mjs";
+import { createAccessCode, listAccessCodes, deactivateAccessCode } from "../lib/coupons.mjs";
 
 async function recentMessages() {
   const store = await openStore("contact");
@@ -67,6 +68,7 @@ export default handler(async (req, context) => {
       warm: { universe: universe.length, perRun: warmSettings().perRun, settings: warmSettings(), last: warm, langs, coverage: covCounts, pending, current: warm?.running ? [].concat(warm.current || []).join(", ") : null },
       contact: await recentMessages(),
       mail: { configured: mailConfigured(), pendingResets: (await pendingResets()).map((r) => ({ username: r.username, email: r.email, link: `${cfg.siteUrl().replace(/\/$/, "")}/#/reset/${r.token}`, expiresAt: r.expiresAt })) },
+      coupons: await listAccessCodes(),
       users: allUsers.slice(0, 200).map((u) => ({ username: u.username, email: u.email, createdAt: u.createdAt, state: entitlement(u).state, status: u.subscription?.status || null, role: u.role || null, lastSeen: lastSeen[u.username] || null })),
     });
   }
@@ -82,6 +84,15 @@ export default handler(async (req, context) => {
     const keys = (await store.list("")).filter((k) => k.includes(`:${symbol}:`));
     for (const k of keys) await store.delete(k);
     return json({ symbol, reportingCurrency: bundle.company.reportingCurrency, fxToUsd: bundle.company.fxToUsd, peForward: bundle.valuation.peForward, deleted: keys });
+  }
+
+  // Access codes (free months, no card): list, create or update, deactivate.
+  if (action === "coupons") return json({ coupons: await listAccessCodes() });
+  if (action === "coupon" && req.method === "POST") {
+    const q = query(req);
+    if (q.get("deactivate") === "1") return json({ coupon: await deactivateAccessCode(q.get("code")) });
+    const expires = q.get("expires") ? Date.parse(q.get("expires")) : null;
+    return json({ coupon: await createAccessCode({ code: q.get("code"), months: q.get("months"), maxUses: q.get("max") || 0, expiresAt: Number.isFinite(expires) ? expires : null, note: q.get("note") || "" }) });
   }
 
   // Drop one sector's AI report (every language, this period) so the next entitled view regenerates it.

@@ -516,4 +516,6 @@ table.cons .small { line-height: 1.4; }
 .coupon input { padding: 6px 10px; border: 1px solid var(--border); border-radius: 3px; width: 11em; text-transform: uppercase; font-size: 14px; }
 .coupon input::placeholder { text-transform: none; }
 .coupon #couponError { flex-basis: 100%; }
+.coupon-admin { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 8px; }
+.coupon-admin input { padding: 5px 8px; border: 1px solid var(--border); border-radius: 3px; font-size: 14px; }
 .coupon.applied span { color: var(--accent, #0b5bd3); font-weight: 600; }

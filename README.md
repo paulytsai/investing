@@ -57,7 +57,16 @@ not a translation.
 
 ### Coupon codes
 
-Coupons are Stripe promotion codes. Create them in the Stripe Dashboard (Product catalog →
+Two kinds share the same box under the subscribe buttons and the same `?coupon=CODE` link.
+
+**Access codes (free months, no card)** are created in the admin panel (code, months, optional
+max uses, expiry and note) or with `POST /api/admin/coupon?code=FREE6&months=6&max=100`.
+Redeeming one extends the member's card-free period by that many months, counted from today
+or from the current free-period end, whichever is later; Stripe asks for the card only when the
+member subscribes afterwards. Each member can use a code once. This is the kind to use for
+"6 months free" and "12 months free".
+
+**Discount codes** are Stripe promotion codes. Create them in the Stripe Dashboard (Product catalog →
 Coupons → New, then "Add promotion code" for the customer-facing string) or via the API; they
 are per mode, so codes made in the sandbox must be created again in live mode. A member types
 the code in the box under the subscribe buttons (`GET /api/billing/coupon?code=` checks it and

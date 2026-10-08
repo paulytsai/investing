@@ -442,8 +442,17 @@
         <section class="card"><h3 class="sec">Recent activity</h3>${wrap(`<table class="tbl"><tbody>${d.recent.map((e) => `<tr><th>${esc(new Date(e.ts).toISOString().slice(5, 16).replace("T", " "))}</th><td>${esc(e.user)}</td><td>${esc(e.action)}</td><td>${esc(e.detail)}</td></tr>`).join("")}</tbody></table>`)}</section>
       </div>
       <section class="card"><h3 class="sec">Users</h3>${wrap(`<table class="tbl"><thead><tr><th>User</th><th>Email</th><th>Signed up</th><th>Status</th><th>Last seen (30d)</th></tr></thead><tbody>${d.users.map((u) => `<tr><td>${esc(u.username)}${u.role ? ` <span class="pill">${esc(u.role)}</span>` : ""}</td><td>${esc(u.email)}</td><td>${esc(fmtDate(new Date(u.createdAt).toISOString()))}</td><td>${esc(u.state)}${u.status ? ` (${esc(u.status)})` : ""}</td><td>${u.lastSeen ? esc(new Date(u.lastSeen).toISOString().slice(0, 16).replace("T", " ")) : "—"}</td></tr>`).join("")}</tbody></table>`)}</section>
+      <section class="card"><h3 class="sec">Access codes (free months, no card)</h3>
+        <form id="couponForm" class="coupon-admin"><input name="code" placeholder="CODE" required maxlength="40" style="text-transform:uppercase"> <input name="months" type="number" min="1" max="60" value="6" style="width:5em" title="months"> <input name="max" type="number" min="0" value="0" style="width:5em" title="max uses (0 = unlimited)"> <input name="expires" type="date" title="expires"> <input name="note" placeholder="note" maxlength="120"> <button class="btn small" type="submit">Create / update</button> <span id="couponMsg" class="muted small"></span></form>
+        <div id="couponList">${wrap(`<table class="tbl"><thead><tr><th>Code</th><th>Months</th><th>Uses</th><th>Expires</th><th>Note</th><th></th></tr></thead><tbody>${(d.coupons || []).map((c) => `<tr><td><code>${esc(c.code)}</code>${c.active ? "" : " <span class=\"pill\">off</span>"}</td><td class="num">${c.months}</td><td class="num">${c.uses}${c.maxUses ? ` / ${c.maxUses}` : ""}</td><td>${c.expiresAt ? esc(new Date(c.expiresAt).toISOString().slice(0, 10)) : "—"}</td><td>${esc(c.note || "")}</td><td>${c.active ? `<button class="btn small" data-off="${esc(c.code)}">Deactivate</button>` : ""}</td></tr>`).join("") || `<tr><td colspan="6" class="muted">None yet. A code gives its months of free access, no card; a link such as ${esc(location.origin)}/?coupon=CODE pre-fills it.</td></tr>`}</tbody></table>`)}</div>
+      </section>
       ${w && w.errors.length ? `<section class="card"><h3 class="sec">Warmer errors</h3><ul>${w.errors.map((x) => `<li>${esc(x)}</li>`).join("")}</ul></section>` : ""}
     </div>`;
+    $("#couponForm").addEventListener("submit", async (ev) => {
+      ev.preventDefault(); const f = ev.target; const q = new URLSearchParams({ code: f.code.value, months: f.months.value, max: f.max.value || "0", expires: f.expires.value || "", note: f.note.value || "" });
+      try { await api(`/api/admin/coupon?${q}`, { method: "POST" }); renderAdmin(); } catch (e) { $("#couponMsg").textContent = e.message; }
+    });
+    document.querySelectorAll("#couponList [data-off]").forEach((b) => b.addEventListener("click", async () => { try { await api(`/api/admin/coupon?deactivate=1&code=${encodeURIComponent(b.dataset.off)}`, { method: "POST" }); renderAdmin(); } catch (e) { $("#couponMsg").textContent = e.message; } }));
     const warmClick = (id, url, label) => $(id).addEventListener("click", async () => { $(id).disabled = true; try { const r = await api(url, { method: "POST" }); $(id).textContent = `${label} (${r.shards} shards)`; } catch (e) { $(id).textContent = e.message; } });
     warmClick("#warmBtn", "/api/admin/warm", "Warmer started"); warmClick("#warmAllBtn", "/api/admin/warm?full=1", "Full run started");
   }
@@ -479,13 +488,14 @@
     return `${what} ${when}`;
   }
   function couponBox() {
-    if (state.config.billingProvider !== "stripe") return "";
     const c = coupon.get();
+    if (!state.user) return "";
     if (c && c.pending) {
       // A code from a link has not been checked yet: verify it, then redraw.
       api(`/api/billing/coupon?code=${encodeURIComponent(c.code)}`).then((r) => { coupon.set(r.coupon); render(); }).catch(() => { coupon.set(null); render(); });
       return `<div class="coupon applied"><span>${esc(t("coupon.applied", { desc: c.code }))}</span></div>`;
     }
+    if (c && c.kind === "access") return `<div class="coupon applied"><span>${esc(t("coupon.applied", { desc: `${c.code}: ${t("coupon.freeMonths", { months: c.months })}` }))}</span> <button class="btn small primary" id="couponRedeem">${esc(t("coupon.redeem"))}</button> <button class="btn small" id="couponRemove">${esc(t("coupon.remove"))}</button><div id="couponError"></div></div>`;
     if (c) return `<div class="coupon applied"><span>${esc(t("coupon.applied", { desc: `${c.code}: ${couponDesc(c)}` }))}</span> <button class="btn small" id="couponRemove">${esc(t("coupon.remove"))}</button></div>`;
     return `<div class="coupon"><label for="couponInput">${esc(t("coupon.label"))}</label> <input id="couponInput" placeholder="${esc(t("coupon.placeholder"))}" maxlength="40" autocapitalize="characters"> <button class="btn small" id="couponApply">${esc(t("coupon.apply"))}</button><div id="couponError"></div></div>`;
   }
@@ -498,8 +508,8 @@
   function bindBilling() {
     const err = (e) => `<div class="error">${esc(t(`errors.${e.code}`) !== `errors.${e.code}` ? t(`errors.${e.code}`) : e.message)}</div>`;
     const go = async (action) => {
-      const c = coupon.get();
-      try { const r = await api(`/api/billing/${action}${c ? `&coupon=${encodeURIComponent(c.code)}` : ""}`); window.location.href = r.url; }
+      const c = coupon.get(); const stripeCode = c && c.kind === "stripe" ? c.code : null;
+      try { const r = await api(`/api/billing/${action}${stripeCode ? `&coupon=${encodeURIComponent(stripeCode)}` : ""}`); window.location.href = r.url; }
       catch (e) { if (e.code === "invalid_coupon") coupon.set(null); $("#formError").innerHTML = err(e); if (e.code === "invalid_coupon") render(); }
     };
     const s = $("#subscribeBtn"); if (s) s.addEventListener("click", () => go("checkout?plan=monthly"));
@@ -515,6 +525,12 @@
       $("#couponInput").addEventListener("keydown", (ev) => { if (ev.key === "Enter") { ev.preventDefault(); apply(); } });
     }
     const cr = $("#couponRemove"); if (cr) cr.addEventListener("click", () => { coupon.set(null); render(); });
+    const rd = $("#couponRedeem");
+    if (rd) rd.addEventListener("click", async () => {
+      const c = coupon.get(); rd.disabled = true;
+      try { const r = await api(`/api/billing/redeem?code=${encodeURIComponent(c.code)}`, { method: "POST" }); coupon.set(null); state.user = r.user; state.ent = r.entitlement; renderUserMenu(); render(); $("#formError").innerHTML = `<div class="pill">${esc(t("coupon.redeemed", { date: fmtDate(new Date(r.until).toISOString()) }))}</div>`; }
+      catch (e) { if (e.code === "invalid_coupon" || e.code === "coupon_used") coupon.set(null); $("#couponError").innerHTML = err(e); rd.disabled = false; }
+    });
     const p = $("#portalBtn"); if (p) p.addEventListener("click", () => go("portal"));
   }
 
