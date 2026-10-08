@@ -515,9 +515,13 @@ async function buildBundle(symbol) {
   let dcf = null;
   try {
     const taxRate = latestFY && num(latestFY.incomeBeforeTax) > 0 ? (num(latestFY.incomeTaxExpense) / num(latestFY.incomeBeforeTax)) * 100 : null;
+    // Accumulated operating losses from the reported years shelter early profits from tax.
+    let nol = 0;
+    for (const r of annual.slice(-5)) { const oi = num(r.operatingIncome) || 0; nol = oi < 0 ? nol - oi : Math.max(0, nol - oi); }
     const dcfInput = {
-      price, sharesOut, marketCap: num(q.marketCap || profile.marketCap), totalDebt: num(bs?.totalDebt), cash: num(bs?.cashAndShortTermInvestments), minorityInterest: num(bs?.minorityInterest),
-      beta: num(profile.beta), riskFree: rf.rate, erp: Number(process.env.DCF_ERP || 4.5),
+      price, sharesOut, dilutedShares: num(latestFY?.weightedAverageShsOutDil), marketCap: num(q.marketCap || profile.marketCap),
+      totalDebt: num(bs?.totalDebt), leases: num(bs?.capitalLeaseObligations), cash: num(bs?.cashAndShortTermInvestments), nonOperatingAssets: num(bs?.longTermInvestments), minorityInterest: num(bs?.minorityInterest),
+      nol, beta: num(profile.beta), riskFree: rf.rate, erp: Number(process.env.DCF_ERP || 4.5),
       latest: { revenue: num(latestFY?.revenue), ebit: num(latestFY?.operatingIncome), taxRate, interestExpense: num(latestFY?.interestExpense), investedCapital: num(km?.investedCapital) || (bs ? (num(bs.totalDebt) || 0) + (num(bs.totalStockholdersEquity) || 0) - (num(bs.cashAndShortTermInvestments) || 0) : null) },
       estimates: nextEst.map((e) => ({ date: e.date, revenue: num(e.revenueAvg), ebit: num(e.ebitAvg) })),
     };
@@ -625,7 +629,7 @@ async function buildBundle(symbol) {
 
 /** Full bundle, cached for 12 hours per symbol. */
 export async function stockBundle(symbol) {
-  return cached(`stock:${symbol}`, 12 * 3600, () => buildBundle(symbol), { version: "8" });
+  return cached(`stock:${symbol}`, 12 * 3600, () => buildBundle(symbol), { version: "9" });
 }
 
 /** Light, frequently refreshed quote (5 minutes). */

@@ -18,7 +18,7 @@ One page per ticker, in four tabs:
 | 概要 Overview | Key figures (market cap, forward P/E, yield, operating margin, 3-year sales growth, 52-week range), company profile, **長期トレンド** and **直近動向** (concise AI text), **強気・弱気シナリオ** (dense, evidence-first bull and bear cases), company details, competitors (AI-curated tickers verified against live quotes) |
 | 業績・財務 Results & financials | 5 fiscal years + 2 consensus-estimate years + last 4 quarters (revenue, operating, pretax, net, EPS, DPS); dividends and yield; ROE/ROA/capex/D&A/R&D; cash flow; balance sheet |
 | 株主・役員 Holders & management | Top-10 13F holders, institutional %, float, insider activity, officers, splits, yearly/monthly high-low-volume, SEC filings, 8-K events |
-| バリュエーション Valuation | Damodaran-style FCFF DCF on consensus estimates (per-share value, WACC build-up, 5-year forecast table, WACC × growth sensitivity, collapsible methodology note) and every current valuation metric (P/E trailing and forward, PEG, P/S, P/B, P/FCF, EV multiples, yields, margins, returns, leverage) |
+| バリュエーション Valuation | FCFF DCF on consensus estimates over a 10-year horizon (five value drivers: end-state revenue, target margin, sales-to-capital, cost of capital converging to a mature level, rating-implied probability of failure; value bridge with leases and non-operating assets; revenue × margin and WACC × growth sensitivity grids; collapsible methodology note) and every current valuation metric (P/E trailing and forward, PEG, P/S, P/B, P/FCF, EV multiples, yields, margins, returns, leverage) |
 
 Above the tabs: a price chart with 1M / 3M / 6M / 1Y / 3Y / 5Y / 10Y ranges.
 
