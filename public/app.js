@@ -190,7 +190,7 @@
       <section class="hero hero-wave"><img class="hero-seal" src="${esc((state.config.brand && state.config.brand.sealImage) || "/img/seal.png")}" alt="${esc((state.config.brand && state.config.brand.seal) || "株海図")}"><div class="hero-inner"><div class="brand"><span class="brand-text"><span class="brand-name">${esc(brandName())}</span><span class="brand-sub">${esc((state.config.brand && state.config.brand.sub) || "US Stock Almanac")}</span></span></div>
         <h1>${esc(L.heroTitle)}</h1><p class="lead">${esc(L.heroLead)}</p>
         <div class="actions"><a class="btn primary big" href="#/signup">${esc(L.ctaPrimary)}</a><a class="btn big" href="#/login">${esc(L.ctaSecondary)}</a></div>
-        <p class="small"><span class="pill ok">${esc(L.noCard)}</span> ${esc(L.ctaNote.replace("{price}", price))}</p>
+        <p class="small"><span class="pill ok">${esc(L.noCard)}</span> ${esc(L.ctaAfter.replace("{price}", price))}</p>
       </div><span class="hero-credit">${esc(t("heroCredit"))}</span></section>
       <section class="land">
         <h2>${esc(L.samplesTitle)}</h2><p class="lead">${esc(L.samplesLead)}</p>
@@ -230,7 +230,7 @@
     stopSummaryPolling(state.stock); stopSummaryPolling(state.demo);
     const isSignup = kind === "signup";
     app.innerHTML = `<div class="panel form"><h2>${t(isSignup ? "signup" : "login")}</h2>
-      ${isSignup ? `<p class="muted">${t("trialNote", { price: state.config.priceLabel })}</p><p class="nocard"><span class="pill ok">${esc(t("landing.noCard"))}</span> ${esc(t("landing.ctaNote").replace("{price}", state.config.priceLabel))}</p>` : ""}
+      ${isSignup ? `<p class="muted">${t("trialNote", { price: state.config.priceLabel })}</p><p class="nocard"><span class="pill ok">${esc(t("landing.noCard"))}</span> ${esc(t("landing.ctaAfter").replace("{price}", state.config.priceLabel))}</p>` : ""}
       <div id="formError"></div>
       <form id="authForm">
         ${isSignup ? `<label>${t("username")}<input name="username" required minlength="3" maxlength="32" autocomplete="username"></label>
