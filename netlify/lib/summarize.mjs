@@ -19,14 +19,15 @@ export function summaryKey(symbol, lang, latestTranscriptDate) {
 }
 
 const PIECES = ["longTerm", "recent", "story", "bull", "bear"];
-const filled = (v) => typeof v === "string" && v.trim().length > 0;
+const filled = (v, min = 1) => typeof v === "string" && v.trim().length >= min;
 
-/** True when every piece of commentary is present; a record with empty strings is treated as missing. */
+/** True when every piece of commentary is present and substantive; empty or placeholder text ("x") counts as missing. */
 export function isComplete(rec) {
-  if (!rec || !filled(rec.feature)) return false;
-  for (const k of PIECES) { const p = rec[k]; if (!p || !filled(p.headline) || !filled(p.body)) return false; }
+  if (!rec || !filled(rec.feature, 30)) return false;
+  for (const k of PIECES) { const p = rec[k]; if (!p || !filled(p.headline, 3) || !filled(p.body, 120)) return false; }
   const t = rec.technical;
-  if (!t || !Array.isArray(t.support) || !t.support.length || !Array.isArray(t.resistance) || !t.resistance.length || !filled(t.comment)) return false;
+  if (!t || !Array.isArray(t.support) || !t.support.length || !Array.isArray(t.resistance) || !t.resistance.length || !filled(t.comment, 40)) return false;
+  if ([...t.support, ...t.resistance].some((l) => typeof l.level !== "number" || !filled(l.reason, 10))) return false;
   return true;
 }
 

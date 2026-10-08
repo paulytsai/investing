@@ -289,7 +289,7 @@ details.method { font-size: 15px; }
 /* ---------- Shikiho-style tables (restored) ---------- */
 .card { border: 1px solid var(--border); border-radius: 0; padding: 0 0 8px; }
 .sec { margin: 0 0 8px; padding: 5px 10px; background: var(--head); border-bottom: 1px solid var(--border); font-size: 15px; font-weight: 700; }
-.sec::before { content: "【"; } .sec::after { content: "】"; }
+.sec .sec-t::before, .sec:not(:has(.sec-t))::before { content: "【"; } .sec .sec-t::after, .sec:not(:has(.sec-t))::after { content: "】"; }
 .sec .sec-extra::before, .sec .sec-extra::after { content: none; }
 .sec { display: block; } .sec > .sec-extra { float: right; margin-top: 2px; }
 .sec.plain { background: none; border: 0; padding: 6px 0; margin: 4px 0; }
@@ -353,3 +353,53 @@ table.shk th.rowh { width: 8.5em; }
 .cov-bar { flex: 1; height: 14px; background: var(--bg); border: 1px solid var(--border-soft); border-radius: 7px; overflow: hidden; }
 .cov-fill { height: 100%; background: var(--logo-sea); }
 .cov-n { width: 6em; text-align: right; font-variant-numeric: tabular-nums; }
+
+/* ---------- phones: stacked overview rows, wrapping labels, compact header ---------- */
+@media (max-width: 640px) {
+  .topbar .inner { padding: 8px 12px; gap: 6px 8px; }
+  .brand-sub { display: none; }
+  .usermenu { margin-left: auto; flex-wrap: wrap; justify-content: flex-end; gap: 4px 8px; font-size: 14px; }
+  .usermenu .btn, .usermenu a, .lang button { white-space: nowrap; }
+  .usermenu .btn.small { padding: 4px 9px; font-size: 13px; }
+  .lang button { font-size: 13px; padding: 4px 8px; }
+  .pill { order: 10; flex-basis: 100%; text-align: right; font-size: 12.5px; padding: 0; background: none; }
+  .searchbox { order: 3; flex-basis: 100%; min-width: 0; }
+  .searchbox input { max-width: none; }
+  main { padding: 10px 10px 30px; }
+  .hero-wave { margin: -10px -10px 12px; }
+  .hero-credit { display: none; }
+  .hero-seal { height: 88px; right: 10px; bottom: 12px; }
+  .land { padding: 16px 10px; }
+  .land .lead { font-size: 15px; }
+  .demo-frame { padding: 8px; }
+  .panel { padding: 10px; }
+  .title-row { gap: 4px 12px; }
+  .meta { text-align: left; }
+  .ranges button { padding: 4px 9px; font-size: 13px; }
+  .tabs { flex-wrap: wrap; padding: 0; overflow: visible; }
+  .tabs button, .demo-frame .tabs button { flex: 1 1 45%; padding: 9px 4px; font-size: 14px; text-align: center; }
+  /* Overview: label above content so the commentary gets the full width */
+  table.shk.ov, table.shk.ov tbody, table.shk.ov tr, table.shk.ov th, table.shk.ov td { display: block; width: auto; }
+  table.shk.ov tr { border-bottom: 1px solid var(--border); }
+  table.shk.ov tr:last-child { border-bottom: 0; }
+  table.shk.ov { border: 1px solid var(--border); }
+  table.shk.ov th.rowh { width: auto; text-align: left; border: 0; padding: 4px 8px 2px; font-size: 12.5px; color: var(--muted); white-space: normal; }
+  table.shk.ov th.rowh b { color: var(--text); }
+  table.shk.ov td { border: 0; padding: 2px 8px 8px; white-space: normal; text-align: left; }
+  .ai .hl { display: block; margin: 0 0 3px; }
+  /* Finance box and other two-column figure tables: let the label wrap instead of widening the page */
+  table.shk.fin { table-layout: fixed; width: 100%; }
+  table.shk.fin th { white-space: normal; }
+  table.shk.fin th.rowh { width: 60%; }
+  table.shk.fin td.num { white-space: nowrap; }
+  .card { padding-bottom: 6px; }
+  .sec { font-size: 15px; }
+  .sec > .sec-extra { float: none; display: block; margin-top: 0; }
+  .kv2 dt { padding: 3px 8px; font-size: 13px; }
+  .kv2 dd { padding: 3px 8px 6px; }
+  .dcf-num { font-size: 30px; }
+  table.tbl { font-size: 13px; }
+  table.tbl th, table.tbl td { padding: 4px 6px; }
+  .tw.scrolls::after { content: "←→"; display: block; text-align: right; font-size: 11px; color: var(--muted); }
+  .form { margin: 12px auto; }
+}

@@ -362,14 +362,19 @@
     window.renderChart(el, c.chartCache[key], { locale: state.locale, height: el.clientWidth < 600 ? 280 : 360 });
   }
 
+  window.addEventListener("resize", () => markScrollable());
+  function markScrollable(root) {
+    (root || document).querySelectorAll(".tw").forEach((el) => el.classList.toggle("scrolls", el.scrollWidth > el.clientWidth + 2));
+  }
   function renderTab(c) {
     const body = c.root && c.root.querySelector("[data-tabbody]"); if (!body) return;
     body.innerHTML = [tabOverview, tabFinancials, tabValuation, tabHolders][c.tab](c);
     if (c.tab === 2) bindTarget(c);
+    markScrollable(body);
   }
 
   // ---- small builders ----
-  const sec = (title, inner, extra = "") => `<section class="card"><h3 class="sec">${title}${extra ? `<span class="sec-extra">${extra}</span>` : ""}</h3>${inner}</section>`;
+  const sec = (title, inner, extra = "") => `<section class="card"><h3 class="sec"><span class="sec-t">${title}</span>${extra ? `<span class="sec-extra">${extra}</span>` : ""}</h3>${inner}</section>`;
   const kv = (rows) => `<dl class="kv2">${rows.filter((r) => r).map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join("")}</dl>`;
   const wrap = (table) => `<div class="tw">${table}</div>`;
   const row = (th, td, cls = "") => `<tr class="${cls}"><th class="rowh">${th}</th><td>${td}</td></tr>`;
@@ -392,7 +397,7 @@
     const F = t("fin");
     const sgn = (v, d = 1) => (v === null || v === undefined ? NA : `${v > 0 ? "+" : ""}${fmtDec(v, d)}%`);
     const r = (k, v) => `<tr><th class="rowh">${k}</th><td class="num">${v}</td></tr>`;
-    return `<table class="shk"><tr><th class="rowh"><b>【${t("financials")}】</b></th><th>&lt;${yymm(f.asOf)}&gt; ${t("unitM")}</th></tr>
+    return `<table class="shk fin"><tr><th class="rowh"><b>【${t("financials")}】</b></th><th>&lt;${yymm(f.asOf)}&gt; ${t("unitM")}</th></tr>
       ${r(t("totalAssets"), fmtInt(f.totalAssets))}
       ${r(F.equityWithRatio, `${fmtInt(f.equity)} <span class="muted">(${fmtPct(f.equityRatioPct)})</span>`)}
       ${r(F.cash, fmtInt(f.cashAndShortTerm))}
@@ -421,7 +426,7 @@
     const compList = c.s && c.s.competitors && c.s.competitors.length ? c.s.competitors : co.competitors;
     const compLink = (x) => (x.us === false ? `<span class="muted">${esc(x.symbol)}</span>` : `<a href="#/s/${esc(x.symbol)}">${esc(x.symbol)}</a>`);
     const comps = compList && compList.length ? compList.map((x) => `${compLink(x)} ${esc(x.name || "")}<span class="muted">（${fmtBig(x.marketCapM)}${x.country && x.country !== "US" ? ` · ${esc(x.country)}` : ""}）</span>`).join("、") : NA;
-    return `<table class="shk">
+    return `<table class="shk ov">
       ${row(t("name"), `${esc(co.name)}${co.ceo ? `<span class="muted">　${t("ceo")}: ${esc(co.ceo)}</span>` : ""}`)}
       ${row(t("fiscalYear"), monthName(co.fiscalYearEndMonth))}
       ${row(t("ipo"), `${fmtDate(co.ipoDate, { month: "numeric", day: undefined })}${co.stateOfIncorporation ? `　<span class="muted">${t("incorporation")}: ${esc(co.stateOfIncorporation)}</span>` : ""}`)}
