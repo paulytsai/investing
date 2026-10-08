@@ -16,18 +16,20 @@ export function deepKey(symbol, lang, latestTranscriptDate) {
   return `deep:${v}:${symbol}:${lang}:${latestTranscriptDate || "none"}`;
 }
 
-export function isDeepComplete(rec) {
+// CJK text carries the same content in roughly half the characters, so thresholds scale by language.
+export function isDeepComplete(rec, lang) {
+  const f = (lang || (rec && rec.lang)) === "en" || !(lang || (rec && rec.lang)) ? 1 : 0.5;
   if (!rec || !Array.isArray(rec.battlefields) || rec.battlefields.length < 2) return false;
-  if (rec.battlefields.some((b) => ["segment", "revenueShare", "competitors", "purchaseCriteria", "position"].some((k) => !filled(b[k], 3)))) return false;
-  for (const k of PIECES) { const p = rec[k]; if (!p || !filled(p.headline, 3) || !filled(p.body, 120)) return false; }
-  if (!filled(rec.caveats, 15)) return false;
+  if (rec.battlefields.some((b) => ["segment", "revenueShare", "competitors", "purchaseCriteria", "position"].some((k) => !filled(b[k], 2)))) return false;
+  for (const k of PIECES) { const p = rec[k]; if (!p || !filled(p.headline, 2) || !filled(p.body, 120 * f)) return false; }
+  if (!filled(rec.caveats, 15 * f)) return false;
   return true;
 }
 
 export async function getCachedDeep(symbol, lang, latestTranscriptDate) {
   const store = await openStore("summaries");
   const rec = await store.get(deepKey(symbol, lang, latestTranscriptDate));
-  return isDeepComplete(rec) ? rec : null;
+  return isDeepComplete(rec, lang) ? rec : null;
 }
 
 const pct = (v) => (v === null || v === undefined || Number.isNaN(Number(v)) ? "-" : `${(Number(v) * 100).toFixed(1)}%`);
@@ -98,7 +100,7 @@ export async function translateDeep(en, lang, bundle) {
     user: `Translate this JSON. Return JSON only.\n\n${JSON.stringify(source)}`,
     schema: DEEP_SCHEMA, effort: "medium", maxTokens: 12000,
   });
-  if (!isDeepComplete(parsed)) throw new Error(`Translation to ${lang} came back incomplete`);
+  if (!isDeepComplete(parsed, lang)) throw new Error(`Translation to ${lang} came back incomplete`);
   const record = { ...en, ...parsed, lang, translatedFrom: "en", model: message.model, generatedAt: new Date().toISOString(), usage: { input: message.usage?.input_tokens, output: message.usage?.output_tokens } };
   const store = await openStore("summaries");
   await store.set(deepKey(en.symbol, lang, bundle.latestTranscriptDate), record);

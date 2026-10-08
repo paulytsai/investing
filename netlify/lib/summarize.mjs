@@ -22,19 +22,22 @@ const PIECES = ["longTerm", "recent", "story", "bull", "bear"];
 const filled = (v, min = 1) => typeof v === "string" && v.trim().length >= min;
 
 /** True when every piece of commentary is present and substantive; empty or placeholder text ("x") counts as missing. */
-export function isComplete(rec) {
-  if (!rec || !filled(rec.feature, 30)) return false;
-  for (const k of PIECES) { const p = rec[k]; if (!p || !filled(p.headline, 3) || !filled(p.body, 120)) return false; }
+// CJK text carries the same content in roughly half the characters, so thresholds scale by language.
+export function isComplete(rec, lang) {
+  const L = lang || (rec && rec.lang) || "en";
+  const f = L === "en" ? 1 : 0.5;
+  if (!rec || !filled(rec.feature, 30 * f)) return false;
+  for (const k of PIECES) { const p = rec[k]; if (!p || !filled(p.headline, 2) || !filled(p.body, 120 * f)) return false; }
   const t = rec.technical;
-  if (!t || !Array.isArray(t.support) || !t.support.length || !Array.isArray(t.resistance) || !t.resistance.length || !filled(t.comment, 40)) return false;
-  if ([...t.support, ...t.resistance].some((l) => typeof l.level !== "number" || !filled(l.reason, 10))) return false;
+  if (!t || !Array.isArray(t.support) || !t.support.length || !Array.isArray(t.resistance) || !t.resistance.length || !filled(t.comment, 40 * f)) return false;
+  if ([...t.support, ...t.resistance].some((l) => typeof l.level !== "number" || !filled(l.reason, 10 * f))) return false;
   return true;
 }
 
 export async function getCachedSummary(symbol, lang, latestTranscriptDate) {
   const store = await openStore("summaries");
   const rec = await store.get(summaryKey(symbol, lang, latestTranscriptDate));
-  return isComplete(rec) ? rec : null;
+  return isComplete(rec, lang) ? rec : null;
 }
 
 function client() {
@@ -231,7 +234,7 @@ export async function translateSummary(en, lang, bundle) {
     user: `Translate this JSON. Return JSON only.\n\n${JSON.stringify(source)}`,
     schema: TEXT_SCHEMA, effort: "medium", maxTokens: 12000,
   });
-  if (!isComplete({ ...parsed, competitors: [] })) throw new Error(`Translation to ${lang} came back incomplete`);
+  if (!isComplete({ ...parsed, competitors: [] }, lang)) throw new Error(`Translation to ${lang} came back incomplete`);
   const record = { ...en, ...parsed, lang, translatedFrom: "en", model: message.model, generatedAt: new Date().toISOString(), usage: { input: message.usage?.input_tokens, output: message.usage?.output_tokens } };
   const store = await openStore("summaries");
   await store.set(summaryKey(en.symbol, lang, bundle.latestTranscriptDate), record);
