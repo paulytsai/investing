@@ -557,7 +557,7 @@
     const F = t("fin");
     const sgn = (v, d = 1) => (v === null || v === undefined ? NA : `${v > 0 ? "+" : ""}${fmtDec(v, d)}%`);
     const r = (k, v) => `<tr><th class="rowh">${k}</th><td class="num">${v}</td></tr>`;
-    return `<table class="shk fin"><tr><th class="rowh"><b>【${t("financials")}】</b></th><th>&lt;${yymm(f.asOf)}&gt; ${t("unitM")}</th></tr>
+    return `<table class="shk fin"><tr><th class="rowh"><b>【${t("financials")}】</b></th><th>&lt;${yymm(f.asOf)}&gt; ${t("unitM")}${fxNote(c.b)}</th></tr>
       ${r(t("totalAssets"), fmtInt(f.totalAssets))}
       ${r(F.equityWithRatio, `${fmtInt(f.equity)} <span class="muted">(${fmtPct(f.equityRatioPct)})</span>`)}
       ${r(F.cash, fmtInt(f.cashAndShortTerm))}
@@ -629,7 +629,7 @@
       [t("roa"), `${fmtPct(ind.roaPct)} <span class="muted">${t("ttm")} ${fmtPct(ind.roaTTMPct)}</span>`],
       [`${t("maxNet")}${ind.maxNetIncome ? ` (${esc(ind.maxNetIncome.label)})` : ""}`, ind.maxNetIncome ? fmtInt(ind.maxNetIncome.value) : NA],
       [t("capex"), pair(ind.capex, ind.capexPrev)], [t("depreciation"), pair(ind.depreciation, ind.depreciationPrev)], [t("rnd"), pair(ind.rnd, ind.rndPrev)],
-    ]) + `<p class="note">${t("unitM")} · ( ) = ${isCJK() ? "前期" : "prior year"}</p>`;
+    ]) + `<p class="note">${t("unitM")} · ( ) = ${isCJK() ? "前期" : "prior year"}${fxNote(c.b)}</p>`;
     const cfl = cf ? kv([[t("opCF"), pair(cf.operating, cf.operatingPrev)], [t("invCF"), pair(cf.investing, cf.investingPrev)], [t("finCF"), pair(cf.financing, cf.financingPrev)], [t("cashEq"), pair(cf.cash, cf.cashPrev)], [t("fcf"), fmtInt(cf.freeCashFlow)], [t("buyback"), fmtInt(cf.buybacks)], [t("divPaid"), fmtInt(cf.dividendsPaid)]]) + `<p class="note">FY${esc(cf.fiscalYear)} · ${t("unitM")}</p>` : NA;
     const bal = financeBox(f) || NA;
     return `<div class="grid2">${sec(t("performance"), perf)}${sec(t("dividends"), divs)}</div>
@@ -656,6 +656,8 @@
   }
 
   // Current multiple against its own 5- and 10-year fiscal-year-end range.
+  // "Reported in TWD, converted at 31.5 TWD per US dollar" for foreign filers.
+  const fxNote = (b) => (b && b.company && b.company.fxToUsd ? ` · ${esc(t("fxNote", { cur: b.company.reportingCurrency, rate: fmtDec(b.company.fxToUsd, 2) }))}` : "");
   function multiplesHistoryHtml(h, V) {
     if (!h || !h.range5) return "";
     const H = V.history; const names = { pe: V.pe, ps: V.ps, pb: V.pb, evEbitda: V.evEbitda, pfcf: V.pfcf };

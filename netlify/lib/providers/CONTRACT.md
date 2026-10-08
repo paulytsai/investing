@@ -6,7 +6,7 @@ switch is therefore one new file (`<vendor>.mjs`, started from `template.mjs`),
 one line in `REGISTRY`, and `MARKET_DATA_PROVIDER=<vendor>` in the environment.
 EDGAR data (`netlify/lib/edgar.mjs`) is separate and unaffected.
 
-Conventions: money in raw USD (callers convert to millions), ratios as
+Conventions: money in the raw reporting currency, with `currency` on statement rows (foreign filers such as TSM report in TWD; `stockdata.mjs` converts to USD at the current rate; estimates are assumed to be in the statement currency, earnings per ADR and dividends in USD) and callers convert to millions, ratios as
 fractions (0.25, not 25), percentages only where the field name ends in `Pct`,
 dates as `YYYY-MM-DD`, `null` for anything the vendor cannot supply, lists
 newest first unless stated. A method throws `ProviderError` on a vendor failure;
@@ -14,11 +14,11 @@ callers that can live without the panel wrap the call in `soft(promise, fallback
 
 | Method | Returns |
 | --- | --- |
-| `profile(symbol)` | `{symbol, name, exchange, exchangeFullName, currency, cik, isin, sector, industry, description, website, ceo, address, city, state, zip, country, phone, ipoDate, employees, marketCap, price, beta, averageVolume, changePct, isEtf, isFund, isActivelyTrading}` or `null` |
+| `profile(symbol)` | `{symbol, name, exchange, exchangeFullName, currency, cik, isin, sector, industry, description, website, ceo, address, city, state, zip, country, phone, ipoDate, employees, marketCap, price, beta, averageVolume, changePct, isEtf, isFund, isAdr, isActivelyTrading}` or `null` |
 | `quote(symbol)` / `quotes(symbols[])` | `{symbol, name, price, change, changePct, volume, dayLow, dayHigh, yearHigh, yearLow, marketCap, priceAvg50, priceAvg200, exchange, open, previousClose, time (ISO), sharesOutstanding}`; `quotes` also serves FX pairs such as `USDJPY` |
-| `incomeStatements(symbol, {period: "annual"\|"quarter", limit})` | `[{date, fiscalYear, period, revenue, grossProfit, operatingIncome, pretaxIncome, netIncome, eps, epsDiluted, ebitda, interestExpense, incomeTax, rnd, sga, dilutedShares, sharesOut}]` |
-| `balanceSheets(symbol, {period, limit})` | `[{date, fiscalYear, period, totalAssets, equity, retainedEarnings, cashAndShortTerm, totalDebt, netDebt, currentAssets, currentLiabilities, goodwillAndIntangibles, leases, longTermInvestments, minorityInterest}]` |
-| `cashFlows(symbol, {period, limit})` | `[{date, fiscalYear, period, operating, investing, financing, cashEnd, freeCashFlow, capex (negative), depreciation, buybacks (negative), dividendsPaid (negative, all classes), commonDividendsPaid, acquisitions}]` |
+| `incomeStatements(symbol, {period: "annual"\|"quarter", limit})` | `[{date, fiscalYear, period, currency (reporting currency, e.g. TWD for TSM), revenue, grossProfit, operatingIncome, pretaxIncome, netIncome, eps, epsDiluted, ebitda, interestExpense, incomeTax, rnd, sga, dilutedShares, sharesOut}]` |
+| `balanceSheets(symbol, {period, limit})` | `[{date, fiscalYear, period, currency, totalAssets, equity, retainedEarnings, cashAndShortTerm, totalDebt, netDebt, currentAssets, currentLiabilities, goodwillAndIntangibles, leases, longTermInvestments, minorityInterest}]` |
+| `cashFlows(symbol, {period, limit})` | `[{date, fiscalYear, period, currency, operating, investing, financing, cashEnd, freeCashFlow, capex (negative), depreciation, buybacks (negative), dividendsPaid (negative, all classes), commonDividendsPaid, acquisitions}]` |
 | `keyMetrics(symbol, {period, limit})` | `[{date, fiscalYear, roe, roa, roic, investedCapital, capexToRevenue, rndToRevenue, sgaToRevenue, evToEbitda}]` |
 | `keyMetricsTtm(symbol)` | `{roe, roa, roic, enterpriseValue, evToSales, evToEbitda, evToOcf, evToFcf, earningsYield, fcfYield, netDebtToEbitda, rndToRevenue, sgaToRevenue, capexToRevenue, inventoryDays, investedCapital}` or `null` |
 | `ratios(symbol, {period, limit})` | fiscal-year-end multiples `[{date, fiscalYear, pe, ps, pb, pfcf, evEbitda, dividendYield}]` |
@@ -31,7 +31,7 @@ callers that can live without the panel wrap the call in `soft(promise, fallback
 | `peers(symbol)` | `[{symbol, name}]` |
 | `employees(symbol)` | `{count, asOf}` or `null` |
 | `sharesFloat(symbol)` | `{outstanding, freeFloatPct}` or `null` |
-| `revenueSegments(symbol, limit)` / `revenueGeography(symbol, limit)` | `[{fiscalYear, date, data: {segmentName: revenue}}]` |
+| `revenueSegments(symbol, limit)` / `revenueGeography(symbol, limit)` | `[{fiscalYear, date, currency, data: {segmentName: revenue}}]` |
 | `earnings(symbol, limit)` | `[{date, epsActual, epsEstimated, revenueActual, revenueEstimated}]`, future dates have `epsActual: null` |
 | `analystRating(symbol)` | `{consensus, strongBuy, buy, hold, sell, strongSell}` or `null` |
 | `priceTarget(symbol)` | `{high, low, consensus}` or `null` |

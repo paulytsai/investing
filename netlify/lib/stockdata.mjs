@@ -214,6 +214,26 @@ async function competitors(symbol, industry, peersRaw) {
     .map((q) => ({ symbol: q.symbol, name: q.name || candidates.get(q.symbol), marketCapM: mm(q.marketCap), price: num(q.price), changePct: r2(q.changePct) }));
 }
 
+/** Units of `currency` per US dollar (1 for USD), cached for six hours. */
+export async function fxToUsd(currency) {
+  const cur = String(currency || "USD").toUpperCase();
+  if (cur === "USD") return 1;
+  return cached(`fx:${cur}`, 6 * 3600, async () => {
+    const q = (await P.quotes([`USD${cur}`]))[0];
+    if (!q || !(q.price > 0)) throw new Error(`no FX rate for ${cur}`);
+    return q.price;
+  });
+}
+/** Divide the listed numeric fields of each row by `rate` (statements of foreign filers to USD). */
+function toUsd(rows, fields, rate) {
+  if (rate === 1 || !Array.isArray(rows)) return rows;
+  return rows.map((r) => { const o = { ...r }; for (const f of fields) if (num(o[f]) !== null) o[f] = o[f] / rate; return o; });
+}
+const INCOME_FIELDS = ["revenue", "grossProfit", "operatingIncome", "pretaxIncome", "netIncome", "eps", "epsDiluted", "ebitda", "interestExpense", "incomeTax", "rnd", "sga"];
+const BALANCE_FIELDS = ["totalAssets", "equity", "retainedEarnings", "cashAndShortTerm", "totalDebt", "netDebt", "currentAssets", "currentLiabilities", "goodwillAndIntangibles", "leases", "longTermInvestments", "minorityInterest"];
+const CASH_FIELDS = ["operating", "investing", "financing", "cashEnd", "freeCashFlow", "capex", "depreciation", "buybacks", "dividendsPaid", "commonDividendsPaid", "acquisitions"];
+export const STATEMENT_FIELDS = { income: INCOME_FIELDS, balance: BALANCE_FIELDS, cash: CASH_FIELDS };
+
 const HISTORY_METRICS = ["pe", "ps", "pb", "evEbitda", "pfcf"];
 /** Ten fiscal years of multiples plus 5- and 10-year low/median/high and where today's value sits. */
 function multiplesHistory(rows, valuation) {
@@ -241,7 +261,7 @@ async function buildBundle(symbol) {
   if (!profile || !profile.name) throw new HttpError(404, "symbol_not_found");
   if (profile.isEtf || profile.isFund) throw new HttpError(400, "not_a_company");
 
-  const [
+  let [
     quote,
     incomeA,
     incomeQ,
@@ -301,6 +321,24 @@ async function buildBundle(symbol) {
     soft(P.ratios(symbol, { period: "annual", limit: 10 })),
   ]);
   const competitorList = await competitors(symbol, profile.industry, peers);
+
+  // Foreign filers report in their own currency (TSM in TWD, ASML in EUR) while the ADR trades
+  // in USD: convert every statement-based amount at today's rate so ratios and the DCF line up.
+  const reportingCurrency = String((incomeA[0] && incomeA[0].currency) || "USD").toUpperCase();
+  let fx = 1;
+  if (reportingCurrency !== "USD") {
+    try { fx = await fxToUsd(reportingCurrency); } catch (e) { console.warn(`no FX for ${symbol} (${reportingCurrency}): ${e.message}`); }
+  }
+  if (fx !== 1) {
+    incomeA = toUsd(incomeA, INCOME_FIELDS, fx); incomeQ = toUsd(incomeQ, INCOME_FIELDS, fx);
+    balanceA = toUsd(balanceA, BALANCE_FIELDS, fx); balanceQ = toUsd(balanceQ, BALANCE_FIELDS, fx);
+    cashA = toUsd(cashA, CASH_FIELDS, fx);
+    estimates = toUsd(estimates, ["revenue", "ebit", "netIncome", "eps"], fx);
+    metricsA = toUsd(metricsA, ["investedCapital"], fx);
+    if (metricsTTM) metricsTTM = { ...metricsTTM, enterpriseValue: metricsTTM.enterpriseValue === null ? null : metricsTTM.enterpriseValue / fx, investedCapital: metricsTTM.investedCapital === null ? null : metricsTTM.investedCapital / fx };
+    if (ratiosTTM) ratiosTTM = { ...ratiosTTM, epsTtm: ratiosTTM.epsTtm === null ? null : ratiosTTM.epsTtm / fx, bvps: ratiosTTM.bvps === null ? null : ratiosTTM.bvps / fx, fcfps: ratiosTTM.fcfps === null ? null : ratiosTTM.fcfps / fx, revenuePerShare: ratiosTTM.revenuePerShare === null ? null : ratiosTTM.revenuePerShare / fx };
+    segments = segments.map((g) => ({ ...g, data: Object.fromEntries(Object.entries(g.data || {}).map(([k, v]) => [k, num(v) === null ? v : v / fx])) }));
+  }
 
   const cik = edgarCo?.cik || profile.cik;
   const [filings, events, edgarRat] = cik
@@ -591,6 +629,8 @@ async function buildBundle(symbol) {
       segmentsFiscalYear: seg?.fiscalYear || null,
       peers: peerList,
       competitors: competitorList,
+      reportingCurrency,
+      fxToUsd: fx === 1 ? null : r2(fx),
     },
     market: {
       price,
@@ -677,7 +717,7 @@ export async function indexMembership(symbol) {
 }
 
 export async function stockBundle(symbol, { force = false, peek = false } = {}) {
-  return cached(`stock:${symbol}`, 12 * 3600, () => buildBundle(symbol), { version: "12", force, peek });
+  return cached(`stock:${symbol}`, 12 * 3600, () => buildBundle(symbol), { version: "13", force, peek });
 }
 
 /** Newest earnings-call transcript date the provider lists for a symbol (one light request). */

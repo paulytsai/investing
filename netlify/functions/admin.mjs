@@ -4,6 +4,7 @@ import { requireAdmin, entitlement } from "../lib/entitlement.mjs";
 import { listUsers } from "../lib/users.mjs";
 import { listEvents } from "../lib/events.mjs";
 import { openStore } from "../lib/store.mjs";
+import { stockBundle, normalizeSymbol } from "../lib/stockdata.mjs";
 import { cfg } from "../lib/config.mjs";
 import { warmUniverse } from "../lib/universe.mjs";
 import { dispatchWarm, warmStatus, warmCoverage, warmSettings } from "../lib/warmer.mjs";
@@ -72,6 +73,15 @@ export default handler(async (req, context) => {
 
   if (action === "warm" && req.method === "POST") {
     return json(await dispatchWarm({ full: query(req).get("full") === "1" }));
+  }
+  // Force-rebuild one ticker's bundle and drop its AI records so the next warmer run regenerates them.
+  if (action === "rebuild" && req.method === "POST") {
+    const symbol = normalizeSymbol(query(req).get("symbol"));
+    const bundle = await stockBundle(symbol, { force: true });
+    const store = await openStore("summaries");
+    const keys = (await store.list("")).filter((k) => k.includes(`:${symbol}:`));
+    for (const k of keys) await store.delete(k);
+    return json({ symbol, reportingCurrency: bundle.company.reportingCurrency, fxToUsd: bundle.company.fxToUsd, peForward: bundle.valuation.peForward, deleted: keys });
   }
 
   throw new HttpError(404, "not_found");

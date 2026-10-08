@@ -52,7 +52,7 @@ function mapProfile(p) {
     cik: p.cik || null, isin: p.isin || null, sector: p.sector || null, industry: p.industry || null, description: p.description || null, website: p.website || null, ceo: p.ceo || null,
     address: p.address || null, city: p.city || null, state: p.state || null, zip: p.zip || null, country: p.country || null, phone: p.phone || null, ipoDate: p.ipoDate || null,
     employees: num(p.fullTimeEmployees), marketCap: num(p.marketCap), price: num(p.price), beta: num(p.beta), averageVolume: num(p.averageVolume), changePct: num(p.changePercentage),
-    isEtf: !!p.isEtf, isFund: !!p.isFund, isActivelyTrading: p.isActivelyTrading !== false,
+    isEtf: !!p.isEtf, isFund: !!p.isFund, isAdr: !!p.isAdr, isActivelyTrading: p.isActivelyTrading !== false,
   };
 }
 
@@ -70,21 +70,21 @@ export async function quotes(symbols) {
 
 // ---- statements (raw USD) ----
 const mapIncome = (r) => ({
-  date: r.date, fiscalYear: str(r.fiscalYear), period: r.period || null, revenue: num(r.revenue), grossProfit: num(r.grossProfit), operatingIncome: num(r.operatingIncome),
+  date: r.date, fiscalYear: str(r.fiscalYear), period: r.period || null, currency: r.reportedCurrency || null, revenue: num(r.revenue), grossProfit: num(r.grossProfit), operatingIncome: num(r.operatingIncome),
   pretaxIncome: num(r.incomeBeforeTax), netIncome: num(r.netIncome), eps: num(r.eps), epsDiluted: num(r.epsDiluted), ebitda: num(r.ebitda), interestExpense: num(r.interestExpense),
   incomeTax: num(r.incomeTaxExpense), rnd: num(r.researchAndDevelopmentExpenses), sga: num(r.sellingGeneralAndAdministrativeExpenses), dilutedShares: num(r.weightedAverageShsOutDil), sharesOut: num(r.weightedAverageShsOut),
 });
 export async function incomeStatements(symbol, { period = "annual", limit = 10 } = {}) { return list(await call("income-statement", { symbol, period, limit })).map(mapIncome); }
 
 const mapBalance = (r) => ({
-  date: r.date, fiscalYear: str(r.fiscalYear), period: r.period || null, totalAssets: num(r.totalAssets), equity: num(r.totalStockholdersEquity), retainedEarnings: num(r.retainedEarnings),
+  date: r.date, fiscalYear: str(r.fiscalYear), period: r.period || null, currency: r.reportedCurrency || null, totalAssets: num(r.totalAssets), equity: num(r.totalStockholdersEquity), retainedEarnings: num(r.retainedEarnings),
   cashAndShortTerm: num(r.cashAndShortTermInvestments), totalDebt: num(r.totalDebt), netDebt: num(r.netDebt), currentAssets: num(r.totalCurrentAssets), currentLiabilities: num(r.totalCurrentLiabilities),
   goodwillAndIntangibles: num(r.goodwillAndIntangibleAssets), leases: num(r.capitalLeaseObligations), longTermInvestments: num(r.longTermInvestments), minorityInterest: num(r.minorityInterest),
 });
 export async function balanceSheets(symbol, { period = "annual", limit = 2 } = {}) { return list(await call("balance-sheet-statement", { symbol, period, limit })).map(mapBalance); }
 
 const mapCash = (r) => ({
-  date: r.date, fiscalYear: str(r.fiscalYear), period: r.period || null, operating: num(r.netCashProvidedByOperatingActivities ?? r.operatingCashFlow), investing: num(r.netCashProvidedByInvestingActivities),
+  date: r.date, fiscalYear: str(r.fiscalYear), period: r.period || null, currency: r.reportedCurrency || null, operating: num(r.netCashProvidedByOperatingActivities ?? r.operatingCashFlow), investing: num(r.netCashProvidedByInvestingActivities),
   financing: num(r.netCashProvidedByFinancingActivities), cashEnd: num(r.cashAtEndOfPeriod), freeCashFlow: num(r.freeCashFlow), capex: num(r.capitalExpenditure), depreciation: num(r.depreciationAndAmortization),
   buybacks: num(r.commonStockRepurchased), dividendsPaid: num(r.netDividendsPaid), commonDividendsPaid: num(r.commonDividendsPaid), acquisitions: num(r.acquisitionsNet),
 });
@@ -149,7 +149,7 @@ export async function sharesFloat(symbol) {
   const s = first(await call("shares-float", { symbol }));
   return s ? { outstanding: num(s.outstandingShares), freeFloatPct: num(s.freeFloat) } : null;
 }
-const mapSeg = (r) => ({ fiscalYear: r.fiscalYear ?? null, date: r.date || null, data: r.data && typeof r.data === "object" ? r.data : {} });
+const mapSeg = (r) => ({ fiscalYear: r.fiscalYear ?? null, date: r.date || null, currency: r.reportedCurrency || null, data: r.data && typeof r.data === "object" ? r.data : {} });
 export async function revenueSegments(symbol, limit = 1) { return list(await call("revenue-product-segmentation", { symbol, limit })).map(mapSeg); }
 export async function revenueGeography(symbol, limit = 2) { return list(await call("revenue-geographic-segmentation", { symbol, structure: "flat" })).slice(0, limit).map(mapSeg); }
 export async function earnings(symbol, limit = 8) {

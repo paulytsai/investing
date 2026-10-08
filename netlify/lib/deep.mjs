@@ -2,6 +2,7 @@
 // transcripts, financials, geography, peer metrics and news, then translated.
 import { provider, soft } from "./providers/index.mjs";
 import { openStore } from "./store.mjs";
+import { fxToUsd, STATEMENT_FIELDS } from "./stockdata.mjs";
 import { logEvent } from "./events.mjs";
 import { runJson, fetchTranscripts, financialDigest, newsDigest, getCachedSummary } from "./summarize.mjs";
 import { deepSystemPrompt, translateDeepPrompt, DEEP_SCHEMA, DEEP_SECTION_KEYS, DEEP_ASSESSMENTS, normalizeAssessment } from "./prompts.mjs";
@@ -85,11 +86,14 @@ export async function historyDigest(symbol) {
     soft(P.incomeStatements(symbol, { period: "annual", limit: 10 })), soft(P.cashFlows(symbol, { period: "annual", limit: 10 })),
     soft(P.balanceSheets(symbol, { period: "annual", limit: 10 })), soft(P.keyMetrics(symbol, { period: "annual", limit: 10 })),
   ]);
+  const cur = String((inc[0] && inc[0].currency) || "USD").toUpperCase();
+  let fx = 1; if (cur !== "USD") { try { fx = await fxToUsd(cur); } catch {} }
+  const conv = (rows, fields) => fx === 1 ? rows : rows.map((r) => { const o = { ...r }; for (const f of fields) if (o[f] !== null && o[f] !== undefined && Number.isFinite(Number(o[f]))) o[f] = o[f] / fx; return o; });
   const by = (rows) => Object.fromEntries((Array.isArray(rows) ? rows : []).map((r) => [String(r.fiscalYear || String(r.date).slice(0, 4)), r]));
-  const I = by(inc), C = by(cf), B = by(bs), K = by(km);
+  const I = by(conv(inc, STATEMENT_FIELDS.income)), C = by(conv(cf, STATEMENT_FIELDS.cash)), B = by(conv(bs, STATEMENT_FIELDS.balance)), K = by(km);
   const years = Object.keys(I).sort();
   if (!years.length) return "(no history)";
-  return ["FY: revenue, gross margin, operating income (margin), net income, diluted EPS, diluted shares, OCF, capex, FCF, buybacks, dividends, acquisitions, cash+ST inv, total debt, equity, ROIC, capex/revenue, R&D/revenue",
+  return [`${fx !== 1 ? `(reported in ${cur}, converted at ${fx.toFixed(2)} ${cur} per USD) ` : ""}FY: revenue, gross margin, operating income (margin), net income, diluted EPS, diluted shares, OCF, capex, FCF, buybacks, dividends, acquisitions, cash+ST inv, total debt, equity, ROIC, capex/revenue, R&D/revenue`,
     ...years.map((y) => { const i = I[y] || {}, c = C[y] || {}, b = B[y] || {}, k = K[y] || {};
       return `FY${y}: ${M(i.revenue)}, GM ${pct(i.grossProfit && i.revenue ? i.grossProfit / i.revenue : null)}, OI ${M(i.operatingIncome)} (${pct(i.operatingIncome && i.revenue ? i.operatingIncome / i.revenue : null)}), NI ${M(i.netIncome)}, EPS ${n2(i.epsDiluted ?? i.eps)}, shares ${M(i.dilutedShares)}, OCF ${M(c.operating)}, capex ${M(c.capex)}, FCF ${M(c.freeCashFlow)}, buybacks ${M(c.buybacks)}, dividends ${M(c.commonDividendsPaid ?? c.dividendsPaid)}, acquisitions ${M(c.acquisitions)}, cash ${M(b.cashAndShortTerm)}, debt ${M(b.totalDebt)}, equity ${M(b.equity)}, ROIC ${pct(k.roic)}, capex/rev ${pct(k.capexToRevenue)}, R&D/rev ${pct(k.rndToRevenue)}`; })].join("\n");
 }
