@@ -15,7 +15,11 @@ export default handler(async (req, context) => {
 
   if (action === "stats") {
     const days = 30;
-    const [events, users, jobs] = await Promise.all([listEvents(days), listUsers(), openStore("jobs")]);
+    const [allEvents, allUsers, jobs] = await Promise.all([listEvents(days), listUsers(), openStore("jobs")]);
+    // Developer/admin accounts are excluded from every usage figure.
+    const adminNames = new Set(allUsers.filter((u) => u.role === "admin").map((u) => u.username));
+    const users = allUsers.filter((u) => u.role !== "admin");
+    const events = allEvents.filter((e) => !adminNames.has(e.user));
     const now = Date.now();
     const dayKey = (ts) => new Date(ts).toISOString().slice(0, 10);
     const byDay = {};
@@ -45,7 +49,7 @@ export default handler(async (req, context) => {
       topSymbols: Object.entries(bySymbol).sort((a, b) => b[1] - a[1]).slice(0, 25).map(([symbol, views]) => ({ symbol, views })),
       recent: events.slice(0, 60),
       warm: { universe: warmUniverse().length, perRun: Number(process.env.WARM_PER_RUN || 8), last: warm },
-      users: users.slice(0, 200).map((u) => ({ username: u.username, email: u.email, createdAt: u.createdAt, state: entitlement(u).state, status: u.subscription?.status || null, role: u.role || null, lastSeen: lastSeen[u.username] || null })),
+      users: allUsers.slice(0, 200).map((u) => ({ username: u.username, email: u.email, createdAt: u.createdAt, state: entitlement(u).state, status: u.subscription?.status || null, role: u.role || null, lastSeen: lastSeen[u.username] || null })),
     });
   }
 
