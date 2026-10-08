@@ -237,7 +237,36 @@ npm test
    loads in 3–6 s on a cold cache. If you see timeouts, ask Netlify support to
    raise the function timeout to 26 s.
 
-### Lemon Squeezy setup
+### Stripe setup (preferred)
+
+Stripe is used when `STRIPE_SECRET_KEY` and `STRIPE_PRICE_ID` are set; Lemon Squeezy
+otherwise. One Stripe account serves every edition: one product ("Monthly plan") with
+one recurring price per currency, and each site points at its own price.
+
+1. Dashboard → Settings → Managed Payments: activate it and accept its terms. Stripe then
+   acts as merchant of record and handles consumption tax, VAT and sales tax, fraud,
+   disputes and transaction-level support. (Set `STRIPE_MANAGED_PAYMENTS=0` to charge as
+   your own merchant instead.)
+2. Product catalog → Create product: "Monthly plan", tax code "Software as a service
+   (SaaS)" or another code marked eligible for Managed Payments, recurring monthly price
+   in the site's currency (¥1,500 for Kabukaizu). Add further prices (NT$300, US$10) on
+   the same product for the other editions. Copy each price ID (`price_...`).
+3. Developers → Webhooks → Add endpoint `https://<site>/api/webhooks/stripe` with the
+   events `checkout.session.completed`, `customer.subscription.created`,
+   `customer.subscription.updated`, `customer.subscription.deleted`,
+   `customer.subscription.paused`, `customer.subscription.resumed`, `invoice.paid`,
+   `invoice.payment_failed`. Copy the signing secret (`whsec_...`). One endpoint per site.
+4. Settings → Billing → Customer portal: enable it, allow cancellation and payment-method
+   updates. The "Manage billing" button opens it.
+5. Set on the site: `STRIPE_SECRET_KEY`, `STRIPE_PRICE_ID`, `STRIPE_WEBHOOK_SECRET`,
+   `PRICE_LABEL`, `PRICE_AMOUNT`, `PRICE_CURRENCY`, then redeploy. Test first with a
+   sandbox key, a sandbox price and the card 4242 4242 4242 4242.
+
+The checkout carries the user id; the webhook matches the subscription to the account by
+that id, or by email. Cancelling from the account page sets cancel-at-period-end, and the
+user keeps access until the period ends.
+
+### Lemon Squeezy setup (legacy)
 
 Each edition charges in its own currency, and Lemon Squeezy charges in the
 **store's** currency (it only *displays* other currencies, converting at the

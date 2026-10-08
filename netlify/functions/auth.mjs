@@ -2,7 +2,7 @@ import { json, error, readJson, handler, param, HttpError } from "../lib/http.mj
 import { createUser, findUserByLogin, findUserByEmail, verifyPassword, hashPassword, validatePassword, publicUser, saveUser, loginBuiltin, deleteUser, createResetToken, consumeResetToken } from "../lib/users.mjs";
 import { sendMail, mailConfigured } from "../lib/mail.mjs";
 import { logEvent, DEV_COOKIE } from "../lib/events.mjs";
-import { cancelSubscription } from "../lib/lemonsqueezy.mjs";
+import { cancelSubscription } from "../lib/billing.mjs";
 import { createToken, sessionCookie, clearCookie } from "../lib/session.mjs";
 import { currentUser, entitlement } from "../lib/entitlement.mjs";
 import { cfg, SUPPORTED_LOCALES } from "../lib/config.mjs";
@@ -63,9 +63,9 @@ export default handler(async (req, context) => {
     const user = await currentUser(req);
     if (!user) throw new HttpError(401, "unauthenticated");
     if (!user.subscription?.id) throw new HttpError(404, "no_subscription");
-    const r = await cancelSubscription(user.subscription.id);
-    if (!r) throw new HttpError(503, "billing_not_configured", "Cancel from the billing portal");
-    user.subscription = { ...user.subscription, status: r.status, endsAt: r.endsAt, renewsAt: r.renewsAt, lastEvent: "cancelled_by_user", updatedAt: new Date().toISOString() };
+    const updated = await cancelSubscription(user);
+    if (!updated) throw new HttpError(503, "billing_not_configured", "Cancel from the billing portal");
+    user.subscription = updated;
     await saveUser(user);
     await logEvent("cancel", { user, req });
     return json(userResponse(user));

@@ -1,4 +1,4 @@
-// Decides whether a user may read paid data: free trial, then Lemon Squeezy subscription.
+// Decides whether a user may read paid data: free trial, then a Stripe or Lemon Squeezy subscription.
 import { getUser } from "./users.mjs";
 import { sessionFromRequest } from "./session.mjs";
 import { HttpError } from "./http.mjs";

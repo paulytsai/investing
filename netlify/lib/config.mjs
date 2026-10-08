@@ -73,6 +73,16 @@ export const cfg = {
     const amount = env("PRICE_AMOUNT", "10");
     return { label: env("PRICE_LABEL", "US$10"), amount: String(amount), currency };
   },
+  // Stripe Billing (preferred): the site's monthly price in its own currency; Managed
+  // Payments makes Stripe the merchant of record (tax handled) when activated in the dashboard.
+  stripe() {
+    return {
+      secretKey: env("STRIPE_SECRET_KEY"),
+      priceId: env("STRIPE_PRICE_ID"),
+      webhookSecret: env("STRIPE_WEBHOOK_SECRET"),
+      managedPayments: env("STRIPE_MANAGED_PAYMENTS", "1") !== "0",
+    };
+  },
   internalSecret() {
     return env("INTERNAL_SECRET") || cfg.authSecret();
   },

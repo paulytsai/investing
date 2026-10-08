@@ -1,5 +1,6 @@
 import { json, handler } from "../lib/http.mjs";
 import { cfg } from "../lib/config.mjs";
+import { billingProvider } from "../lib/billing.mjs";
 
 export default handler(async () => {
   const lemon = cfg.lemon();
@@ -9,7 +10,8 @@ export default handler(async () => {
     trialDays: cfg.trialDays(),
     priceLabel: lemon.priceLabel,
     priceCurrency: cfg.price().currency,
-    billingEnabled: !!(lemon.checkoutUrl || (lemon.store && lemon.variantId)),
+    billingEnabled: billingProvider() !== null,
+    billingProvider: billingProvider(),
     summariesEnabled: !!cfg.anthropicKey(),
     brand: cfg.brand(),
   });

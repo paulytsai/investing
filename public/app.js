@@ -124,7 +124,7 @@
   function parseRoute() {
     const pm = !location.hash && location.pathname.match(/^\/s\/([A-Za-z0-9.\-]+)\/?$/);
     if (pm) return { view: "stock", symbol: decodeURIComponent(pm[1]).toUpperCase(), ssr: true };
-    const h = location.hash.replace(/^#\/?/, "");
+    const h = location.hash.replace(/^#\/?/, "").split("?")[0];
     const [a, b] = h.split("/");
     if (a === "s" && b) return { view: "stock", symbol: decodeURIComponent(b).toUpperCase() };
     if (a === "reset" && b) return { view: "reset", token: b };
@@ -367,7 +367,7 @@
     const canCancel = hasSub && ["active", "on_trial", "past_due"].includes(u.subscription.status);
     app.innerHTML = `<div class="panel form"><h2>${t("account")}</h2>
       <div class="kv"><div>${t("username")}</div><div>${esc(u.username)}</div><div>${t("email")}</div><div>${esc(u.email)}</div><div>${t("pricing")}</div><div>${statusLine()}</div></div>
-      <div id="formError"></div>
+      <div id="formError">${location.hash.includes("checkout=success") && !hasSub ? `<div class="pill">${esc(B.checkoutDone)}</div>` : ""}</div>
       ${canSubscribe ? `<button class="btn primary" id="subscribeBtn">${t("subscribe")} — ${esc(state.config.priceLabel)}</button>` : ""}
       ${u.builtin ? "" : `<h3 class="billing-h">${t("pw.changeTitle")}</h3><form id="pwForm"><label>${t("pw.current")}<input name="currentPassword" type="password" required autocomplete="current-password"></label><label>${t("pw.newPassword")}<input name="newPassword" type="password" required minlength="8" autocomplete="new-password"></label><label>${t("pw.confirm")}<input name="confirm" type="password" required minlength="8" autocomplete="new-password"></label><button class="btn" type="submit">${t("pw.change")}</button> <span id="pwMsg" class="muted small"></span></form>`}
       <h3 class="billing-h">${B.title}</h3>
@@ -376,6 +376,7 @@
       ${u.builtin ? "" : `<button class="btn danger-outline" id="deleteBtn">${B.deleteAcct}</button><div id="deleteBox" hidden><p>${B.deleteConfirm}</p><input type="password" id="deletePw" autocomplete="current-password" placeholder="${t("password")}"><div style="margin-top:8px"><button class="btn danger" id="deleteYes">${B.deleteBtn}</button> <button class="btn" id="deleteNo">${B.back}</button></div></div>`}
       <p class="muted" style="margin-top:14px">${t("priceLine", { price: state.config.priceLabel })}</p></div>`;
     bindBilling();
+    pollAfterCheckout();
     const pf = $("#pwForm"); if (pf) pf.addEventListener("submit", async (ev) => {
       ev.preventDefault(); const P = t("pw"); const msg = $("#pwMsg");
       if (pf.newPassword.value !== pf.confirm.value) { msg.textContent = P.mismatch; return; }
@@ -444,6 +445,17 @@
     bindBilling();
   }
 
+  // After Stripe Checkout returns, the webhook can land a few seconds later: refresh the account until it does.
+  function pollAfterCheckout() {
+    if (!location.hash.includes("checkout=success")) return;
+    let tries = 0;
+    const tick = async () => {
+      try { const r = await api("/api/auth/me"); if (r.user) { state.user = r.user; state.ent = r.entitlement; } } catch {}
+      if (state.user && state.user.subscription && state.user.subscription.id) { location.hash = "#/account"; renderUserMenu(); renderAccount(); return; }
+      if (++tries < 15) setTimeout(tick, 2000);
+    };
+    setTimeout(tick, 1500);
+  }
   function bindBilling() {
     const go = async (action) => {
       try { const r = await api(`/api/billing/${action}`); window.location.href = r.url; }
