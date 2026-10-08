@@ -1,7 +1,7 @@
 // Netlify background function (name ends with -background: runs up to 15 minutes).
 import { cfg } from "../lib/config.mjs";
 import { stockBundle, normalizeSymbol } from "../lib/stockdata.mjs";
-import { generateSummary } from "../lib/summarize.mjs";
+import { ensureSummary } from "../lib/summarize.mjs";
 import { openStore } from "../lib/store.mjs";
 
 export default async (req) => {
@@ -18,7 +18,7 @@ export default async (req) => {
   try {
     const symbol = normalizeSymbol(body.symbol);
     const bundle = await stockBundle(symbol);
-    await generateSummary(symbol, lang, bundle);
+    await ensureSummary(symbol, lang, bundle);
     await jobs.set(jobKey, { status: "done", updatedAt: Date.now() });
   } catch (e) {
     console.error("summary generation failed", e);

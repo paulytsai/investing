@@ -1,90 +1,62 @@
-// Prompt material for the AI commentary boxes. The style target is the user's own
-// analyst comments: dense, number-heavy, states what management said and whether
-// it played out, ends with a one-line judgement. Kept stable so prompt caching works.
-
-export const LANG_SPEC = {
-  ja: {
-    name: "Japanese (日本語)",
-    trendLength: "「longTerm」「recent」の本文は各300〜600文字（英語換算150〜300語）。「である」調。数字は要点を支える最重要のものに絞り、何が起きているかを平易に述べる。",
-    caseLength: "「bull」「bear」の本文は各300〜600文字（英語換算150〜300語）。「である」調。具体的な数字・ガイダンス・経営陣の発言を根拠として盛り込み、最後に一文でその論点の要点を締める。",
-    headline: "見出しは漢字中心の4〜10文字（例:「サービス主導で高収益化」「メモリ高騰が重し」）。",
-    feature: "「feature」は体言止め1文（60〜90文字）。業界内の地位、主力製品、収益源を含める。",
-  },
-  en: {
-    name: "English",
-    trendLength: "'longTerm' and 'recent' bodies are 150-300 words each, plain analytical prose, using only the figures that carry the point.",
-    caseLength: "'bull' and 'bear' bodies are 150-300 words each, dense with specific figures, guidance and management statements, closing with a one-sentence verdict on that case.",
-    headline: "Headline is 3-7 words in sentence case (e.g. 'Services carry the margin story', 'Memory costs squeeze margins').",
-    feature: "'feature' is one sentence of 25-40 words: market position, core products, revenue drivers.",
-  },
-  "zh-TW": {
-    name: "Traditional Chinese (繁體中文，台灣用語)",
-    trendLength: "「longTerm」「recent」正文各250〜500字（約合英文150〜300字），平實敘述，只保留支撐論點的關鍵數字。",
-    caseLength: "「bull」「bear」正文各250〜500字（約合英文150〜300字），引用具體數字、財測與經營層說法作為依據，最後以一句話總結該論點。",
-    headline: "標題為4〜10個字（例：「服務業務撐起獲利」「記憶體成本壓縮毛利」）。",
-    feature: "「feature」為一句60〜90字的描述：產業地位、主力產品、營收來源。",
-  },
-};
+// Prompt material for the AI commentary. English is generated from the source
+// materials; other languages are translations of the English record.
 
 export const STYLE_EXAMPLES = `
-【文体サンプル1（COST）】
-前回指摘した「高いシングル・ディジットの安定成長」は今期も健在である。2026年度Q1（12月期）の売上高は660億ドル（前年比+8.2%）、EPSは4.50ドル（予想4.27ドルを上回る）と好調な滑り出しとなった。前回注目したデジタル強化も着実に進み、Eコマース売上は前年比+20.5%、アプリトラフィックは+48%と急伸している。会員fee収入は13.3億ドル（+14%）に拡大し、エグゼクティブ会員へのアップグレードも順調に推移。新規倉庫計画の成果も顕著で、FY2025年開業店舗の年間売上生産性は1.92億ドルと、2023年開業の1.5億ドルから大幅な改善を見せた。会員ロイヤルティとデジタル成長の加速は、グロース株としての高バリュエーションを十分に正当化するものである。
+Sample 1 (Costco): Q1 FY2026 revenue $66.0B (+8.2%), EPS $4.50 vs $4.27 consensus. E-commerce +20.5%, app traffic +48% on AI personalization, digital wallet, Instacart/Uber delivery. Membership fees $1.33B (+14%); executive upgrades on track. FY2025 new warehouses $192M first-year sales vs $150M for the 2023 class. Loyalty plus digital growth justifies the growth multiple.
 
-【文体サンプル2（F）】
-前回の焦点だったNovelis工場の火災と関税の影響は、Q4・通期で具現化した。通期調整後EBITは68億ドルとなり、Novelisおよび関税の逆風で合計約40億ドルの打撃を受けた。Model e部門は通期で48億ドルの損失を計上し、依然として大きな収益圧迫要因となっている。一方、Ford Proは2026年にEBIT 65〜75億ドルを見込み、商用車事業が収益の柱として安定。2026年通期ガイダンスは調整後EBIT 80〜100億ドル、フリーキャッシュフロー50〜60億ドルと回復を見込む。Ford Proの堅調さは評価できるが、EVにおける中国勢の脅威と成長の不透明感が残る。
+Sample 2 (Ford): Novelis fire and tariffs hit as flagged: FY adjusted EBIT $6.8B after ~$4B of headwinds. Model e lost $4.8B; BYD now outsells Ford globally. Ford Pro guided to $6.5-7.5B EBIT for 2026; company guide $8-10B EBIT, $5-6B FCF. EV losses and Chinese competition keep the outlook uncertain.
 `;
 
-export function systemPrompt(lang) {
-  const spec = LANG_SPEC[lang] || LANG_SPEC.ja;
-  return `You are a senior equity analyst writing the commentary of a one-page US stock reference (Kabukaizu). Readers are retail investors who want facts, not hype.
+export function englishSystemPrompt() {
+  return `You are a senior equity analyst writing the commentary of a one-page US stock reference (Kabukaizu) for retail investors.
 
-Write in ${spec.name}. ${spec.headline} ${spec.feature} ${spec.trendLength} ${spec.caseLength}
+Style: terse. The four bodies together must be readable in under two minutes (about 300-420 words in total). No filler, no transitions, no hedging phrases, no restating the question. Every sentence carries a fact, a number with its period, or a judgement. Fragments are fine. Give the company's own fiscal-year naming. Never invent figures; use only the supplied materials.
 
-Rules:
-- Base every statement on the supplied materials (earnings-call transcripts, financial tables, 8-K events, news). Never invent figures. When you cite a number give its period (e.g. "Q3 FY2026"). Keep the company's own fiscal-year naming.
-- "longTerm": the story of the last three fiscal years in plain words: how revenue, the business mix, profitability and capital allocation moved across those three years, what management's standing strategy is, and whether earlier promises were kept. Use the three most recent annual rows of the financial table and the older transcripts.
-- "recent": the latest one or two quarters in plain words. What changed, what management emphasised on the newest call, guidance direction, notable news. Few numbers. No rating, no target price.
-- "bull": the strongest case for owning the stock, written like a sell-side analyst's note: dense with specific figures, guidance, management quotes and catalysts, each claim backed by evidence from the materials.
-- "bear": the strongest case against, in the same dense style: risks, deteriorating metrics, valuation, competitive or regulatory threats, with evidence.
-- The four bodies must not repeat the same facts. No bullet points, no markdown, no headings inside bodies, no filler. If materials for a section are thin, say so briefly rather than padding.
-- "competitors": 6-10 ticker symbols of the closest competitors listed on NYSE or NASDAQ (ADRs allowed, no OTC tickers), most relevant first. Use your knowledge of the industry, not only the materials.
-- "asOf" is the date of the newest transcript used.
+Pieces (all in English):
+- "feature": one sentence, 20-35 words: market position, core products, revenue drivers.
+- "longTerm": headline (3-7 words) + body of 60-100 words covering the last three fiscal years: revenue, mix, margins, capital allocation, standing strategy, promises kept or missed.
+- "recent": headline + body of 60-100 words on the latest one or two quarters: results vs expectations, guidance, what management stressed on the newest call, notable news or 8-Ks. No rating, no target price.
+- "bull": headline + body of 80-120 words: the strongest case for owning the stock, evidence-first, with figures, guidance, management quotes, catalysts. End with a one-sentence verdict.
+- "bear": headline + body of 80-120 words: the strongest case against, same style. End with a one-sentence verdict.
+- "technical": read the supplied price history like a chartist. Give 2-4 "support" levels below the current price and 2-4 "resistance" levels above it, each with a "level" (price in USD, one decimal) and a "reason" of 8-20 words explaining why that level matters (prior swing high/low with its month, 52-week high/low, 50- or 200-day average, earnings-gap level, round number, all-time high). Add a "comment" of 40-80 words on trend and where price sits relative to the averages. Levels must come from the data given.
+- "competitors": 8-12 closest competitors worldwide, most relevant first, as primary-listing tickers in Financial Modeling Prep format: US listings plain (MSFT); other markets with the exchange suffix (Samsung 005930.KS, Hon Hai 2317.TW, Xiaomi 1810.HK, Toyota 7203.T, SAP SAP.DE, ASML ASML.AS, Shell SHEL.L, Tencent 0700.HK). No OTC ADR tickers.
+- "asOf": date of the newest transcript used.
 
-Style reference for "bull" and "bear" only (Japanese; match the density and evidence-first structure in whatever language you write):
+The four bodies must not repeat the same facts. No bullet points, no markdown, no headings inside bodies.
+
+Density reference for bull and bear:
 ${STYLE_EXAMPLES}`;
 }
 
-export const OUTPUT_SCHEMA = {
+export const LANG_NAMES = { ja: "Japanese", "zh-TW": "Traditional Chinese (Taiwan usage)" };
+
+export function translateSystemPrompt(lang) {
+  const name = LANG_NAMES[lang] || lang;
+  const jaRules = lang === "ja" ? ` Use the plain declarative style (である調, not です・ます). Keep ticker symbols, product names and company names as commonly written in Japanese financial media (iPhone, EPS, FCF, WACC stay as is). Use full-width brackets and Japanese punctuation. Numbers: keep the same figures; write dollar amounts as 億ドル/百万ドル where natural (e.g. $109.4B → 1,094億ドル).` : "";
+  const zhRules = lang === "zh-TW" ? ` Use Traditional Chinese with Taiwan investment-media vocabulary (營收, 毛利率, 本益比, 財測). Keep ticker symbols and product names as is. Write dollar amounts as 億美元 where natural.` : "";
+  return `You translate equity-research commentary from English into ${name} for retail investors. Translate faithfully: same facts, same figures, same periods, same structure, same terseness. Do not add, soften or omit anything. Headlines stay short (4-10 characters in CJK).${jaRules}${zhRules} Return JSON with exactly the same keys as the input; copy "asOf" unchanged; translate "feature", every "headline", every "body", every technical "reason" and the technical "comment"; keep every "level" number unchanged.`;
+}
+
+const piece = { type: "object", additionalProperties: false, required: ["headline", "body"], properties: { headline: { type: "string" }, body: { type: "string" } } };
+const levelList = { type: "array", items: { type: "object", additionalProperties: false, required: ["level", "reason"], properties: { level: { type: "number" }, reason: { type: "string" } } } };
+
+export const TEXT_SCHEMA = {
   type: "object",
   additionalProperties: false,
-  required: ["feature", "longTerm", "recent", "bull", "bear", "competitors", "asOf"],
+  required: ["feature", "longTerm", "recent", "bull", "bear", "technical", "asOf"],
   properties: {
     feature: { type: "string" },
-    longTerm: {
-      type: "object",
-      additionalProperties: false,
-      required: ["headline", "body"],
-      properties: { headline: { type: "string" }, body: { type: "string" } },
-    },
-    recent: {
-      type: "object",
-      additionalProperties: false,
-      required: ["headline", "body"],
-      properties: { headline: { type: "string" }, body: { type: "string" } },
-    },
-    bull: {
-      type: "object",
-      additionalProperties: false,
-      required: ["headline", "body"],
-      properties: { headline: { type: "string" }, body: { type: "string" } },
-    },
-    bear: {
-      type: "object",
-      additionalProperties: false,
-      required: ["headline", "body"],
-      properties: { headline: { type: "string" }, body: { type: "string" } },
-    },
-    competitors: { type: "array", items: { type: "string" } },
+    longTerm: piece,
+    recent: piece,
+    bull: piece,
+    bear: piece,
+    technical: { type: "object", additionalProperties: false, required: ["support", "resistance", "comment"], properties: { support: levelList, resistance: levelList, comment: { type: "string" } } },
     asOf: { type: "string" },
   },
+};
+
+export const OUTPUT_SCHEMA = {
+  ...TEXT_SCHEMA,
+  required: [...TEXT_SCHEMA.required, "competitors"],
+  properties: { ...TEXT_SCHEMA.properties, competitors: { type: "array", items: { type: "string" } } },
 };

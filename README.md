@@ -58,10 +58,13 @@ not a translation.
 * **edgar.tools** (`api.edgar.tools/v1`): SEC entity profile (CIK, SIC, state of
   incorporation, fiscal year end, 10-K business summary), filing list, 8-K
   material events, filing-derived ratios.
-* **Claude** (`claude-opus-5-5` via the Anthropic SDK) writes the profile,
-  the two concise trend pieces, the bull and bear cases and the competitor
-  list from the last four transcripts, ~25 news items and the financial
-  table. Output is schema-constrained JSON. Generation runs in a
+* **Claude** (`claude-opus-5-5` via the Anthropic SDK) writes the English
+  commentary (profile, long-term trend, recent quarters, bull and bear cases,
+  a technical read of support and resistance, and a worldwide competitor
+  list) from the last four transcripts, ~25 news items, the financial table
+  and a digest of the price history. Japanese and Traditional Chinese are
+  translations of that English record in a second, cheaper call, so all
+  languages say the same thing. Output is schema-constrained JSON. Generation runs in a
   Netlify **background function** (up to 15 min) and the page polls until it is
   ready; results are cached until a newer transcript appears. One generation
   costs roughly US$0.30 (≈66k input tokens).

@@ -151,11 +151,9 @@
       mountDemo(app.querySelector("[data-demo]"));
       return;
     }
-    let recent = [];
-    try { recent = JSON.parse(localStorage.getItem("recent") || "[]"); } catch {}
-    app.innerHTML = `<div class="panel center"><p>${t("welcome")}</p>
-      ${recent.length ? `<p>${recent.map((s) => `<a href="#/s/${esc(s)}" class="btn small" style="margin:2px">${esc(s)}</a>`).join(" ")}</p>` : ""}</div>
-      <div class="footer">${t("sources")}<br>${t("disclaimer")}</div>`;
+    // Logged-in home: open the default ticker.
+    location.hash = "#/s/AAPL";
+    if (location.hash === "#/s/AAPL") { state.route = parseRoute(); render(); }
   }
 
   function renderAuth(kind) {
@@ -181,8 +179,8 @@
         renderUserMenu();
         const back = sessionStorage.getItem("after_login");
         sessionStorage.removeItem("after_login");
-        location.hash = back || "#/";
-        if (location.hash === (back || "#/")) { state.route = parseRoute(); render(); }
+        location.hash = back || "#/s/AAPL";
+        if (location.hash === (back || "#/s/AAPL")) { state.route = parseRoute(); render(); }
       } catch (e) {
         $("#formError").innerHTML = `<div class="error">${esc(t(`errors.${e.code}`) !== `errors.${e.code}` ? t(`errors.${e.code}`) : e.message)}</div>`;
         btn.disabled = false;
@@ -302,6 +300,7 @@
   function renderTab(c) {
     const body = c.root && c.root.querySelector("[data-tabbody]"); if (!body) return;
     body.innerHTML = [tabOverview, tabFinancials, tabValuation, tabHolders][c.tab](c);
+    if (c.tab === 2) bindTarget(c);
   }
 
   // ---- small builders ----
@@ -355,7 +354,8 @@
     const target = m.analystTarget ? `$${fmtDec(m.analystTarget.consensus)}（$${fmtDec(m.analystTarget.low)}〜$${fmtDec(m.analystTarget.high)}）` : NA;
     const sg = (b.growth.salesGrowth || []).map((x) => `${esc(x.label)} ${x.pct !== null ? (x.pct >= 0 ? "+" : "") + fmtDec(x.pct, 1) + "%" : NA}`).join("　");
     const compList = c.s && c.s.competitors && c.s.competitors.length ? c.s.competitors : co.competitors;
-    const comps = compList && compList.length ? compList.map((x) => `<a href="#/s/${esc(x.symbol)}">${esc(x.symbol)}</a> ${esc(x.name || "")}<span class="muted">（${fmtBig(x.marketCapM)}）</span>`).join("、") : NA;
+    const compLink = (x) => (x.us === false ? `<span class="muted">${esc(x.symbol)}</span>` : `<a href="#/s/${esc(x.symbol)}">${esc(x.symbol)}</a>`);
+    const comps = compList && compList.length ? compList.map((x) => `${compLink(x)} ${esc(x.name || "")}<span class="muted">（${fmtBig(x.marketCapM)}${x.country && x.country !== "US" ? ` · ${esc(x.country)}` : ""}）</span>`).join("、") : NA;
     return `<table class="shk">
       ${row(t("name"), `${esc(co.name)}${co.ceo ? `<span class="muted">　${t("ceo")}: ${esc(co.ceo)}</span>` : ""}`)}
       ${row(t("fiscalYear"), monthName(co.fiscalYearEndMonth))}
@@ -371,7 +371,7 @@
       ${row(t("employees"), co.employees ? `${fmtInt(co.employees)}${isCJK() ? "名" : ""}${co.employeesAsOf ? ` <${yymm(co.employeesAsOf)}>` : ""}` : NA)}
       ${row(t("exchange"), `${esc(co.exchangeFullName || co.exchange)}${co.filerCategory ? `　<span class="muted">${esc(co.filerCategory)}</span>` : ""}`)}
       ${row(t("url"), co.website ? `<a href="${esc(co.website)}" target="_blank" rel="noopener">${esc(co.website)}</a>` : NA)}
-      ${row(t("shares"), `${t("sharesOut")} ${fmtInt(m.sharesOutstandingM)}${t("millionShares")}　${t("marketCap")} ${fmtBig(m.marketCapM)}　${t("val.peFwd")} ${fmtDec(v.peForward, 1)}　${t("per")} ${fmtDec(m.per, 1)}　${t("pbr")} ${fmtDec(m.pbr, 1)}　${t("val.divYield")} ${fmtPct(m.dividendYieldPct, 2)}`)}
+      ${row(t("shares"), `${t("sharesOut")} ${fmtInt(m.sharesOutstandingM)}${t("millionShares")}　${t("marketCap")} ${fmtBig(m.marketCapM)}　${t("val.peFwd")} ${fmtDec(v.peForward, 1)}　${t("val.pe")} ${fmtDec(v.pe, 1)}　${t("pbr")} ${fmtDec(m.pbr, 1)}　${t("val.divYield")} ${fmtPct(m.dividendYieldPct, 2)}`)}
       ${row(t("opMargin"), `${fmtPct(b.growth.operatingMarginPct)}${b.growth.operatingMarginPrevPct !== null ? `(${b.growth.operatingMarginPct - b.growth.operatingMarginPrevPct >= 0 ? "+" : ""}${fmtDec(b.growth.operatingMarginPct - b.growth.operatingMarginPrevPct, 1)}pt)` : ""}　<span class="muted">${t("salesGrowth3y")}:</span> ${sg || NA}`)}
       ${row(t("competitors"), comps)}
       ${row(t("nextEarnings"), `${fmtDate(b.nextEarnings)}　<span class="muted">${t("analysts")}: ${rating}　${t("target")}: ${target}</span>`)}
@@ -433,7 +433,7 @@
       [V.ev, [[V.marketCap, fmtBig(v.marketCapM)], [V.ev, fmtBig(v.enterpriseValueM)], [V.evSales, x(v.evSales)], [V.evEbitda, x(v.evEbitda)], [V.evOcf, x(v.evOcf)], [V.evFcf, x(v.evFcf)]]],
       [V.yields, [[V.earningsYield, fmtPct(v.earningsYieldPct)], [V.fcfYield, fmtPct(v.fcfYieldPct)], [V.divYield, fmtPct(v.dividendYieldPct, 2)], [V.payout, fmtPct(v.payoutPct)], [V.epsTTM, `$${x(v.epsTTM, 2)}`], [V.epsFwd, `$${x(v.epsForward, 2)}`], [V.epsFwd2, `$${x(v.epsForward2, 2)}`], [V.epsGrowth, fmtPct(v.epsGrowthFwdPct)], [V.bvps, `$${x(v.bvps, 2)}`], [V.fcfps, `$${x(v.fcfps, 2)}`], [V.rps, `$${x(v.revenuePerShare, 2)}`]]],
       [V.quality, [[V.gm, fmtPct(v.grossMarginPct)], [V.om, fmtPct(v.opMarginPct)], [V.nm, fmtPct(v.netMarginPct)], [V.roe, fmtPct(v.roePct)], [V.roic, fmtPct(v.roicPct)], [V.roa, fmtPct(v.roaPct)], [V.ndEbitda, x(v.netDebtEbitda, 2)], [V.de, x(v.debtEquity, 2)], [V.cov, x(v.interestCoverage)], [V.cr, x(v.currentRatio, 2)]]],
-      [V.market, [[V.beta, x(v.beta, 2)], [V.range52, `$${x(v.yearLow, 2)} – $${x(v.yearHigh, 2)}`], [V.ma, `$${x(v.priceAvg50, 2)} / $${x(v.priceAvg200, 2)}`], [V.target, v.analystTarget ? `$${x(v.analystTarget.consensus, 2)} (${v.analystTarget.upsidePct >= 0 ? "+" : ""}${x(v.analystTarget.upsidePct)}%)` : NA], [V.graham, `$${x(v.grahamNumber, 2)}`]]],
+      [V.market, [[V.beta, x(v.beta, 2)], [t("tech").high52, `$${x(v.yearHigh, 2)}${v.yearHighDate ? ` <span class="muted">(${fmtDate(v.yearHighDate)})</span>` : ""}`], [t("tech").low52, `$${x(v.yearLow, 2)}${v.yearLowDate ? ` <span class="muted">(${fmtDate(v.yearLowDate)})</span>` : ""}`], v.allTimeHigh ? [t("tech").ath, `$${x(v.allTimeHigh.price, 2)} <span class="muted">(${fmtDate(v.allTimeHigh.date)})</span>`] : null, [V.ma, `$${x(v.priceAvg50, 2)} / $${x(v.priceAvg200, 2)}`], [V.target, v.analystTarget ? `$${x(v.analystTarget.consensus, 2)} (${v.analystTarget.upsidePct >= 0 ? "+" : ""}${x(v.analystTarget.upsidePct)}%)` : NA]]],
     ];
     const metrics = `<div class="grid3">${groups.map(([title, rows]) => sec(title, kv(rows))).join("")}</div>`;
     let dcfHtml;
@@ -447,7 +447,40 @@
       const sens = S ? wrap(`<table class="tbl sens"><thead><tr><th>WACC \\ g</th>${S.gs.map((g) => `<th class="num">${fmtPct(g, 1)}</th>`).join("")}</tr></thead><tbody>${S.grid.map((r, i) => `<tr><th>${fmtPct(S.waccs[i], 1)}</th>${r.map((val, j) => `<td class="num ${i === 1 && j === 1 ? "base" : ""}">${val === null ? NA : "$" + x(val, 0)}</td>`).join("")}</tr>`).join("")}</tbody></table>`) + `<p class="note">${V.sensNote}</p>` : "";
       dcfHtml = head + yrs + `<h4 class="sub">${V.sens}</h4>` + sens + `<details class="method"><summary>${V.method}</summary>${V.methodBody.map((para) => `<p>${esc(para)}</p>`).join("")}</details>`;
     }
-    return `${sec(V.dcfTitle, dcfHtml, d && d.riskFreeDate ? `${V.rf}: ${fmtPct(d.inputs.riskFree, 2)} (${esc(d.riskFreeDate)})` : "")}<h3 class="sec plain">${V.title}</h3>${metrics}`;
+    const T = t("target");
+    const eps = v.epsNtm || v.epsForward;
+    let targetHtml = `<p class="muted">${NA}</p>`;
+    if (eps && v.price) {
+      let saved = null; try { saved = Number(localStorage.getItem(`tpe:${b.symbol}`)) || null; } catch {}
+      const def = saved || (v.peForward ? Math.round(v.peForward) : 20);
+      const refs = [[V.pe, v.pe], [V.peFwd, v.peForward], [V.peFwd2, v.peForward2]].filter((r) => r[1]).map((r) => `${r[0]} ${fmtDec(r[1], 1)}`).join(" · ");
+      targetHtml = `<div class="target"><dl class="kv2"><dt>${T.epsNtm}</dt><dd>$${fmtDec(eps, 2)}</dd>
+        <dt><label for="tpe-${esc(b.symbol)}">${T.multiple}</label></dt><dd><input id="tpe-${esc(b.symbol)}" class="tpe" type="number" min="1" max="500" step="0.5" value="${def}" inputmode="decimal"> <span class="muted small">${T.presets}: ${refs}</span></dd>
+        <dt>${T.price}</dt><dd><b class="tp-price"></b> <span class="tp-up"></span></dd></dl><p class="note">${esc(T.note)}</p></div>`;
+    }
+    const K = t("tech"); const tech = c.s && c.s.technical;
+    const lv = (rows) => rows && rows.length ? `<table class="tbl"><thead><tr><th class="num">${K.level}</th><th>${K.reason}</th></tr></thead><tbody>${rows.slice().sort((p, q) => q.level - p.level).map((r) => `<tr><td class="num">$${fmtDec(r.level, 1)}</td><td>${esc(r.reason)}</td></tr>`).join("")}</tbody></table>` : `<p class="muted">${NA}</p>`;
+    const techHtml = tech
+      ? `<div class="grid2b"><div><h4 class="sub">${K.resistance}</h4>${wrap(lv(tech.resistance))}</div><div><h4 class="sub">${K.support}</h4>${wrap(lv(tech.support))}</div></div><p class="tech-comment">${esc(tech.comment)}</p>`
+      : `<p class="muted">${c.summaryStatus === "pending" || c.summaryStatus === null ? t("generating") : t("summaryError")}</p>`;
+    return `${sec(T.title, targetHtml)}${sec(K.title, techHtml, `$${fmtDec(v.price, 2)}`)}${sec(V.dcfTitle, dcfHtml, d && d.riskFreeDate ? `${V.rf}: ${fmtPct(d.inputs.riskFree, 2)} (${esc(d.riskFreeDate)})` : "")}<h3 class="sec plain">${V.title}</h3>${metrics}`;
+  }
+  function bindTarget(c) {
+    const root = c.root; if (!root) return;
+    const input = root.querySelector("input.tpe"); if (!input) return;
+    const v = c.b.valuation; const eps = v.epsNtm || v.epsForward;
+    const update = () => {
+      const m = Number(input.value);
+      const priceEl = root.querySelector(".tp-price"); const upEl = root.querySelector(".tp-up");
+      if (!m || m <= 0) { priceEl.textContent = NA; upEl.textContent = ""; return; }
+      const tp = m * eps; const up = (tp / v.price - 1) * 100;
+      priceEl.textContent = `$${fmtDec(tp, 2)}`;
+      upEl.textContent = `${t("target").upside} ${up >= 0 ? "+" : ""}${fmtDec(up, 1)}%`;
+      upEl.className = `tp-up ${up >= 0 ? "up" : "down"}`;
+      try { localStorage.setItem(`tpe:${c.b.symbol}`, String(m)); } catch {}
+    };
+    input.addEventListener("input", update);
+    update();
   }
 
   // ---------- AI summary polling ----------
@@ -455,7 +488,7 @@
   function applySummary(c, r, lang) {
     c.summaryStatus = r.status;
     if (r.status === "ready") { c.s = r.summary; c.tries = 0; }
-    if (c.root && c.tab === 0) renderTab(c);
+    if (c.root && (c.tab === 0 || c.tab === 2)) renderTab(c);
     if (r.status === "pending" && c.tries < 40) { c.tries++; c.timer = setTimeout(() => loadSummary(c), 6000); }
   }
   async function loadSummary(c) {

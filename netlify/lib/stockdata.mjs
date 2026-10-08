@@ -481,6 +481,19 @@ async function buildBundle(symbol) {
   const fwdEps = num(nextEst[0]?.epsAvg);
   const fwdEps2 = num(nextEst[1]?.epsAvg);
   const epsTTM = num(rtTTM?.netIncomePerShareTTM);
+  // Next-twelve-month EPS: blend FY1 and FY2 consensus by months remaining in FY1.
+  let epsNtm = null;
+  if (fwdEps && nextEst[0]?.date) {
+    const monthsLeft = Math.max(0, Math.min(12, (Date.parse(nextEst[0].date) - Date.now()) / (30.44 * 86400000)));
+    epsNtm = fwdEps2 ? (fwdEps * monthsLeft + fwdEps2 * (12 - monthsLeft)) / 12 : fwdEps;
+  }
+  // 52-week high/low dates and all-time high from the daily series.
+  const dailyArr = Array.isArray(daily) ? daily : [];
+  const yearAgo = new Date(Date.now() - 366 * 86400000).toISOString().slice(0, 10);
+  const last52 = dailyArr.filter((r) => r.d >= yearAgo);
+  const hi52 = last52.reduce((a, r) => (a === null || r.p > a.p ? r : a), null);
+  const lo52 = last52.reduce((a, r) => (a === null || r.p < a.p ? r : a), null);
+  const ath = dailyArr.reduce((a, r) => (a === null || r.p > a.p ? r : a), null);
   const epsGrowthFwd = fwdEps && epsTTM && epsTTM > 0 ? (fwdEps / epsTTM - 1) * 100 : null;
   const valuation = {
     price, marketCapM: mm(q.marketCap || profile.marketCap), enterpriseValueM: mm(kmTTM?.enterpriseValueTTM),
@@ -489,12 +502,13 @@ async function buildBundle(symbol) {
     ps: r2(rtTTM?.priceToSalesRatioTTM), pb: r2(rtTTM?.priceToBookRatioTTM), pfcf: r2(rtTTM?.priceToFreeCashFlowRatioTTM), pocf: r2(rtTTM?.priceToOperatingCashFlowRatioTTM),
     evSales: r2(kmTTM?.evToSalesTTM), evEbitda: r2(kmTTM?.evToEBITDATTM), evOcf: r2(kmTTM?.evToOperatingCashFlowTTM), evFcf: r2(kmTTM?.evToFreeCashFlowTTM),
     earningsYieldPct: pct(kmTTM?.earningsYieldTTM), fcfYieldPct: pct(kmTTM?.freeCashFlowYieldTTM), dividendYieldPct, payoutPct: pct(rtTTM?.dividendPayoutRatioTTM),
-    epsTTM: r2(epsTTM), epsForward: r2(fwdEps), epsForward2: r2(fwdEps2), epsGrowthFwdPct: r2(epsGrowthFwd), bvps: r2(rtTTM?.bookValuePerShareTTM), fcfps: r2(rtTTM?.freeCashFlowPerShareTTM), revenuePerShare: r2(rtTTM?.revenuePerShareTTM),
+    epsTTM: r2(epsTTM), epsNtm: r2(epsNtm), epsForward: r2(fwdEps), epsForward2: r2(fwdEps2), epsGrowthFwdPct: r2(epsGrowthFwd), bvps: r2(rtTTM?.bookValuePerShareTTM), fcfps: r2(rtTTM?.freeCashFlowPerShareTTM), revenuePerShare: r2(rtTTM?.revenuePerShareTTM),
     grossMarginPct: pct(rtTTM?.grossProfitMarginTTM), opMarginPct: pct(rtTTM?.operatingProfitMarginTTM), netMarginPct: pct(rtTTM?.netProfitMarginTTM),
     roePct: pct(kmTTM?.returnOnEquityTTM), roicPct: pct(kmTTM?.returnOnInvestedCapitalTTM), roaPct: pct(kmTTM?.returnOnAssetsTTM),
     netDebtEbitda: r2(kmTTM?.netDebtToEBITDATTM), debtEquity: r2(rtTTM?.debtToEquityRatioTTM), interestCoverage: r2(rtTTM?.interestCoverageRatioTTM), currentRatio: r2(rtTTM?.currentRatioTTM),
     beta: r2(profile.beta), yearHigh: num(q.yearHigh), yearLow: num(q.yearLow), priceAvg50: num(q.priceAvg50), priceAvg200: num(q.priceAvg200),
-    grahamNumber: r2(kmTTM?.grahamNumberTTM),
+    yearHighDate: hi52?.d || null, yearLowDate: lo52?.d || null, yearHighClose: hi52?.p ?? null, yearLowClose: lo52?.p ?? null,
+    allTimeHigh: ath ? { price: ath.p, date: ath.d } : null,
     analystTarget: first(targets) ? { high: num(first(targets).targetHigh), low: num(first(targets).targetLow), consensus: num(first(targets).targetConsensus), upsidePct: price && num(first(targets).targetConsensus) ? r2((first(targets).targetConsensus / price - 1) * 100) : null } : null,
   };
   // ---- DCF (Damodaran FCFF) ----
@@ -611,7 +625,7 @@ async function buildBundle(symbol) {
 
 /** Full bundle, cached for 12 hours per symbol. */
 export async function stockBundle(symbol) {
-  return cached(`stock:${symbol}`, 12 * 3600, () => buildBundle(symbol), { version: "6" });
+  return cached(`stock:${symbol}`, 12 * 3600, () => buildBundle(symbol), { version: "8" });
 }
 
 /** Light, frequently refreshed quote (5 minutes). */

@@ -328,3 +328,8 @@ table.shk th.rowh { width: 8.5em; }
 .ai .body { font-size: 15px; line-height: 1.8; }
 .chart { min-height: 0; }
 @media (max-width: 640px) { table.shk { font-size: 13.5px; } table.shk th.rowh { width: 5.5em; } }
+
+.target input.tpe { width: 7em; padding: 5px 8px; border: 1px solid var(--border); border-radius: 3px; font-size: 16px; text-align: right; }
+.target .tp-price { font-size: 22px; }
+.target .tp-up { margin-left: 8px; font-weight: 600; }
+.tech-comment { margin: 10px 8px 0; line-height: 1.75; }
