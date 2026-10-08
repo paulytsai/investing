@@ -5,21 +5,24 @@
 export const LANG_SPEC = {
   ja: {
     name: "Japanese (日本語)",
-    bodyLength: "本文は各250〜400文字。です・ます調ではなく「である」調（常体）。",
-    headline: "見出しは会社四季報風の漢字4〜8文字（例:「一転増益」「サービス拡大」「設備投資倍増」）。",
-    feature: "「特色」は四季報風の体言止め1文（60〜90文字）。業界内の地位、主力製品、収益源を含める。",
+    trendLength: "「longTerm」「recent」の本文は各120〜200文字。「である」調。数字は各段落で最も重要な2〜3個に絞り、何が起きているかを平易に述べる。",
+    caseLength: "「bull」「bear」の本文は各250〜380文字。「である」調。具体的な数字・ガイダンス・経営陣の発言を根拠として密に盛り込み、最後に一文でその論点の要点を締める。",
+    headline: "見出しは漢字中心の4〜10文字（例:「サービス主導で高収益化」「メモリ高騰が重し」）。",
+    feature: "「feature」は体言止め1文（60〜90文字）。業界内の地位、主力製品、収益源を含める。",
   },
   en: {
     name: "English",
-    bodyLength: "Each body is 130-200 words of tight analytical prose.",
-    headline: "Headline is 2-5 words in title case (e.g. 'Margins Rebound', 'Capex Doubles').",
+    trendLength: "'longTerm' and 'recent' bodies are 70-110 words each, plain analytical prose, limited to the two or three figures that matter most.",
+    caseLength: "'bull' and 'bear' bodies are 130-200 words each, dense with specific figures, guidance and management statements, closing with a one-sentence verdict on that case.",
+    headline: "Headline is 3-7 words in sentence case (e.g. 'Services carry the margin story', 'Memory costs squeeze margins').",
     feature: "'feature' is one sentence of 25-40 words: market position, core products, revenue drivers.",
   },
   "zh-TW": {
     name: "Traditional Chinese (繁體中文，台灣用語)",
-    bodyLength: "每段正文200〜350字，使用繁體中文與台灣投資圈慣用語。",
-    headline: "標題為4〜8個字的精煉標題（例：「獲利反轉」「服務擴張」「資本支出倍增」）。",
-    feature: "「特色」為一句60〜90字的描述：產業地位、主力產品、營收來源。",
+    trendLength: "「longTerm」「recent」正文各100〜170字，平實敘述，每段只保留最關鍵的2〜3個數字。",
+    caseLength: "「bull」「bear」正文各220〜340字，密集引用具體數字、財測與經營層說法作為依據，最後以一句話總結該論點。",
+    headline: "標題為4〜10個字（例：「服務業務撐起獲利」「記憶體成本壓縮毛利」）。",
+    feature: "「feature」為一句60〜90字的描述：產業地位、主力產品、營收來源。",
   },
 };
 
@@ -33,26 +36,28 @@ export const STYLE_EXAMPLES = `
 
 export function systemPrompt(lang) {
   const spec = LANG_SPEC[lang] || LANG_SPEC.ja;
-  return `You are a senior equity analyst writing the commentary boxes of a Kaisha Shikiho (会社四季報) style reference page for US-listed stocks. Readers are retail investors who want facts, not hype.
+  return `You are a senior equity analyst writing the commentary of a one-page US stock reference (Kabukaizu). Readers are retail investors who want facts, not hype.
 
-Write in ${spec.name}. ${spec.bodyLength} ${spec.headline} ${spec.feature}
+Write in ${spec.name}. ${spec.headline} ${spec.feature} ${spec.trendLength} ${spec.caseLength}
 
 Rules:
-- Base every statement on the supplied materials (earnings-call transcripts, financial tables, 8-K events, news). Never invent figures. Use concrete numbers with units and periods (e.g. "Q3 FY2026 revenue $109.4B (+8% YoY)"). Keep the company's own fiscal-year naming.
-- "longTerm" covers the multi-year fundamental trend: how revenue mix, margins, capital allocation, and competitive position moved over the last 3-5 years, what management's standing strategy is, and whether past promises were delivered. Draw on the older transcripts and the annual table.
-- "recent" covers the latest one or two quarters: results vs. expectations, guidance, what management emphasised on the newest call, notable news or 8-K events, and risks. End with a one-sentence overall judgement in the style of the samples (no buy/sell rating, no target price).
-- Tone: matter-of-fact, dense with figures, no bullet points, no markdown, no headings inside the body, no filler. The two bodies must not repeat the same facts.
-- If materials for a section are thin, say so briefly inside the body rather than padding.
+- Base every statement on the supplied materials (earnings-call transcripts, financial tables, 8-K events, news). Never invent figures. When you cite a number give its period (e.g. "Q3 FY2026"). Keep the company's own fiscal-year naming.
+- "longTerm": the multi-year story in plain words. How the business mix, profitability and capital allocation have shifted over the last 3-5 years and what management's standing strategy is. Readable at a glance; few numbers.
+- "recent": the latest one or two quarters in plain words. What changed, what management emphasised on the newest call, guidance direction, notable news. Few numbers. No rating, no target price.
+- "bull": the strongest case for owning the stock, written like a sell-side analyst's note: dense with specific figures, guidance, management quotes and catalysts, each claim backed by evidence from the materials.
+- "bear": the strongest case against, in the same dense style: risks, deteriorating metrics, valuation, competitive or regulatory threats, with evidence.
+- The four bodies must not repeat the same facts. No bullet points, no markdown, no headings inside bodies, no filler. If materials for a section are thin, say so briefly rather than padding.
+- "competitors": 6-10 ticker symbols of the closest competitors listed on NYSE or NASDAQ (ADRs allowed, no OTC tickers), most relevant first. Use your knowledge of the industry, not only the materials.
 - "asOf" is the date of the newest transcript used.
 
-Style reference (Japanese; match the density and structure in whatever language you write):
+Style reference for "bull" and "bear" only (Japanese; match the density and evidence-first structure in whatever language you write):
 ${STYLE_EXAMPLES}`;
 }
 
 export const OUTPUT_SCHEMA = {
   type: "object",
   additionalProperties: false,
-  required: ["feature", "longTerm", "recent", "asOf"],
+  required: ["feature", "longTerm", "recent", "bull", "bear", "competitors", "asOf"],
   properties: {
     feature: { type: "string" },
     longTerm: {
@@ -67,6 +72,19 @@ export const OUTPUT_SCHEMA = {
       required: ["headline", "body"],
       properties: { headline: { type: "string" }, body: { type: "string" } },
     },
+    bull: {
+      type: "object",
+      additionalProperties: false,
+      required: ["headline", "body"],
+      properties: { headline: { type: "string" }, body: { type: "string" } },
+    },
+    bear: {
+      type: "object",
+      additionalProperties: false,
+      required: ["headline", "body"],
+      properties: { headline: { type: "string" }, body: { type: "string" } },
+    },
+    competitors: { type: "array", items: { type: "string" } },
     asOf: { type: "string" },
   },
 };

@@ -9,7 +9,7 @@ const MAX_TRANSCRIPT_CHARS = 60000; // one call is ~50k chars
 const TRANSCRIPTS_TO_USE = 4;
 
 export function summaryKey(symbol, lang, latestTranscriptDate) {
-  return `${symbol}:${lang}:${latestTranscriptDate || "none"}`;
+  return `v3:${symbol}:${lang}:${latestTranscriptDate || "none"}`;
 }
 
 export async function getCachedSummary(symbol, lang, latestTranscriptDate) {
@@ -83,11 +83,11 @@ export async function generateSummary(symbol, lang, bundle) {
     ...transcripts.flatMap((t) => [`## Earnings call transcript — ${t.period} (${t.date})`, t.content, ""]),
   ].join("\n");
 
-  const userText = `Write the three commentary pieces for ${bundle.company.name} (${symbol}). Return JSON only.\n\n${materials}`;
+  const userText = `Write the five commentary pieces (feature, longTerm, recent, bull, bear) for ${bundle.company.name} (${symbol}). Return JSON only.\n\n${materials}`;
 
   const stream = client.beta.messages.stream({
     model: cfg.summaryModel(),
-    max_tokens: 6000,
+    max_tokens: 8000,
     betas: ["server-side-fallback-2026-07-01"],
     fallbacks: "default",
     system: [{ type: "text", text: systemPrompt(lang), cache_control: { type: "ephemeral" } }],
@@ -100,10 +100,25 @@ export async function generateSummary(symbol, lang, bundle) {
   const text = message.content.filter((b) => b.type === "text").map((b) => b.text).join("");
   const parsed = JSON.parse(text);
 
+  // Verify the model's competitor tickers against live quotes (drops typos and non-US listings).
+  let competitors = [];
+  try {
+    const syms = (parsed.competitors || []).map((x) => String(x).toUpperCase().replace(/[^A-Z0-9.\-]/g, "")).filter((x) => x && x !== symbol).slice(0, 10);
+    if (syms.length) {
+      const quotes = await fmpSoft("batch-quote", { symbols: syms.join(",") });
+      const usEx = (e) => ["NASDAQ", "NYSE", "AMEX"].some((x) => String(e || "").toUpperCase().startsWith(x));
+      const byUs = Object.fromEntries((Array.isArray(quotes) ? quotes : []).filter((q) => q.symbol && usEx(q.exchange) && q.marketCap > 0).map((q) => [q.symbol, q]));
+      competitors = syms.filter((x) => byUs[x]).map((x) => ({ symbol: x, name: byUs[x].name, marketCapM: Math.round(byUs[x].marketCap / 1e6), price: byUs[x].price, changePct: byUs[x].changePercentage }));
+    }
+  } catch (e) {
+    console.warn("competitor lookup failed", e.message);
+  }
+
   const record = {
     symbol,
     lang,
     ...parsed,
+    competitors,
     transcriptsUsed: transcripts.map((t) => ({ period: t.period, date: t.date })),
     newsCount: Array.isArray(news) ? Math.min(news.length, 25) : 0,
     model: message.model,

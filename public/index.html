@@ -6,39 +6,14 @@
   <title>Kabukaizu</title>
   <meta name="description" content="Kabukaizu — US Stock Almanac. 米国上場企業の業績・財務・株主・役員を1ページに。決算説明会と最新ニュースをAIが要約。">
   <link rel="stylesheet" href="/styles.css">
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='30' fill='%230b3d6b'/%3E%3Cpath d='M4 44C14 38 20 50 30 46S46 54 58 48M6 52C16 46 22 56 32 52S48 60 56 54' stroke='%237fb3dd' stroke-width='1.5' fill='none'/%3E%3Cpolyline points='10,42 18,34 25,38 33,26 40,30 49,16' fill='none' stroke='%23fff' stroke-width='4' stroke-linejoin='round' stroke-linecap='round'/%3E%3Ccircle cx='49' cy='16' r='3.5' fill='%23f2c14e'/%3E%3C/svg%3E">
+  <link rel="icon" type="image/png" href="/favicon.png">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
 </head>
 <body>
   <header class="topbar">
     <div class="inner">
-      <a class="brand" href="#/" id="brand"><svg class="logo-mark" viewBox="0 0 64 64" aria-hidden="true" focusable="false">
-  <circle cx="32" cy="32" r="30" fill="var(--logo-sea)"/>
-  <g stroke="var(--logo-grid)" stroke-width="0.8" fill="none">
-    <path d="M2 24 H62 M2 40 H62 M24 2 V62 M40 2 V62"/>
-  </g>
-  <g stroke="var(--logo-contour)" stroke-width="1.1" fill="none">
-    <path d="M4 44 C14 38 20 50 30 46 S46 54 58 48"/>
-    <path d="M6 52 C16 46 22 56 32 52 S48 60 56 54"/>
-    <path d="M12 58 C20 54 26 60 34 58 S44 62 50 60"/>
-  </g>
-  <path d="M46 17 l1.6 4.4 4.4 1.6 -4.4 1.6 -1.6 4.4 -1.6 -4.4 -4.4 -1.6 4.4 -1.6z" fill="var(--logo-star)"/>
-  <polyline points="10,42 18,34 25,38 33,26 40,30 49,16" fill="none" stroke="var(--logo-course)" stroke-width="2.6" stroke-linejoin="round" stroke-linecap="round"/>
-  <circle cx="49" cy="16" r="2.6" fill="var(--logo-course)"/>
-</svg><span class="brand-text"><span class="brand-name">Kabukaizu</span><span class="brand-sub">US Stock Almanac</span></span></a>
-      <template id="logoTpl"><svg class="logo-mark" viewBox="0 0 64 64" aria-hidden="true" focusable="false">
-  <circle cx="32" cy="32" r="30" fill="var(--logo-sea)"/>
-  <g stroke="var(--logo-grid)" stroke-width="0.8" fill="none">
-    <path d="M2 24 H62 M2 40 H62 M24 2 V62 M40 2 V62"/>
-  </g>
-  <g stroke="var(--logo-contour)" stroke-width="1.1" fill="none">
-    <path d="M4 44 C14 38 20 50 30 46 S46 54 58 48"/>
-    <path d="M6 52 C16 46 22 56 32 52 S48 60 56 54"/>
-    <path d="M12 58 C20 54 26 60 34 58 S44 62 50 60"/>
-  </g>
-  <path d="M46 17 l1.6 4.4 4.4 1.6 -4.4 1.6 -1.6 4.4 -1.6 -4.4 -4.4 -1.6 4.4 -1.6z" fill="var(--logo-star)"/>
-  <polyline points="10,42 18,34 25,38 33,26 40,30 49,16" fill="none" stroke="var(--logo-course)" stroke-width="2.6" stroke-linejoin="round" stroke-linecap="round"/>
-  <circle cx="49" cy="16" r="2.6" fill="var(--logo-course)"/>
-</svg></template>
+      <a class="brand" href="#/" id="brand"><span class="logo-mark"><img src="/img/logo-512.jpg" alt="Kabukaizu"></span><span class="brand-text"><span class="brand-name">Kabukaizu</span><span class="brand-sub">US Stock Almanac</span></span></a>
+      <template id="logoTpl"><span class="logo-mark"><img src="/img/logo-512.jpg" alt="Kabukaizu"></span></template>
       <form class="searchbox" id="searchForm" autocomplete="off">
         <input id="searchInput" placeholder="ティッカー・会社名" maxlength="40">
         <button class="btn primary" type="submit" id="searchBtn">検索</button>

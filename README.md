@@ -2,28 +2,29 @@
 
 Two things live in this repository:
 
-1. **US Stock Almanac (米国株四季報 / 美股四季報)** — a paid, Shikiho-style reference
+1. **Kabukaizu — US Stock Almanac** — a paid, one-page reference
    site for US-listed stocks, hosted on Netlify. Everything under `public/`,
    `netlify/`, `scripts/` and `tests/`.
 2. Python API clients used for research (`investing/`), described at the end.
 
 ---
 
-## US Stock Almanac
+## Kabukaizu
 
-One page per ticker, laid out like a Kaisha Shikiho entry:
+One page per ticker, in four tabs:
 
 | Tab | Contents |
 | --- | --- |
-| 基礎／財務情報 | Name, fiscal year, listing, **特色** (AI), revenue mix, sector, **長期トレンド** and **直近動向** (AI from earnings-call transcripts and news), HQ, employees, shares/market cap/PER/PBR, operating margin, peers, next earnings, analyst consensus, balance-sheet box |
-| 業績／株主構成 | 5 fiscal years + 2 consensus-estimate years + last 4 quarters (revenue, operating, pretax, net, EPS, DPS); dividend history and yield; ROE/ROA/capex/D&A/R&D; cash-flow box; top-10 13F holders, institutional %, float, insider activity |
-| 資本異動／役員等 | Stock splits, yearly and monthly high/low/volume tables, officers, recent SEC filings, 8-K material events |
+| 概要 Overview | Key figures (market cap, forward P/E, yield, operating margin, 3-year sales growth, 52-week range), company profile, **長期トレンド** and **直近動向** (concise AI text), **強気・弱気シナリオ** (dense, evidence-first bull and bear cases), company details, competitors (AI-curated tickers verified against live quotes) |
+| 業績・財務 Results & financials | 5 fiscal years + 2 consensus-estimate years + last 4 quarters (revenue, operating, pretax, net, EPS, DPS); dividends and yield; ROE/ROA/capex/D&A/R&D; cash flow; balance sheet |
+| 株主・役員 Holders & management | Top-10 13F holders, institutional %, float, insider activity, officers, splits, yearly/monthly high-low-volume, SEC filings, 8-K events |
+| バリュエーション Valuation | Damodaran-style FCFF DCF on consensus estimates (per-share value, WACC build-up, 5-year forecast table, WACC × growth sensitivity, collapsible methodology note) and every current valuation metric (P/E trailing and forward, PEG, P/S, P/B, P/FCF, EV multiples, yields, margins, returns, leverage) |
 
 Above the tabs: a price chart with 1M / 3M / 6M / 1Y / 3Y / 5Y / 10Y ranges.
 
 ### Languages
 
-One codebase, deployed as separate Netlify sites with different `SITE_LOCALES`:
+One codebase, deployed as separate Netlify sites with different `SITE_LOCALES` (Japanese is the default on the main site; the UI never follows the browser language):
 
 | Site | `SITE_LOCALES` | Toggle shown |
 | --- | --- | --- |
@@ -57,9 +58,10 @@ not a translation.
 * **edgar.tools** (`api.edgar.tools/v1`): SEC entity profile (CIK, SIC, state of
   incorporation, fiscal year end, 10-K business summary), filing list, 8-K
   material events, filing-derived ratios.
-* **Claude** (`claude-opus-5-5` via the Anthropic SDK) writes the three
-  commentary pieces from the last four transcripts, ~25 news items and the
-  financial table. Output is schema-constrained JSON. Generation runs in a
+* **Claude** (`claude-opus-5-5` via the Anthropic SDK) writes the profile,
+  the two concise trend pieces, the bull and bear cases and the competitor
+  list from the last four transcripts, ~25 news items and the financial
+  table. Output is schema-constrained JSON. Generation runs in a
   Netlify **background function** (up to 15 min) and the page polls until it is
   ready; results are cached until a newer transcript appears. One generation
   costs roughly US$0.30 (≈66k input tokens).
@@ -75,7 +77,7 @@ public/                 static front end (no build step)
   chart.js              dependency-free SVG chart
 netlify/functions/      Netlify Functions v2 (Request -> Response)
   auth.mjs              /api/auth/{signup,login,logout,me,locale}
-  stock.mjs             /api/stock/:symbol      full Shikiho bundle
+  stock.mjs             /api/stock/:symbol      full data bundle (profile, results, valuation, DCF)
   chart.mjs             /api/chart/:symbol?range=1m|3m|6m|1y|3y|5y|10y
   summary.mjs           /api/summary/:symbol?lang=ja   cached AI commentary or "pending"
   summary-generate-background.mjs   does the Claude call
@@ -121,7 +123,7 @@ npm test
 
 ### Lemon Squeezy setup
 
-1. Create a **subscription product** billed monthly at US$15. In store settings
+1. Create a **subscription product** billed monthly at US$10. In store settings
    enable *localized pricing* so the checkout shows a rounded local-currency
    price (e.g. ¥2,300, NT$480) — the app itself only shows `PRICE_LABEL`.
 2. Copy the product variant id into `LEMONSQUEEZY_VARIANT_ID` and the store

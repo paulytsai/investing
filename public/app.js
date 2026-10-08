@@ -131,11 +131,11 @@
       const L = t("landing");
       const logo = `<div class="brand">${$("#logoTpl").innerHTML}<span class="brand-text"><span class="brand-name">Kabukaizu</span><span class="brand-sub">US Stock Almanac</span></span></div>`;
       app.innerHTML = `
-      <section class="hero">${logo}
+      <section class="hero hero-wave"><div class="hero-inner">${logo}
         <h1>${esc(L.heroTitle)}</h1><p class="lead">${esc(L.heroLead)}</p>
         <div class="actions"><a class="btn primary big" href="#/signup">${esc(L.ctaPrimary)}</a><a class="btn big" href="#/login">${esc(L.ctaSecondary)}</a></div>
-        <p class="muted small">${esc(L.ctaNote.replace("{price}", price))}</p>
-      </section>
+        <p class="small">${esc(L.ctaNote.replace("{price}", price))}</p>
+      </div><span class="hero-credit">葛飾北斎『神奈川沖浪裏』</span></section>
       <section class="land">
         <h2>${esc(L.samplesTitle)}</h2><p class="lead">${esc(L.samplesLead)}</p>
         <div class="gallery">
@@ -146,16 +146,6 @@
       <section class="land">
         <h2>${esc(L.featuresTitle)}</h2>
         <div class="features">${L.features.map((f) => `<div class="feat"><h3>${esc(f.title)}</h3><p>${esc(f.body)}</p></div>`).join("")}</div>
-      </section>
-      <section class="land ai-sample">
-        <h2>${esc(L.aiTitle)}</h2>
-        <blockquote>${esc(L.aiSample)}</blockquote>
-        <p class="muted small">${esc(L.aiNote)}</p>
-      </section>
-      <section class="land">
-        <h2>${esc(L.dataTitle)}</h2><p class="lead">${esc(L.dataLead)}</p>
-        <div class="sources">${L.data.map((d) => `<div class="src"><h3>${esc(d.name)}</h3><p>${esc(d.body)}</p></div>`).join("")}</div>
-        <p class="muted small">${esc(L.dataNote)}</p>
       </section>
       <section class="land pricing">
         <h2>${esc(L.pricingTitle)}</h2>
@@ -285,19 +275,17 @@
     const sign = chg > 0 ? "+" : "";
     app.innerHTML = `
       <div class="panel">
-        <div class="title-row"><h1><span class="sym">【${esc(b.symbol)}】${esc(b.company.name)}</span><span class="ex">${esc(b.company.exchange)}</span></h1>
+        <div class="title-row"><h1><span class="co">${esc(b.company.name)}</span><span class="ticker">${esc(b.symbol)}</span><span class="ex">${esc(b.company.exchange)}</span></h1>
           <div class="price">$${fmtDec(m.price)} <small class="${cls}">${sign}${fmtDec(m.change)} (${sign}${fmtDec(m.changePct)}%)</small></div></div>
         <div class="meta">${t("updated", { date: fmtDate(m.quoteTime || b.asOf) })}</div>
         <div class="ranges" id="ranges">${Object.keys(t("ranges")).map((r) => `<button data-range="${r}" class="${r === state.chartRange ? "active" : ""}">${t("ranges")[r]}</button>`).join("")}</div>
         <div class="chart" id="chart"></div>
       </div>
-      <div class="panel">
-        <div class="tabs" id="tabs">${t("tabs").map((x, i) => `<button data-tab="${i}" class="${i === state.tab ? "active" : ""}">${esc(x)}</button>`).join("")}</div>
-        <div id="tabBody"></div>
-      </div>
-      <div class="footer">${t("aiNote")}<br>${t("sources")}<br>${t("disclaimer")}</div>`;
+      <div class="tabs" id="tabs">${t("tabs").map((x, i) => `<button data-tab="${i}" class="${i === state.tab ? "active" : ""}">${esc(x)}</button>`).join("")}</div>
+      <div id="tabBody"></div>
+      <div class="footer">${t("aiNote")}<br>${t("disclaimer")}</div>`;
     document.querySelectorAll("#ranges button").forEach((btn) => btn.addEventListener("click", () => { state.chartRange = btn.dataset.range; document.querySelectorAll("#ranges button").forEach((x) => x.classList.toggle("active", x === btn)); loadChart(state.chartRange); }));
-    document.querySelectorAll("#tabs button").forEach((btn) => btn.addEventListener("click", () => { state.tab = Number(btn.dataset.tab); document.querySelectorAll("#tabs button").forEach((x) => x.classList.toggle("active", x === btn)); renderTab(); }));
+    document.querySelectorAll("#tabs button").forEach((btn) => btn.addEventListener("click", () => { state.tab = Number(btn.dataset.tab); document.querySelectorAll("#tabs button").forEach((x) => x.classList.toggle("active", x === btn)); renderTab(); window.scrollTo({ top: document.getElementById("tabs").offsetTop - 8, behavior: "smooth" }); }));
     renderTab();
   }
 
@@ -315,129 +303,137 @@
 
   function renderTab() {
     const body = $("#tabBody"); if (!body) return;
-    body.innerHTML = [tabBasic, tabResults, tabCapital][state.tab]();
+    body.innerHTML = [tabOverview, tabFinancials, tabHolders, tabValuation][state.tab]();
   }
+
+  // ---- small builders ----
+  const sec = (title, inner, extra = "") => `<section class="card"><h3 class="sec">${title}${extra ? `<span class="sec-extra">${extra}</span>` : ""}</h3>${inner}</section>`;
+  const kv = (rows) => `<dl class="kv2">${rows.filter((r) => r).map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join("")}</dl>`;
+  const stat = (label, value, sub = "") => `<div class="stat"><div class="stat-l">${label}</div><div class="stat-v">${value}</div>${sub ? `<div class="stat-s">${sub}</div>` : ""}</div>`;
+  const wrap = (table) => `<div class="tw">${table}</div>`;
 
   function aiBox(part) {
     const s = state.summary;
-    if (s && s[part]) return `<span class="hl">${esc(s[part].headline)}</span><span class="body">${esc(s[part].body)}</span>`;
-    if (state.summaryStatus === "pending" || state.summaryStatus === null) return `<span class="spinner">${t("generating")}</span>`;
-    if (state.summaryStatus === "disabled") return `<span class="muted">${t("summaryDisabled")}</span>`;
-    return `<span class="muted">${t("summaryError")}</span>`;
+    if (s && s[part]) return `<div class="ai"><div class="hl">${esc(s[part].headline)}</div><p class="body">${esc(s[part].body)}</p></div>`;
+    if (state.summaryStatus === "pending" || state.summaryStatus === null) return `<div class="ai"><span class="spinner">${t("generating")}</span></div>`;
+    if (state.summaryStatus === "disabled") return `<div class="ai"><span class="muted">${t("summaryDisabled")}</span></div>`;
+    return `<div class="ai"><span class="muted">${t("summaryError")}</span></div>`;
+  }
+  function updatedNote() {
+    const s = state.summary; if (!s) return "";
+    const tr = (s.transcriptsUsed || [])[0];
+    return `<p class="muted small">${esc(t("updatedNote", { period: tr ? tr.period : "—", date: tr ? fmtDate(tr.date) : "—", gen: fmtDate(s.generatedAt) }))}</p>`;
   }
 
-  function tabBasic() {
-    const b = state.bundle; const c = b.company; const m = b.market; const f = b.financials;
-    const seg = c.segments.length ? c.segments.map((s) => `${esc(s.name)}${s.sharePct ?? "?"}`).join("、") + (c.segmentsFiscalYear ? ` <${c.segmentsFiscalYear}>` : "") : NA;
-    const feature = state.summary ? esc(state.summary.feature) : esc((c.businessSummary || c.description || "").slice(0, 220));
-    const rating = m.analystRating ? `${esc(m.analystRating.consensus)}（Buy ${m.analystRating.buy} / Hold ${m.analystRating.hold ?? 0} / Sell ${m.analystRating.sell}）` : NA;
-    const target = m.analystTarget ? `$${fmtDec(m.analystTarget.consensus)}（$${fmtDec(m.analystTarget.low)}〜$${fmtDec(m.analystTarget.high)}）` : NA;
-    const row = (th, td, cls = "") => `<tr class="${cls}"><th class="rowh">${th}</th><td>${td}</td></tr>`;
-    return `<table class="shk">
-      ${row(t("name"), `${esc(c.name)}${c.ceo ? `<span class="muted">　${t("ceo")}: ${esc(c.ceo)}</span>` : ""}`)}
-      ${row(t("fiscalYear"), monthName(c.fiscalYearEndMonth))}
-      ${row(t("ipo"), `${fmtDate(c.ipoDate, { month: "numeric", day: undefined })}${c.stateOfIncorporation ? `　<span class="muted">${t("incorporation")}: ${esc(c.stateOfIncorporation)}</span>` : ""}`)}
-      ${row(t("feature"), feature)}
-      ${row(t("segments"), seg)}
-      ${row(t("sector"), `${esc(c.sector || "")} / ${esc(c.industry || "")}${c.sicDescription ? `　<span class="muted">${t("sic")}: ${esc(c.sicDescription)} (${esc(c.sicCode)})</span>` : ""}`)}
-      ${row(`<b>${t("longTerm")}</b>`, `<div class="ai">${aiBox("longTerm")}</div>`)}
-      ${row(`<b>${t("recent")}</b>`, `<div class="ai">${aiBox("recent")}</div>`)}
-      ${row(t("hq"), esc(c.address || NA))}
-      ${row(t("phone"), esc(c.phone || NA))}
-      ${row(t("employees"), c.employees ? `${fmtInt(c.employees)}${isCJK() ? "名" : ""}${c.employeesAsOf ? ` <${yymm(c.employeesAsOf)}>` : ""}` : NA)}
-      ${row(t("exchange"), `${esc(c.exchangeFullName || c.exchange)}${c.filerCategory ? `　<span class="muted">${esc(c.filerCategory)}</span>` : ""}`)}
-      ${row(t("url"), c.website ? `<a href="${esc(c.website)}" target="_blank" rel="noopener">${esc(c.website)}</a>` : NA)}
-      ${row(t("shares"), `${t("sharesOut")} ${fmtInt(m.sharesOutstandingM)}${t("millionShares")}　${t("marketCap")} ${fmtBig(m.marketCapM)}　${t("per")} ${fmtDec(m.per, 1)}　${t("pbr")} ${fmtDec(m.pbr, 1)}`)}
-      ${row(t("opMargin"), `${fmtPct(b.growth.operatingMarginPct)}${b.growth.operatingMarginPrevPct !== null ? `(${b.growth.operatingMarginPct - b.growth.operatingMarginPrevPct >= 0 ? "+" : ""}${fmtDec(b.growth.operatingMarginPct - b.growth.operatingMarginPrevPct, 1)}pt)` : ""}　${isCJK() ? "売上5年平均成長率" : "5-yr revenue CAGR"} ${fmtPct(b.growth.revenueCagr5Pct)}`)}
-      ${row(t("peers"), c.peers.length ? c.peers.map((p) => `<a href="#/s/${esc(p.symbol)}">${esc(p.symbol)}</a> ${esc(p.name)}`).join("、") : NA)}
-      ${row(t("nextEarnings"), `${fmtDate(b.nextEarnings)}　<span class="muted">${t("analysts")}: ${rating}　${t("target")}: ${target}</span>`)}
-    </table>
-    ${f ? `<table class="shk"><tr><th class="rowh"><b>【${t("financials")}】</b></th><th>&lt;${yymm(f.asOf)}&gt; ${t("unitM")}</th></tr>
-      <tr><th class="rowh">${t("totalAssets")}</th><td class="num">${fmtInt(f.totalAssets)}</td></tr>
-      <tr><th class="rowh">${t("equity")}</th><td class="num">${fmtInt(f.equity)}</td></tr>
-      <tr><th class="rowh">${t("equityRatio")}</th><td class="num">${fmtPct(f.equityRatioPct)}</td></tr>
-      <tr><th class="rowh">${t("commonStock")}</th><td class="num">${fmtInt(f.commonStock)}</td></tr>
-      <tr><th class="rowh">${t("retained")}</th><td class="num">${fmtInt(f.retainedEarnings)}</td></tr>
-      <tr><th class="rowh">${t("debt")}</th><td class="num">${fmtInt(f.totalDebt)}</td></tr>
-      <tr><th class="rowh">${t("cash")}</th><td class="num">${fmtInt(f.cashAndShortTerm)}</td></tr></table>` : ""}`;
+  function tabOverview() {
+    const b = state.bundle; const c = b.company; const m = b.market; const v = b.valuation || {};
+    const sg = (b.growth.salesGrowth || []).map((x) => `<span class="sg"><span class="muted">${esc(x.label)}</span> ${x.pct !== null ? (x.pct >= 0 ? "+" : "") + fmtDec(x.pct, 1) + "%" : NA}</span>`).join(" ");
+    const stats = `<div class="stats">
+      ${stat(t("marketCap"), fmtBig(m.marketCapM))}
+      ${stat(t("val.peFwd"), fmtDec(v.peForward, 1), `${t("val.pe")} ${fmtDec(v.pe, 1)}`)}
+      ${stat(t("val.divYield"), fmtPct(m.dividendYieldPct, 2), `${t("val.pb")} ${fmtDec(v.pb, 1)}`)}
+      ${stat(t("opMargin"), fmtPct(b.growth.operatingMarginPct), b.indicators.fiscalYear ? `FY${esc(b.indicators.fiscalYear)}` : "")}
+      ${stat(t("salesGrowth3y"), sg || NA)}
+      ${stat(t("val.range52"), `$${fmtDec(m.yearLow)} – $${fmtDec(m.yearHigh)}`)}
+    </div>`;
+    const feature = state.summary ? esc(state.summary.feature) : esc((c.businessSummary || c.description || "").slice(0, 240));
+    const rating = m.analystRating ? `${esc(m.analystRating.consensus)} (Buy ${m.analystRating.buy} / Hold ${m.analystRating.hold ?? 0} / Sell ${m.analystRating.sell})` : NA;
+    const target = m.analystTarget ? `$${fmtDec(m.analystTarget.consensus)} ($${fmtDec(m.analystTarget.low)}–$${fmtDec(m.analystTarget.high)})` : NA;
+    const facts = kv([
+      [t("sector"), `${esc(c.sector || "")} / ${esc(c.industry || "")}`],
+      [t("ceo"), esc(c.ceo || NA)],
+      [t("fiscalYear"), monthName(c.fiscalYearEndMonth)],
+      [t("ipo"), `${fmtDate(c.ipoDate, { month: "numeric", day: undefined })}${c.stateOfIncorporation ? ` · ${t("incorporation")}: ${esc(c.stateOfIncorporation)}` : ""}`],
+      [t("hq"), esc(c.address || NA)],
+      [t("employees"), c.employees ? `${fmtInt(c.employees)}${c.employeesAsOf ? ` <span class="muted">(${yymm(c.employeesAsOf)})</span>` : ""}` : NA],
+      [t("exchange"), esc(c.exchangeFullName || c.exchange)],
+      [t("url"), c.website ? `<a href="${esc(c.website)}" target="_blank" rel="noopener">${esc(c.website)}</a>` : NA],
+      [t("shares"), `${fmtInt(m.sharesOutstandingM)}${t("millionShares")} · ${t("freeFloat")} ${fmtPct(m.freeFloatPct)}`],
+      [t("segments"), c.segments.length ? c.segments.map((s) => `${esc(s.name)} ${s.sharePct ?? "?"}%`).join(" · ") + (c.segmentsFiscalYear ? ` <span class="muted">(FY${c.segmentsFiscalYear})</span>` : "") : NA],
+      [t("nextEarnings"), fmtDate(b.nextEarnings)],
+      [t("analysts"), `${rating} · ${t("target")} ${target}`],
+    ]);
+    const compList = state.summary && state.summary.competitors && state.summary.competitors.length ? state.summary.competitors : c.competitors;
+    const comps = compList && compList.length
+      ? wrap(`<table class="tbl"><thead><tr><th>Ticker</th><th></th><th class="num">${t("marketCap")}</th><th class="num">${t("val.market")}</th></tr></thead><tbody>${compList.map((x) => `<tr><td><a href="#/s/${esc(x.symbol)}">${esc(x.symbol)}</a></td><td>${esc(x.name || "")}</td><td class="num">${fmtBig(x.marketCapM)}</td><td class="num">$${fmtDec(x.price)} <span class="${x.changePct > 0 ? "up" : x.changePct < 0 ? "down" : ""}">${x.changePct !== null ? (x.changePct >= 0 ? "+" : "") + fmtDec(x.changePct, 2) + "%" : ""}</span></td></tr>`).join("")}</tbody></table>`)
+      : `<p class="muted">${NA}</p>`;
+    return `${stats}
+      ${sec(t("feature"), `<p class="feature">${feature}</p>`)}
+      <div class="grid2b">${sec(t("longTerm"), aiBox("longTerm"))}${sec(t("recent"), aiBox("recent"))}</div>
+      <div class="grid2b">${sec(t("bull"), aiBox("bull"))}${sec(t("bear"), aiBox("bear"))}</div>
+      ${updatedNote()}
+      ${sec(t("companyInfo"), facts)}
+      ${sec(t("competitors"), comps)}`;
   }
 
-  function tabResults() {
+  function tabFinancials() {
     const b = state.bundle;
     const rows = b.performance.map((r, i, arr) => {
-      const prefix = r.kind === "annual" ? t("consolidated") : r.kind === "estimate" ? t("estimate") : "";
+      const prefix = r.kind === "annual" ? "FY" : r.kind === "estimate" ? `${t("estimate")} ` : "";
       const cls = r.kind === "estimate" ? "est" : r.kind === "quarter" ? "quarter" : "";
       const sep = i > 0 && arr[i - 1].kind !== r.kind ? " sep" : "";
-      return `<tr class="${cls}${sep}"><th class="rowh">${prefix}${esc(r.label)}${r.kind === "quarter" ? "" : ""}</th><td class="num">${fmtInt(r.revenue)}</td><td class="num">${fmtInt(r.operatingIncome)}</td><td class="num">${fmtInt(r.pretaxIncome)}</td><td class="num">${fmtInt(r.netIncome)}</td><td class="num">${fmtDec(r.eps)}</td><td class="num">${r.dps === null ? (r.kind === "annual" ? "0" : NA) : fmtDec(r.dps)}</td></tr>`;
+      return `<tr class="${cls}${sep}"><th>${prefix}${esc(r.label)}</th><td class="num">${fmtInt(r.revenue)}</td><td class="num">${fmtInt(r.operatingIncome)}</td><td class="num">${fmtInt(r.pretaxIncome)}</td><td class="num">${fmtInt(r.netIncome)}</td><td class="num">${fmtDec(r.eps)}</td><td class="num">${r.dps === null ? (r.kind === "annual" ? "0" : NA) : fmtDec(r.dps)}</td></tr>`;
     }).join("");
     const estN = (b.performance.find((r) => r.kind === "estimate") || {}).analysts;
-    const d = b.dividends;
-    const divRows = d.history.map((x) => `<tr><th class="rowh">${yymm(x.date)}</th><td class="num">${fmtDec(x.amount)}</td></tr>`).join("");
-    const ind = b.indicators; const cf = b.cashflow; const h = b.holders;
+    const d = b.dividends; const ind = b.indicators; const cf = b.cashflow; const f = b.financials;
     const pair = (a, p) => `${fmtInt(a)}${p !== null && p !== undefined ? ` <span class="muted">(${fmtInt(p)})</span>` : ""}`;
-    return `<div class="grid2"><div>
-      <table class="shk"><tr><th class="rowh"><b>【${t("performance")}】</b></th><th>${t("revenue")}</th><th>${t("opIncome")}</th><th>${t("pretax")}</th><th>${t("netIncome")}</th><th>${t("eps")}</th><th>${t("dps")}</th></tr>${rows}</table>
-      <div class="note">${t("unitM")}${estN ? `　${t("estimateNote", { n: estN })}` : ""}</div>
-    </div><div>
-      <table class="shk"><tr><th class="rowh"><b>【${t("dividends")}】</b></th><th>${t("dividendAmount")}</th></tr>${divRows || `<tr><td colspan="2" class="c">${NA}</td></tr>`}
-        <tr class="sep"><th class="rowh">${t("yieldLabel")}</th><td class="num">${fmtPct(d.yieldPct, 2)}</td></tr>
-        <tr><th class="rowh">${t("bps")}</th><td class="num">${fmtDec(b.market.bps)}</td></tr></table>
-      <div class="note">${t("exDate")}</div>
-    </div></div>
-    <div class="grid2b"><div>
-      <table class="shk"><tr><th class="rowh"><b>【${t("indicators")}】</b></th><th>&lt;${esc(ind.fiscalYear || "")}&gt;</th></tr>
-        <tr><th class="rowh">${t("roe")}</th><td class="num">${fmtPct(ind.roePct)}　<span class="muted">${t("ttm")} ${fmtPct(ind.roeTTMPct)}</span></td></tr>
-        <tr><th class="rowh">${t("roa")}</th><td class="num">${fmtPct(ind.roaPct)}　<span class="muted">${t("ttm")} ${fmtPct(ind.roaTTMPct)}</span></td></tr>
-        <tr><th class="rowh">${t("maxNet")}${ind.maxNetIncome ? `(${esc(ind.maxNetIncome.label)})` : ""}</th><td class="num">${ind.maxNetIncome ? fmtInt(ind.maxNetIncome.value) : NA}</td></tr>
-        <tr><th class="rowh">${t("capex")}</th><td class="num">${pair(ind.capex, ind.capexPrev)}</td></tr>
-        <tr><th class="rowh">${t("depreciation")}</th><td class="num">${pair(ind.depreciation, ind.depreciationPrev)}</td></tr>
-        <tr><th class="rowh">${t("rnd")}</th><td class="num">${pair(ind.rnd, ind.rndPrev)}</td></tr>
-        <tr><th class="rowh">${t("per")} / ${t("pbr")}</th><td class="num">${fmtDec(ind.per, 1)} / ${fmtDec(ind.pbr, 1)}</td></tr></table>
-      <div class="note">${t("unitM")}　( ) = ${isCJK() ? "前期" : "prior year"}</div>
-    </div><div>
-      ${cf ? `<table class="shk"><tr><th class="rowh"><b>【${t("cashflow")}】</b></th><th>&lt;${esc(cf.fiscalYear)}&gt; ${t("unitM")}</th></tr>
-        <tr><th class="rowh">${t("opCF")}</th><td class="num">${pair(cf.operating, cf.operatingPrev)}</td></tr>
-        <tr><th class="rowh">${t("invCF")}</th><td class="num">${pair(cf.investing, cf.investingPrev)}</td></tr>
-        <tr><th class="rowh">${t("finCF")}</th><td class="num">${pair(cf.financing, cf.financingPrev)}</td></tr>
-        <tr><th class="rowh">${t("cashEq")}</th><td class="num">${pair(cf.cash, cf.cashPrev)}</td></tr>
-        <tr class="sep"><th class="rowh">${t("fcf")}</th><td class="num">${fmtInt(cf.freeCashFlow)}</td></tr>
-        <tr><th class="rowh">${t("buyback")}</th><td class="num">${fmtInt(cf.buybacks)}</td></tr>
-        <tr><th class="rowh">${t("divPaid")}</th><td class="num">${fmtInt(cf.dividendsPaid)}</td></tr></table>` : ""}
-    </div></div>
-    <table class="shk"><tr><th class="rowh"><b>【${t("holders")}】</b></th><th colspan="2">${h.asOf ? t("holdersAsOf", { date: h.asOf }) : ""}${h.summary ? `　${t("investorsHolding")} ${fmtInt(h.summary.investorsHolding)}` : ""}</th></tr>
-      <tr><th class="rowh">${t("holderName")}</th><th colspan="2">${t("holderShares")}</th></tr>
-      ${h.holders.length ? h.holders.map((x) => `<tr><td colspan="2">${esc(x.name)}</td><td class="num">${fmtDec(x.sharesM, 1)} (${fmtDec(x.ownershipPct, 1)})</td></tr>`).join("") : `<tr><td colspan="3" class="c">${NA}</td></tr>`}
-      <tr class="sep"><td colspan="3">&lt;${t("instOwnership")}&gt; ${h.summary ? fmtPct(h.summary.ownershipPct) : NA}　&lt;${t("freeFloat")}&gt; ${fmtPct(b.market.freeFloatPct)}　&lt;${t("insiders")}&gt; ${b.insider ? t("insiderNote", { b: b.insider.purchases ?? 0, s: b.insider.sales ?? 0 }) : NA}</td></tr></table>`;
+    const perf = wrap(`<table class="tbl"><thead><tr><th></th><th class="num">${t("revenue")}</th><th class="num">${t("opIncome")}</th><th class="num">${t("pretax")}</th><th class="num">${t("netIncome")}</th><th class="num">${t("eps")}</th><th class="num">${t("dps")}</th></tr></thead><tbody>${rows}</tbody></table>`) + `<p class="note">${t("unitM")}${estN ? ` · ${t("estimateNote", { n: estN })}` : ""}</p>`;
+    const divs = wrap(`<table class="tbl"><thead><tr><th>${t("exDate")}</th><th class="num">${t("dividendAmount")}</th></tr></thead><tbody>${d.history.map((x) => `<tr><th>${yymm(x.date)}</th><td class="num">${fmtDec(x.amount)}</td></tr>`).join("") || `<tr><td colspan="2" class="c">${NA}</td></tr>`}</tbody></table>`) + kv([[t("yieldLabel"), fmtPct(d.yieldPct, 2)], [t("bps"), fmtDec(b.market.bps)]]);
+    const indic = kv([
+      [t("roe"), `${fmtPct(ind.roePct)} <span class="muted">${t("ttm")} ${fmtPct(ind.roeTTMPct)}</span>`],
+      [t("roa"), `${fmtPct(ind.roaPct)} <span class="muted">${t("ttm")} ${fmtPct(ind.roaTTMPct)}</span>`],
+      [`${t("maxNet")}${ind.maxNetIncome ? ` (${esc(ind.maxNetIncome.label)})` : ""}`, ind.maxNetIncome ? fmtInt(ind.maxNetIncome.value) : NA],
+      [t("capex"), pair(ind.capex, ind.capexPrev)], [t("depreciation"), pair(ind.depreciation, ind.depreciationPrev)], [t("rnd"), pair(ind.rnd, ind.rndPrev)],
+    ]) + `<p class="note">${t("unitM")} · ( ) = ${isCJK() ? "前期" : "prior year"}</p>`;
+    const cfl = cf ? kv([[t("opCF"), pair(cf.operating, cf.operatingPrev)], [t("invCF"), pair(cf.investing, cf.investingPrev)], [t("finCF"), pair(cf.financing, cf.financingPrev)], [t("cashEq"), pair(cf.cash, cf.cashPrev)], [t("fcf"), fmtInt(cf.freeCashFlow)], [t("buyback"), fmtInt(cf.buybacks)], [t("divPaid"), fmtInt(cf.dividendsPaid)]]) + `<p class="note">FY${esc(cf.fiscalYear)} · ${t("unitM")}</p>` : NA;
+    const bal = f ? kv([[t("totalAssets"), fmtInt(f.totalAssets)], [t("equity"), fmtInt(f.equity)], [t("equityRatio"), fmtPct(f.equityRatioPct)], [t("commonStock"), fmtInt(f.commonStock)], [t("retained"), fmtInt(f.retainedEarnings)], [t("debt"), fmtInt(f.totalDebt)], [t("cash"), fmtInt(f.cashAndShortTerm)]]) + `<p class="note">${yymm(f.asOf)} · ${t("unitM")}</p>` : NA;
+    return `<div class="grid2">${sec(t("performance"), perf)}${sec(t("dividends"), divs)}</div>
+      <div class="grid2b">${sec(t("indicators"), indic, ind.fiscalYear ? `FY${esc(ind.fiscalYear)}` : "")}${sec(t("cashflow"), cfl)}</div>
+      ${sec(t("financials"), bal)}`;
   }
 
-  function tabCapital() {
-    const b = state.bundle; const p = b.prices;
+  function tabHolders() {
+    const b = state.bundle; const h = b.holders; const p = b.prices;
+    const holders = wrap(`<table class="tbl"><thead><tr><th>${t("holderName")}</th><th class="num">${t("holderShares")}</th></tr></thead><tbody>${h.holders.length ? h.holders.map((x) => `<tr><td>${esc(x.name)}</td><td class="num">${fmtDec(x.sharesM, 1)} (${fmtDec(x.ownershipPct, 1)}%)</td></tr>`).join("") : `<tr><td colspan="2" class="c">${NA}</td></tr>`}</tbody></table>`)
+      + `<p class="note">${h.asOf ? t("holdersAsOf", { date: h.asOf }) : ""}${h.summary ? ` · ${t("investorsHolding")} ${fmtInt(h.summary.investorsHolding)} · ${t("instOwnership")} ${fmtPct(h.summary.ownershipPct)}` : ""} · ${t("freeFloat")} ${fmtPct(b.market.freeFloatPct)} · ${t("insiders")}: ${b.insider ? t("insiderNote", { b: b.insider.purchases ?? 0, s: b.insider.sales ?? 0 }) : NA}</p>`;
+    const officers = b.officers.length ? `<ul class="officers">${b.officers.map((o) => `<li><b>${esc(o.name)}</b><span class="muted">${esc(o.title)}</span></li>`).join("")}</ul>` : NA;
     const caps = b.capitalChanges.filter((c) => c.date >= new Date(Date.now() - 10 * 366 * 86400000).toISOString().slice(0, 10));
-    const capRows = caps.length
-      ? caps.map((c) => `<tr><th class="rowh">${yymm(c.date)}</th><td class="c">${c.numerator >= c.denominator ? t("split", { a: c.denominator, b: c.numerator }) : t("reverseSplit", { a: c.denominator, b: c.numerator })}</td></tr>`).join("")
-      : `<tr><td colspan="2" class="c muted">${t("noSplits")}</td></tr>`;
-    const yearly = p.yearly.map((r) => `<tr><th class="rowh">${esc(r.label)}</th><td class="num">${fmtDec(r.high)}(${esc(r.highNote)})</td><td class="num">${fmtDec(r.low)}(${esc(r.lowNote)})</td></tr>`).join("");
-    const monthly = p.monthly.map((r) => `<tr><th class="rowh">${r.partial ? "#" : ""}${esc(r.label)}</th><td class="num">${fmtDec(r.high)}</td><td class="num">${fmtDec(r.low)}</td><td class="num">${fmtInt(r.volumeM)}</td></tr>`).join("");
-    const half = Math.ceil(b.officers.length / 2);
-    const offRows = [];
-    for (let i = 0; i < half; i++) {
-      const a = b.officers[i]; const c = b.officers[i + half];
-      const cell = (o) => (o ? `(${esc(o.title)}) ${esc(o.name)}` : "");
-      offRows.push(`<tr><td>${cell(a)}</td><td>${cell(c)}</td></tr>`);
+    const capRows = caps.length ? caps.map((c) => `<tr><th>${yymm(c.date)}</th><td>${c.numerator >= c.denominator ? t("split", { a: c.denominator, b: c.numerator }) : t("reverseSplit", { a: c.denominator, b: c.numerator })}</td></tr>`).join("") : `<tr><td colspan="2" class="muted">${t("noSplits")}</td></tr>`;
+    const yearly = p.yearly.map((r) => `<tr><th>${esc(r.label)}</th><td class="num">${fmtDec(r.high)} <span class="muted">(${esc(r.highNote)})</span></td><td class="num">${fmtDec(r.low)} <span class="muted">(${esc(r.lowNote)})</span></td></tr>`).join("");
+    const monthly = p.monthly.map((r) => `<tr><th>${r.partial ? "#" : ""}${esc(r.label)}</th><td class="num">${fmtDec(r.high)}</td><td class="num">${fmtDec(r.low)}</td><td class="num">${fmtInt(r.volumeM)}</td></tr>`).join("");
+    const prices = wrap(`<table class="tbl"><thead><tr><th></th><th class="num">${t("high")}</th><th class="num">${t("low")}</th></tr></thead><tbody>${yearly}</tbody></table>`) + `<p class="note">${t("priceNote1")}</p>` +
+      wrap(`<table class="tbl"><thead><tr><th></th><th class="num">${t("high")}</th><th class="num">${t("low")}</th><th class="num">${t("volume")}</th></tr></thead><tbody>${monthly}</tbody></table>`);
+    const filings = b.filings.map((f) => `<tr><th>${esc(f.filingDate)}</th><td><a href="${esc(f.url)}" target="_blank" rel="noopener">${esc(f.form)}</a> <span class="muted">${esc(f.description || "")}</span></td></tr>`).join("");
+    const events = b.materialEvents.map((e) => `<tr><th>${esc(e.filingDate)}</th><td>${esc(e.form)} · ${esc(e.items.join(", "))}</td></tr>`).join("");
+    return `<div class="grid2">${sec(t("holders"), holders)}${sec(t("officers"), officers)}</div>
+      <div class="grid2b">${sec(t("capitalChanges"), wrap(`<table class="tbl"><tbody>${capRows}</tbody></table>`) + prices)}
+      ${sec(t("filings"), wrap(`<table class="tbl"><tbody>${filings || `<tr><td class="c">${NA}</td></tr>`}</tbody></table>`)) + (events ? sec(t("events"), wrap(`<table class="tbl"><tbody>${events}</tbody></table>`)) : "")}</div>`;
+  }
+
+  function tabValuation() {
+    const b = state.bundle; const v = b.valuation; const d = b.dcf; const V = t("val");
+    if (!v) return `<p class="muted">${NA}</p>`;
+    const x = (n, dgt = 1) => fmtDec(n, dgt);
+    const groups = [
+      [V.multiples, [[V.pe, x(v.pe)], [V.peFwd, x(v.peForward)], [V.peFwd2, x(v.peForward2)], [V.peg, x(v.peg, 2)], [V.ps, x(v.ps)], [V.pb, x(v.pb)], [V.pfcf, x(v.pfcf)], [V.pocf, x(v.pocf)]]],
+      [V.ev, [[V.marketCap, fmtBig(v.marketCapM)], [V.ev, fmtBig(v.enterpriseValueM)], [V.evSales, x(v.evSales)], [V.evEbitda, x(v.evEbitda)], [V.evOcf, x(v.evOcf)], [V.evFcf, x(v.evFcf)]]],
+      [V.yields, [[V.earningsYield, fmtPct(v.earningsYieldPct)], [V.fcfYield, fmtPct(v.fcfYieldPct)], [V.divYield, fmtPct(v.dividendYieldPct, 2)], [V.payout, fmtPct(v.payoutPct)], [V.epsTTM, `$${x(v.epsTTM, 2)}`], [V.epsFwd, `$${x(v.epsForward, 2)}`], [V.epsFwd2, `$${x(v.epsForward2, 2)}`], [V.epsGrowth, fmtPct(v.epsGrowthFwdPct)], [V.bvps, `$${x(v.bvps, 2)}`], [V.fcfps, `$${x(v.fcfps, 2)}`], [V.rps, `$${x(v.revenuePerShare, 2)}`]]],
+      [V.quality, [[V.gm, fmtPct(v.grossMarginPct)], [V.om, fmtPct(v.opMarginPct)], [V.nm, fmtPct(v.netMarginPct)], [V.roe, fmtPct(v.roePct)], [V.roic, fmtPct(v.roicPct)], [V.roa, fmtPct(v.roaPct)], [V.ndEbitda, x(v.netDebtEbitda, 2)], [V.de, x(v.debtEquity, 2)], [V.cov, x(v.interestCoverage)], [V.cr, x(v.currentRatio, 2)]]],
+      [V.market, [[V.beta, x(v.beta, 2)], [V.range52, `$${x(v.yearLow, 2)} – $${x(v.yearHigh, 2)}`], [V.ma, `$${x(v.priceAvg50, 2)} / $${x(v.priceAvg200, 2)}`], [V.target, v.analystTarget ? `$${x(v.analystTarget.consensus, 2)} (${v.analystTarget.upsidePct >= 0 ? "+" : ""}${x(v.analystTarget.upsidePct)}%)` : NA], [V.graham, `$${x(v.grahamNumber, 2)}`]]],
+    ];
+    const metrics = `<div class="grid3">${groups.map(([title, rows]) => sec(title, kv(rows))).join("")}</div>`;
+    let dcfHtml;
+    if (!d) dcfHtml = `<p class="muted">${V.noDcf}</p>`;
+    else {
+      const I = d.inputs; const up = d.upsidePct;
+      const head = `<div class="dcf-head"><div class="dcf-value"><div class="stat-l">${V.perShare}</div><div class="dcf-num">$${x(d.perShare, 2)}</div><div class="${up >= 0 ? "up" : "down"}">${V.vsPrice} ${up >= 0 ? "+" : ""}${x(up)}% <span class="muted">($${x(d.price, 2)})</span></div></div>
+        ${kv([[V.evLabel, fmtBig(d.enterpriseValue / 1e6)], [V.equity, fmtBig(d.equityValue / 1e6)], [V.terminalShare, fmtPct(d.terminalShare * 100, 0)], [V.wacc, fmtPct(I.wacc, 2)], [V.g, fmtPct(I.g, 2)], [V.costEquity, `${fmtPct(I.costEquity, 2)} <span class="muted">(${V.rf} ${fmtPct(I.riskFree, 2)} + β ${x(I.beta, 2)} × ${V.erp} ${fmtPct(I.erp, 1)})</span>`], [V.costDebt, `${fmtPct(I.costDebt, 2)} <span class="muted">(${fmtPct(I.weightDebt * 100, 1)} ${isCJK() ? "ウェイト" : "weight"})</span>`], [V.s2c, x(I.salesToCapital, 2)], [V.tax, `${fmtPct(I.taxRate)} → ${fmtPct(I.marginalTax, 0)}`]])}</div>`;
+      const yrs = wrap(`<table class="tbl"><thead><tr><th>${V.year}</th><th class="num">${V.rev}</th><th class="num">${V.ebit}</th><th class="num">${V.margin}</th><th class="num">${V.reinvest}</th><th class="num">${V.fcff}</th><th class="num">${V.pv}</th></tr></thead><tbody>${d.years.map((y) => `<tr class="${y.source === "consensus" ? "est" : ""}"><th>FY${esc(y.label)} <span class="muted small">${y.source === "consensus" ? V.consensus : V.extrap}</span></th><td class="num">${fmtInt(y.revenue / 1e6)}</td><td class="num">${fmtInt(y.ebit / 1e6)}</td><td class="num">${fmtPct(y.margin * 100)}</td><td class="num">${fmtInt(y.reinvestment / 1e6)}</td><td class="num">${fmtInt(y.fcff / 1e6)}</td><td class="num">${fmtInt(y.pv / 1e6)}</td></tr>`).join("")}<tr class="sep"><th>${V.terminal}</th><td colspan="5" class="num muted">${fmtInt(d.terminalValue / 1e6)}</td><td class="num">${fmtInt(d.pvTerminal / 1e6)}</td></tr></tbody></table>`) + `<p class="note">${t("unitM")}</p>`;
+      const S = d.sensitivity;
+      const sens = S ? wrap(`<table class="tbl sens"><thead><tr><th>WACC \\ g</th>${S.gs.map((g) => `<th class="num">${fmtPct(g, 1)}</th>`).join("")}</tr></thead><tbody>${S.grid.map((row, i) => `<tr><th>${fmtPct(S.waccs[i], 1)}</th>${row.map((val, j) => `<td class="num ${i === 1 && j === 1 ? "base" : ""}">${val === null ? NA : "$" + x(val, 0)}</td>`).join("")}</tr>`).join("")}</tbody></table>`) + `<p class="note">${V.sensNote}</p>` : "";
+      dcfHtml = head + yrs + `<h4 class="sub">${V.sens}</h4>` + sens + `<details class="method"><summary>${V.method}</summary>${V.methodBody.map((para) => `<p>${esc(para)}</p>`).join("")}</details>`;
     }
-    const filings = b.filings.map((f) => `<tr><th class="rowh">${esc(f.filingDate)}</th><td><a href="${esc(f.url)}" target="_blank" rel="noopener">${esc(f.form)}</a> <span class="muted">${esc(f.description || "")}</span></td></tr>`).join("");
-    const events = b.materialEvents.map((e) => `<tr><th class="rowh">${esc(e.filingDate)}</th><td>${esc(e.form)} — ${esc(e.items.join(", "))}</td></tr>`).join("");
-    return `<div class="grid2b"><div>
-      <table class="shk"><tr><th class="rowh"><b>【${t("capitalChanges")}】</b></th><th>${t("dateCol")}</th></tr>${capRows}</table>
-      <table class="shk"><tr><th class="rowh">${esc(b.company.exchange)}</th><th>${t("high")}</th><th>${t("low")}</th></tr>${yearly}</table>
-      <div class="note">${t("priceNote1")}</div>
-      <table class="shk"><tr><th class="rowh"></th><th>${t("high")}</th><th>${t("low")}</th><th>${t("volume")}</th></tr>${monthly}</table>
-      <div class="note">${t("priceNote2")}</div>
-    </div><div>
-      <table class="shk"><tr><th colspan="2" style="text-align:left"><b>【${t("officers")}】</b></th></tr>${offRows.join("") || `<tr><td colspan="2" class="c">${NA}</td></tr>`}</table>
-      <table class="shk"><tr><th colspan="2" style="text-align:left"><b>【${t("filings")}】</b></th></tr>${filings || `<tr><td colspan="2" class="c">${NA}</td></tr>`}</table>
-      ${events ? `<table class="shk"><tr><th colspan="2" style="text-align:left"><b>【${t("events")}】</b></th></tr>${events}</table>` : ""}
-    </div></div>`;
+    return `${sec(V.dcfTitle, dcfHtml, d && d.riskFreeDate ? `${V.rf}: ${fmtPct(d.inputs.riskFree, 2)} (${esc(d.riskFreeDate)})` : "")}<h3 class="sec plain">${V.title}</h3>${metrics}`;
   }
 
   // ---------- AI summary polling ----------
@@ -503,7 +499,7 @@
 
   // ---------- boot ----------
   async function init() {
-    try { state.config = await api("/api/config"); } catch { state.config = { locales: ["ja", "en"], defaultLocale: "ja", trialDays: 7, priceLabel: "US$15 / month", billingEnabled: false, summariesEnabled: false }; }
+    try { state.config = await api("/api/config"); } catch { state.config = { locales: ["ja", "en"], defaultLocale: "ja", trialDays: 7, priceLabel: "US$10 / month", billingEnabled: false, summariesEnabled: false }; }
     try { const me = await api("/api/auth/me"); state.user = me.user; state.ent = me.entitlement; } catch {}
     let loc = null;
     try { loc = localStorage.getItem("locale"); } catch {}

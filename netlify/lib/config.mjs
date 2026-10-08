@@ -55,11 +55,11 @@ export const cfg = {
   lemon() {
     return {
       store: env("LEMONSQUEEZY_STORE"), // store subdomain, e.g. "mystore"
-      variantId: env("LEMONSQUEEZY_VARIANT_ID"),
+      variantId: env("LEMONSQUEEZY_VARIANT_ID", "2220324"), // Kabukaizu monthly plan
       checkoutUrl: env("LEMONSQUEEZY_CHECKOUT_URL"), // optional full buy link override
       webhookSecret: env("LEMONSQUEEZY_WEBHOOK_SECRET"),
       apiKey: env("LEMONSQUEEZY_API_KEY"),
-      priceLabel: env("PRICE_LABEL", "US$15 / month"),
+      priceLabel: env("PRICE_LABEL", "US$10 / month"),
     };
   },
   internalSecret() {
