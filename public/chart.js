@@ -42,6 +42,8 @@
     // those near the price range; levels far outside it are left out rather than squashing the chart.
     const levels = (opts.levels || []).filter((l) => Number.isFinite(l.price) && l.price > min - span0 * 0.35 && l.price < max + span0 * 0.35);
     for (const l of levels) { if (l.price < min) min = l.price; if (l.price > max) max = l.price; }
+    const bands = (opts.bands || []).filter((b) => Number.isFinite(b.low) && Number.isFinite(b.high) && b.high > min - span0 * 0.35 && b.low < max + span0 * 0.35);
+    for (const b of bands) { if (b.low < min) min = b.low; if (b.high > max) max = b.high; }
     // overlay series (moving averages), aligned index by index with the price points
     const series = (opts.series || []).filter((sr) => Array.isArray(sr.points) && sr.points.length === points.length);
     for (const sr of series) for (const p of sr.points) { if (p[1] !== null && Number.isFinite(p[1])) { if (p[1] < min) min = p[1]; if (p[1] > max) max = p[1]; } }
@@ -75,13 +77,21 @@
     }
     // reference levels: dashed lines with labels at the right edge, nudged apart when they collide
     const styles = { res: { stroke: "#c93c37", dash: "6 4" }, sup: { stroke: "#1a7f37", dash: "6 4" }, ma50: { stroke: "#d08c1a", dash: "2 3" }, ma200: { stroke: "#6b4fbb", dash: "2 3" }, px: { stroke: "#1f2328", dash: "" } };
+    // bands: translucent zones with a label; single levels: dashed lines
+    for (const b of bands) {
+      const st = styles[b.kind] || styles.res;
+      el("rect", { x: pad.l, y: y(b.high), width: iw, height: Math.max(2, y(b.low) - y(b.high)), fill: st.stroke, opacity: 0.13 }, svg);
+      el("line", { x1: pad.l, x2: W - pad.r, y1: y(b.high), y2: y(b.high), stroke: st.stroke, "stroke-width": 1, "stroke-dasharray": "3 3", opacity: 0.7 }, svg);
+      el("line", { x1: pad.l, x2: W - pad.r, y1: y(b.low), y2: y(b.low), stroke: st.stroke, "stroke-width": 1, "stroke-dasharray": "3 3", opacity: 0.7 }, svg);
+    }
     const drawn = levels.map((l) => ({ ...l, y: y(l.price) }));
+    for (const b of bands) drawn.push({ kind: b.kind, label: b.label, y: (y(b.high) + y(b.low)) / 2, noLine: true });
     if (Number.isFinite(opts.current)) drawn.push({ price: opts.current, kind: "px", label: `$${fmtPrice(opts.current)}`, y: y(opts.current), thin: true });
     drawn.sort((a, b) => a.y - b.y);
     let lastLabelY = -99;
     for (const l of drawn) {
       const st = styles[l.kind] || styles.res;
-      el("line", { x1: pad.l, x2: W - pad.r, y1: l.y, y2: l.y, stroke: st.stroke, "stroke-width": l.thin ? 1 : 1.3, "stroke-dasharray": st.dash, opacity: 0.9 }, svg);
+      if (!l.noLine) el("line", { x1: pad.l, x2: W - pad.r, y1: l.y, y2: l.y, stroke: st.stroke, "stroke-width": l.thin ? 1 : 1.3, "stroke-dasharray": st.dash, opacity: 0.9 }, svg);
       if (!l.label) continue;
       let ly = l.y - 4; if (ly < lastLabelY + 12) ly = lastLabelY + 12; lastLabelY = ly;
       const tw = l.label.length * 6.2 + 8;

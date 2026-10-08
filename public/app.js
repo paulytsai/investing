@@ -587,12 +587,15 @@
       if (!document.body.contains(el)) return;
     }
     const v = c.b.valuation || {}; const K = t("tech"); const tech = c.s && c.s.technical; const ch = c.techCache[key];
-    const levels = [];
-    if (tech) { for (const r of tech.resistance || []) levels.push({ price: r.level, kind: "res", label: `R $${fmtDec(r.level, 1)}` }); for (const r of tech.support || []) levels.push({ price: r.level, kind: "sup", label: `S $${fmtDec(r.level, 1)}` }); }
+    // Levels within 5% of each other merge into one band (width measured from the band's lowest level).
+    const cluster = (rows) => { const out = []; for (const lv of (rows || []).map((r) => r.level).filter(Number.isFinite).sort((a, b) => a - b)) { const g = out[out.length - 1]; if (g && lv <= g.low * 1.05) g.high = lv; else out.push({ low: lv, high: lv }); } return out; };
+    const levels = [], bands = [];
+    const place = (groups, kind, name) => { for (const g of groups) { if (g.high > g.low) bands.push({ low: g.low, high: g.high, kind, label: `${name} $${fmtDec(g.low, 1)}〜${fmtDec(g.high, 1)}` }); else levels.push({ price: g.low, kind, label: `${name} $${fmtDec(g.low, 1)}` }); } };
+    if (tech) { place(cluster(tech.resistance), "res", K.resistance.split("（")[0]); place(cluster(tech.support), "sup", K.support.split("（")[0]); }
     const series = [];
     if (ch.ma50) series.push({ points: ch.ma50, color: "#d08c1a", label: K.ma50 });
     if (ch.ma200) series.push({ points: ch.ma200, color: "#6b4fbb", label: K.ma200 });
-    window.renderChart(el, ch.points, { locale: state.locale, height: el.clientWidth < 600 ? 320 : 420, levels, series, current: v.price });
+    window.renderChart(el, ch.points, { locale: state.locale, height: el.clientWidth < 600 ? 320 : 420, levels, bands, series, current: v.price });
   }
   function tabDeep(c) {
     const D = t("deep"); const d = c.d;
