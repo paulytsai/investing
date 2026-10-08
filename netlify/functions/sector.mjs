@@ -16,7 +16,7 @@ export default handler(async (req, context) => {
   if (!SUPPORTED_LOCALES.includes(lang)) throw new HttpError(400, "invalid_locale");
   const user = await currentUser(req).catch(() => null);
   const entitled = !!(user && entitlement(user).access);
-  const rows = (await constituentRows(sector)).map(({ _en, _fin, _rev, ...r }) => r);
+  const rows = (await constituentRows(sector, { lang })).map(({ _en, _fin, _rev, ...r }) => r);
   const analysis = entitled ? await sectorStatus(id, lang) : { status: "locked" };
   await logEvent("sector_view", { user, detail: id, req });
   return json({ sector: { id: sector.id, group: sector.group, name: sector.name, desc: sector.desc || null, layers: sector.layers || null }, constituents: rows, analysis }, 200, { "cache-control": "no-store" });

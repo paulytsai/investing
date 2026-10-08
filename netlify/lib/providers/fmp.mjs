@@ -104,6 +104,13 @@ export async function keyMetricsTtm(symbol) {
     rndToRevenue: num(k.researchAndDevelopementToRevenueTTM), sgaToRevenue: num(k.salesGeneralAndAdministrativeToRevenueTTM), capexToRevenue: num(k.capexToRevenueTTM), inventoryDays: num(k.daysOfInventoryOutstandingTTM), investedCapital: num(k.investedCapitalTTM),
   } : null;
 }
+/** Fiscal-year-end valuation multiples (price at the fiscal year end over that year's figures). */
+export async function ratios(symbol, { period = "annual", limit = 10 } = {}) {
+  return list(await call("ratios", { symbol, period, limit })).map((r) => ({
+    date: r.date, fiscalYear: str(r.fiscalYear), pe: num(r.priceToEarningsRatio), ps: num(r.priceToSalesRatio), pb: num(r.priceToBookRatio), pfcf: num(r.priceToFreeCashFlowRatio),
+    evEbitda: num(r.enterpriseValueMultiple), dividendYield: num(r.dividendYield),
+  }));
+}
 export async function ratiosTtm(symbol) {
   const r = first(await call("ratios-ttm", { symbol }));
   return r ? {

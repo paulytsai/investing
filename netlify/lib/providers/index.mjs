@@ -37,7 +37,7 @@ export async function soft(promise, fallback = []) {
 
 /** Every method a provider must export, used by tests and the health check. */
 export const CONTRACT = [
-  "profile", "quote", "quotes", "incomeStatements", "balanceSheets", "cashFlows", "keyMetrics", "keyMetricsTtm", "ratiosTtm", "incomeGrowth",
+  "profile", "quote", "quotes", "incomeStatements", "balanceSheets", "cashFlows", "keyMetrics", "keyMetricsTtm", "ratios", "ratiosTtm", "incomeGrowth",
   "dividends", "splits", "executives", "estimates", "peers", "employees", "sharesFloat", "revenueSegments", "revenueGeography", "earnings",
   "analystRating", "priceTarget", "insiderStats", "transcriptDates", "transcript", "dailyPrices", "institutionalHolders", "institutionalSummary",
   "screenIndustry", "treasury10y", "news", "compensation", "search", "indexConstituents", "etfHoldings", "health",

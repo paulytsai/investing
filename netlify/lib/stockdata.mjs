@@ -214,6 +214,23 @@ async function competitors(symbol, industry, peersRaw) {
     .map((q) => ({ symbol: q.symbol, name: q.name || candidates.get(q.symbol), marketCapM: mm(q.marketCap), price: num(q.price), changePct: r2(q.changePct) }));
 }
 
+const HISTORY_METRICS = ["pe", "ps", "pb", "evEbitda", "pfcf"];
+/** Ten fiscal years of multiples plus 5- and 10-year low/median/high and where today's value sits. */
+function multiplesHistory(rows, valuation) {
+  const years = (Array.isArray(rows) ? rows : []).filter((r) => r && r.date).slice().sort((a, b) => a.date.localeCompare(b.date))
+    .map((r) => ({ fy: r.fiscalYear || r.date.slice(0, 4), date: r.date, pe: r2(r.pe), ps: r2(r.ps), pb: r2(r.pb), evEbitda: r2(r.evEbitda), pfcf: r2(r.pfcf) }));
+  if (!years.length) return null;
+  const range = (n) => Object.fromEntries(HISTORY_METRICS.map((m) => {
+    const vals = years.slice(-n).map((y) => y[m]).filter((v) => v !== null && Number.isFinite(v) && v > 0).sort((a, b) => a - b);
+    if (vals.length < 2) return [m, null];
+    const median = vals.length % 2 ? vals[(vals.length - 1) / 2] : (vals[vals.length / 2 - 1] + vals[vals.length / 2]) / 2;
+    const now = num(valuation[m]);
+    const pct = now !== null && now > 0 ? Math.round((vals.filter((v) => v < now).length / vals.length) * 100) : null;
+    return [m, { low: vals[0], median: r2(median), high: vals[vals.length - 1], n: vals.length, now: r2(now), percentile: pct }];
+  }));
+  return { years, range5: range(5), range10: range(10) };
+}
+
 async function riskFreeRate() {
   const r = await soft(P.treasury10y(), null);
   return r ? { rate: num(r.rate), date: r.date } : { rate: 4.5, date: null };
@@ -252,6 +269,7 @@ async function buildBundle(symbol) {
     edgarCo,
     rf,
     indices,
+    ratiosHist,
   ] = await Promise.all([
     soft(P.quote(symbol), null),
     soft(P.incomeStatements(symbol, { period: "annual", limit: 10 })),
@@ -280,6 +298,7 @@ async function buildBundle(symbol) {
     edgarCompany(symbol),
     riskFreeRate(),
     indexMembership(symbol),
+    soft(P.ratios(symbol, { period: "annual", limit: 10 })),
   ]);
   const competitorList = await competitors(symbol, profile.industry, peers);
 
@@ -515,6 +534,9 @@ async function buildBundle(symbol) {
     allTimeHigh: ath ? { price: ath.p, date: ath.d } : null,
     analystTarget: targets ? { high: num(targets.high), low: num(targets.low), consensus: num(targets.consensus), upsidePct: price && num(targets.consensus) ? r2((targets.consensus / price - 1) * 100) : null } : null,
   };
+  // ---- multiples versus own history (fiscal-year-end values) ----
+  valuation.history = multiplesHistory(ratiosHist, valuation);
+
   // ---- DCF (Damodaran FCFF) ----
   let dcf = null;
   try {
@@ -655,7 +677,7 @@ export async function indexMembership(symbol) {
 }
 
 export async function stockBundle(symbol, { force = false, peek = false } = {}) {
-  return cached(`stock:${symbol}`, 12 * 3600, () => buildBundle(symbol), { version: "11", force, peek });
+  return cached(`stock:${symbol}`, 12 * 3600, () => buildBundle(symbol), { version: "12", force, peek });
 }
 
 /** Newest earnings-call transcript date the provider lists for a symbol (one light request). */

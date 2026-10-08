@@ -11,7 +11,7 @@ import { DEEP_SCHEMA, DEEP_SECTION_KEYS, LANG_NAMES, normalizeAssessment } from 
 import { sectorById, AI_LAYERS } from "./sectors.mjs";
 import { deepIncompleteReason } from "./deep.mjs";
 
-const VERSION = "s1";
+const VERSION = "s2";
 const TRANSLATION_VERSION = "1";
 const JOB_TTL_MS = 10 * 60 * 1000;
 const filled = (v, min = 1) => typeof v === "string" && v.trim().length >= min;
@@ -48,10 +48,10 @@ const n1 = (v, d = 1) => (v === null || v === undefined || Number.isNaN(Number(v
 
 /**
  * Data rows for the constituents. The page (`full` false) only reads bundles the warmer
- * already built and falls back to a quote for the rest, so it never blocks on 30 FMP
+ * already built and falls back to a quote for the rest, so it never blocks on 30 upstream
  * fetches; report generation (`full` true) builds any missing bundle, a few at a time.
  */
-export async function constituentRows(sector, { full = false } = {}) {
+export async function constituentRows(sector, { full = false, lang = cfg.defaultLocale() } = {}) {
   const layersOf = (sym) => AI_LAYERS.filter((l) => l.members.includes(sym)).map((l) => l.layer);
   // Report generation builds the bundles of the curated AI names and of the 25 largest
   // S&P 500 names in the sector; the page itself never builds anything.
@@ -59,7 +59,7 @@ export async function constituentRows(sector, { full = false } = {}) {
   const build = new Set(full ? [...sector.members.filter((s) => layersOf(s).length), ...[...sector.members].sort((a, b) => ((quotes[b] || {}).marketCap || 0) - ((quotes[a] || {}).marketCap || 0)).slice(0, 25)] : []);
   const limit = full ? 3 : 16;
   let i = 0; const out = [];
-  const worker = async () => { while (i < sector.members.length) { const sym = sector.members[i++]; out.push(await constituentRow(sym, { full: build.has(sym), layersOf, quote: quotes[sym] })); } };
+  const worker = async () => { while (i < sector.members.length) { const sym = sector.members[i++]; out.push(await constituentRow(sym, { full: build.has(sym), layersOf, quote: quotes[sym], lang })); } };
   await Promise.all(Array.from({ length: Math.min(limit, sector.members.length) }, worker));
   return sector.members.map((sym) => out.find((r) => r.symbol === sym));
 }
@@ -76,7 +76,7 @@ async function sectorQuotes(sector) {
   }, { version: "2" }).catch(() => ({}));
 }
 
-async function constituentRow(symbol, { full, layersOf, quote }) {
+async function constituentRow(symbol, { full, layersOf, quote, lang }) {
   try {
     let b = await stockBundle(symbol, { peek: !full });
     if (!b) {
@@ -87,10 +87,10 @@ async function constituentRow(symbol, { full, layersOf, quote }) {
       const v = b.valuation || {}, m = b.market || {};
       const fy = (b.performance || []).filter((r) => r.kind === "annual" || r.kind === "fy" || (!r.kind && r.label));
       const growth = (b.growth && b.growth.salesGrowth && b.growth.salesGrowth[b.growth.salesGrowth.length - 1]) || null;
-      const s = await getCachedSummary(symbol, cfg.defaultLocale(), b.latestTranscriptDate).catch(() => null);
+      const s = lang === "en" ? null : await getCachedSummary(symbol, lang, b.latestTranscriptDate).catch(() => null);
       const en = await getCachedSummary(symbol, "en", b.latestTranscriptDate).catch(() => null);
       return { symbol, name: b.company.name, exchange: b.company.exchange, country: b.company.country || "US", marketCapM: m.marketCapM, price: m.price, changePct: m.changePct, peForward: v.peForward, evEbitda: v.evEbitda, opMarginPct: v.opMarginPct, grossMarginPct: v.grossMarginPct, roicPct: v.roicPct, revenueGrowthPct: growth ? growth.pct : null, growthLabel: growth ? growth.label : null, yearHigh: v.yearHigh, yearLow: v.yearLow, layers: layersOf(symbol), feature: s ? s.feature : (en ? en.feature : null), storyHeadline: s && s.story ? s.story.headline : null,
-        _en: en ? { feature: en.feature, story: en.story, longTerm: en.longTerm && en.longTerm.headline, recent: en.recent && en.recent.headline, bull: en.bull && en.bull.headline, bear: en.bear && en.bear.headline } : null, _fin: b.financials ? { netDebtToEbitda: b.financials.netDebtToEbitda, capex: b.indicators && b.indicators.capex, rnd: b.indicators && b.indicators.rnd } : null, _rev: (b.performance || []).slice(0, 7).map((r) => `${r.kind === "estimate" ? "E" : ""}${r.label}:${r.revenue}`).join(" ") };
+        _en: en ? { feature: en.feature, story: en.story, longTerm: en.longTerm && en.longTerm.headline, recent: en.recent && en.recent.headline, bull: en.bull && en.bull.headline, bear: en.bear && en.bear.headline } : null, _pe5: b.valuation && b.valuation.history && b.valuation.history.range5 && b.valuation.history.range5.pe ? b.valuation.history.range5.pe : null, _fin: b.financials ? { netDebtToEbitda: b.financials.netDebtToEbitda, capex: b.indicators && b.indicators.capex, rnd: b.indicators && b.indicators.rnd } : null, _rev: (b.performance || []).slice(0, 7).map((r) => `${r.kind === "estimate" ? "E" : ""}${r.label}:${r.revenue}`).join(" ") };
     }
   } catch (e) { return { symbol, error: e.message }; }
 }
@@ -98,11 +98,11 @@ async function constituentRow(symbol, { full, layersOf, quote }) {
 function sectorMaterials(sector, rows, lang) {
   const name = sector.name.en;
   const good = rows.filter((r) => !r.error);
-  const table = ["symbol | name | mkt cap $M | fwd P/E | EV/EBITDA | gross margin | op margin | ROIC | latest FY revenue growth | revenue by FY (E=consensus, $M) | net debt/EBITDA | AI layers",
-    ...good.map((r) => `${r.symbol} | ${r.name} | ${r.marketCapM ?? "-"} | ${n1(r.peForward)} | ${n1(r.evEbitda)} | ${n1(r.grossMarginPct)}% | ${n1(r.opMarginPct)}% | ${n1(r.roicPct)}% | ${r.revenueGrowthPct == null ? "-" : n1(r.revenueGrowthPct) + "% (" + r.growthLabel + ")"} | ${r._rev} | ${r._fin ? n1(r._fin.netDebtToEbitda) : "-"} | ${r.layers.join(",") || "-"}`)].join("\n");
+  const table = ["symbol | name | mkt cap $M | fwd P/E | trailing P/E now vs own 5y low/median/high | EV/EBITDA | gross margin | op margin | ROIC | latest FY revenue growth | revenue by FY (E=consensus, $M) | net debt/EBITDA | AI layers",
+    ...good.map((r) => `${r.symbol} | ${r.name} | ${r.marketCapM ?? "-"} | ${n1(r.peForward)} | ${r._pe5 ? `${n1(r._pe5.now)} vs ${n1(r._pe5.low)}/${n1(r._pe5.median)}/${n1(r._pe5.high)}` : "-"} | ${n1(r.evEbitda)} | ${n1(r.grossMarginPct)}% | ${n1(r.opMarginPct)}% | ${n1(r.roicPct)}% | ${r.revenueGrowthPct == null ? "-" : n1(r.revenueGrowthPct) + "% (" + r.growthLabel + ")"} | ${r._rev} | ${r._fin ? n1(r._fin.netDebtToEbitda) : "-"} | ${r.layers.join(",") || "-"}`)].join("\n");
   const digests = good.filter((r) => r._en).map((r) => `### ${r.symbol} ${r.name}\nProfile: ${r._en.feature}\nPast year: ${r._en.story ? `${r._en.story.headline}. ${r._en.story.body}` : "-"}\nHeadlines: long-term "${r._en.longTerm}"; recent "${r._en.recent}"; bull "${r._en.bull}"; bear "${r._en.bear}"`).join("\n\n");
   const layers = sector.layers ? `## The five layers\n${sector.layers.map((l) => `Layer ${l.layer} ${l.name.en}: ${l.members.join(", ")}`).join("\n")}\n` : "";
-  return [`## Sector: ${name}${sector.desc ? ` — ${sector.desc.en}` : ""}`, `Research date ${new Date().toISOString().slice(0, 10)}. Constituents are the S&P 500 members of the sector (plus curated AI names where the sector is an AI layer); rows with only market data had no digest yet. Private companies may be referenced from the digests but have no data here.`, layers, "## Constituent data (Financial Modeling Prep, latest)", table, "", "## Company digests (generated by this site from earnings calls and news)", digests || "(none yet)"].join("\n");
+  return [`## Sector: ${name}${sector.desc ? ` — ${sector.desc.en}` : ""}`, `Research date ${new Date().toISOString().slice(0, 10)}. Constituents are the S&P 500 members of the sector (plus curated AI names where the sector is an AI layer); rows with only market data had no digest yet. Private companies may be referenced from the digests but have no data here.`, layers, "## Constituent data (market data, latest)", table, "", "## Company digests (generated by this site from earnings calls and news)", digests || "(none yet)"].join("\n");
 }
 
 export function sectorSystemPrompt() {
@@ -111,7 +111,7 @@ export function sectorSystemPrompt() {
 Three independent findings for the sector, kept separate and never averaged:
 - Sector Quality (Q): how economically sound and durable the sector's profit pool is over five to ten years: value-chain profit capture, industry structure and concentration, entry barriers, pricing power, switching costs, scale and scarce assets, returns on capital, reinvestment needs, financing resilience. Labels: strong, adequate, weak, mixed or uncertain. Price and multiples do not enter Q.
 - Sector Trajectory (T): are the sector's operating economics improving or deteriorating, and why: demand, volume and price, capacity additions and utilisation, inventories, capex cycle, supply discipline, margins, estimate revisions; distinguish observed direction (dated) from forecast direction (one to five years) and structural from cyclical and one-time changes. Labels: improving, stable, deteriorating or mixed/uncertain.
-- Market Expectations and Valuation (V): what the group's dated multiples imply versus plausible scenarios, using own-history and cross-sector context, dispersion inside the group, consensus growth, and the operating requirements behind the price. Labels: demanding, moderate, undemanding or indeterminate.
+- Market Expectations and Valuation (V): what the group's dated multiples imply versus plausible scenarios, using own-history and cross-sector context, dispersion inside the group, consensus growth, and the operating requirements behind the price. Every multiple you cite for a company must be placed against that company's own 5-year low/median/high from the table (near the low end, the middle, the high end, or outside the range); say where the group as a whole sits versus its own history. Labels: demanding, moderate, undemanding or indeterminate.
 Then a divergences paragraph.
 
 Evidence discipline: give material numbers their period; separate reported data, consensus, management assertions (from the digests) and your own reading; say "indeterminate" where evidence is thin; never fabricate. Terse plain prose with concrete numbers and causal reasoning; no bullet points or markdown inside strings. About 1,200-1,500 words in total.
@@ -120,7 +120,7 @@ Return JSON with:
 - "findings": "quality", "trajectory", "valuation" (each: "assessment" exactly one label from the list above and nothing else, qualifications go in the mechanism; "mechanism" 60-90 words; "evidence" 40-70 words, dated; "counterevidence" 30-60 words; "confidence" high/medium/low; "decisive" one sentence naming the decisive variable and the observation that would change the conclusion) and "divergences" (40-80 words).
 - "story": headline (3-7 words) + body (110-150 words): what the sector sells and to whom, the value chain and where profit is captured, the reachable opportunity and the competitive structure, ending with the two-minute falsifiable story.
 - "battlefields": 3-6 rows, one per value-chain stage or sub-segment (for the AI stack, one per layer): "segment", "revenueShare" (share of the sector's profit pool or revenue, or "n/a" with the reason), "competitors" (the main listed and private players), "purchaseCriteria" (what decides the sale), "position" (who captures the profit and why, 15-25 words).
-- "sections": exactly 8 items in this order, each {"key", "headline", "body"}: "history" (70-100 words: phases of the sector's development, the events behind the big moves, what is unexplained), "detective" (70-100 words: what the aggregate numbers say versus the sector narrative: margins, returns, cash conversion, capital intensity, dispersion between leaders and laggards), "moat" (70-100 words: where durable advantages sit in the chain, toll-booth versus commodity layers, pricing evidence, bypass risk), "outlook" (70-100 words: demand driver equations, capacity and reinvestment, base and alternative scenarios, maturation), "cycle" (50-80 words: cycle position, supply response, capex timeline, confirming and reversing indicators), "management" (50-80 words: capital allocation patterns across the group: capex, M&A, buybacks, dilution, governance issues), "valuationDetail" (70-100 words: group multiples versus history and other sectors, dispersion, what the price requires, sensitivities), "consensus" (50-80 words: consensus, revisions, the optimistic and sceptical narratives and what distinguishes them).
+- "sections": exactly 8 items in this order, each {"key", "headline", "body"}: "history" (70-100 words: phases of the sector's development, the events behind the big moves, what is unexplained), "detective" (70-100 words: what the aggregate numbers say versus the sector narrative: margins, returns, cash conversion, capital intensity, dispersion between leaders and laggards), "moat" (70-100 words: where durable advantages sit in the chain, toll-booth versus commodity layers, pricing evidence, bypass risk), "outlook" (70-100 words: demand driver equations, capacity and reinvestment, base and alternative scenarios, maturation), "cycle" (50-80 words: cycle position, supply response, capex timeline, confirming and reversing indicators), "management" (50-80 words: capital allocation patterns across the group: capex, M&A, buybacks, dilution, governance issues), "valuationDetail" (70-100 words: group multiples versus each company's own 5-year range and versus other sectors, dispersion, what the price requires, sensitivities), "consensus" (50-80 words: consensus, revisions, the optimistic and sceptical narratives and what distinguishes them).
 - "constituents": one item per listed constituent in the data table: "symbol", "role" (its place in the chain, 2-6 words), "read" (20-35 words: position, what drives it, the main exposure).
 - "risks": 3-5 items: "risk" (mechanism and effect), "indicator" (early indicator), "finding" (Q, T or V).
 - "questions": 3 decisive research questions, the first being the central economic question.

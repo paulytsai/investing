@@ -296,9 +296,9 @@
     else if (A.status === "disabled") analysis = `<section class="card"><p class="muted" style="margin:8px">${t("summaryDisabled")}</p></section>`;
     else analysis = `<section class="card"><p class="muted" style="margin:8px">${t("summaryError")}${A.message ? ` <span class="small">(${esc(A.message)})</span>` : ""}</p></section>`;
     app.innerHTML = `<div class="panel"><div class="title-row"><h1>${esc(name(sx.name))}</h1><a class="btn small" href="#/sectors">← ${esc(X.title)}</a></div>${sx.desc ? `<p class="muted">${esc(name(sx.desc))}</p>` : ""}${layers}</div>
-      ${sec(X.constituents, table + `<p class="note">${esc(X.tableNote)}</p>`)}
       ${sec(X.reportTitle, `<p class="muted deep-intro">${esc(X.reportIntro)}</p>`)}
       ${analysis}
+      ${sec(X.constituents, table + `<p class="note">${esc(X.tableNote)}</p>`)}
       <div class="footer">${t("aiNote")}<br>${t("disclaimer")}<br><a href="#/about">${t("about.link")}</a> · <a href="#/contact">${t("contact.link")}</a></div>`;
   }
   function renderAbout() {
@@ -655,6 +655,15 @@
       ${sec(t("filings"), wrap(`<table class="tbl"><tbody>${filings || `<tr><td class="c">${NA}</td></tr>`}</tbody></table>`)) + (events ? sec(t("events"), wrap(`<table class="tbl"><tbody>${events}</tbody></table>`)) : "")}</div>`;
   }
 
+  // Current multiple against its own 5- and 10-year fiscal-year-end range.
+  function multiplesHistoryHtml(h, V) {
+    if (!h || !h.range5) return "";
+    const H = V.history; const names = { pe: V.pe, ps: V.ps, pb: V.pb, evEbitda: V.evEbitda, pfcf: V.pfcf };
+    const pos = (r) => { if (!r || r.now === null || r.now === undefined) return NA; if (r.now > r.high) return `<span class="down">${H.above}</span>`; if (r.now < r.low) return `<span class="up">${H.below}</span>`; const p = r.percentile; return p === null ? NA : p >= 67 ? H.highEnd : p <= 33 ? H.lowEnd : H.middle; };
+    const rows = Object.entries(names).map(([k, label]) => { const r5 = h.range5[k], r10 = h.range10 && h.range10[k]; if (!r5 && !r10) return ""; const r = r5 || r10;
+      return `<tr><th>${label}</th><td class="num"><b>${fmtDec(r.now, 1)}</b></td><td class="num">${r5 ? `${fmtDec(r5.low, 1)} / ${fmtDec(r5.median, 1)} / ${fmtDec(r5.high, 1)}` : NA}</td><td class="num">${r10 && r10.n > (r5 ? r5.n : 0) ? `${fmtDec(r10.low, 1)} / ${fmtDec(r10.median, 1)} / ${fmtDec(r10.high, 1)}` : NA}</td><td>${pos(r5 || r10)}</td></tr>`; }).join("");
+    return sec(H.title, wrap(`<table class="tbl hist"><thead><tr><th>${H.metric}</th><th class="num">${H.now}</th><th class="num">${H.range5}</th><th class="num">${H.range10}</th><th>${H.position}</th></tr></thead><tbody>${rows}</tbody></table>`) + `<p class="note">${esc(H.note)}</p>`);
+  }
   function tabValuation(c) {
     const b = c.b; const v = b.valuation; const d = b.dcf; const V = t("val");
     if (!v) return `<p class="muted">${NA}</p>`;
@@ -666,7 +675,7 @@
       [V.quality, [[V.gm, fmtPct(v.grossMarginPct)], [V.om, fmtPct(v.opMarginPct)], [V.nm, fmtPct(v.netMarginPct)], [V.roe, fmtPct(v.roePct)], [V.roic, fmtPct(v.roicPct)], [V.roa, fmtPct(v.roaPct)], [V.ndEbitda, x(v.netDebtEbitda, 2)], [V.de, x(v.debtEquity, 2)], [V.cov, x(v.interestCoverage)], [V.cr, x(v.currentRatio, 2)]]],
       [V.market, [[V.beta, x(v.beta, 2)], [t("tech").high52, `$${x(v.yearHigh, 2)}${v.yearHighDate ? ` <span class="muted">(${fmtDate(v.yearHighDate)})</span>` : ""}`], [t("tech").low52, `$${x(v.yearLow, 2)}${v.yearLowDate ? ` <span class="muted">(${fmtDate(v.yearLowDate)})</span>` : ""}`], v.allTimeHigh ? [t("tech").ath, `$${x(v.allTimeHigh.price, 2)} <span class="muted">(${fmtDate(v.allTimeHigh.date)})</span>`] : null, [V.ma, `$${x(v.priceAvg50, 2)} / $${x(v.priceAvg200, 2)}`], [V.target, v.analystTarget ? `$${x(v.analystTarget.consensus, 2)} (${v.analystTarget.upsidePct >= 0 ? "+" : ""}${x(v.analystTarget.upsidePct)}%)` : NA]]],
     ];
-    const metrics = `<div class="grid3">${groups.map(([title, rows]) => sec(title, kv(rows))).join("")}</div>`;
+    const metrics = `<div class="grid3">${groups.map(([title, rows]) => sec(title, kv(rows))).join("")}</div>` + multiplesHistoryHtml(v.history, V);
     let dcfHtml;
     if (!d) dcfHtml = `<p class="muted">${V.noDcf}</p>`;
     else {
@@ -773,8 +782,8 @@
     const qs = `<ol class="imps">${(d.questions || []).map((q) => `<li>${esc(q)}</li>`).join("")}</ol>`;
     const cps = wrap(`<table class="tbl cps"><thead><tr><th>${D.premise}</th><th>${D.kpi}</th><th>${D.latest}</th><th>${D.failure}</th><th>${D.next}</th></tr></thead><tbody>${(d.checkpoints || []).map((x) => `<tr><td>${esc(x.premise)} <span class="tag">${esc(x.finding)}</span></td><td>${esc(x.kpi)}</td><td>${esc(x.latest)}</td><td>${esc(x.failure)}</td><td>${esc(x.next)}</td></tr>`).join("")}</tbody></table>`);
     const note = `<p class="note"><b>${D.caveats}:</b> ${esc(d.caveats)}</p><p class="note">${opts.updated || ""} ${esc(D.noAdvice)}</p>`;
-    return `${sec(D.findingsTitle, findings)}
-      ${sec(opts.storyTitle || D.storyTitle, story + `<h4 class="sub">${opts.battlefieldsTitle || D.battlefields}</h4>` + bf)}
+    return `${sec(opts.storyTitle || D.storyTitle, story + `<h4 class="sub">${opts.battlefieldsTitle || D.battlefields}</h4>` + bf)}
+      ${sec(D.findingsTitle, findings)}
       <table class="shk ov">${rows}</table>
       ${cons}
       ${sec(D.risks, risks)}

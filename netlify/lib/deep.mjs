@@ -6,7 +6,7 @@ import { logEvent } from "./events.mjs";
 import { runJson, fetchTranscripts, financialDigest, newsDigest, getCachedSummary } from "./summarize.mjs";
 import { deepSystemPrompt, translateDeepPrompt, DEEP_SCHEMA, DEEP_SECTION_KEYS, DEEP_ASSESSMENTS, normalizeAssessment } from "./prompts.mjs";
 
-const VERSION = "d3";
+const VERSION = "d4";
 const TRANSLATION_VERSION = "1";
 
 const filled = (v, min = 1) => typeof v === "string" && v.trim().length >= min;
@@ -101,6 +101,16 @@ export async function compensationDigest(symbol) {
     .map((r) => `${latest} ${r.name}: total ${M(r.total)} (salary ${M(r.salary)}, stock awards ${M(r.stockAward)}, incentive ${M(r.incentive)})`).join("\n") || "(none)";
 }
 
+/** "P/E now 38.6 vs 5y low/median/high 24.1/30.2/41.9 (10y 12.5/25.0/41.9), 80th percentile of the 5y values" per multiple. */
+export function multiplesDigest(h) {
+  if (!h || !h.years || !h.years.length) return "Multiples versus own history: not available.";
+  const names = { pe: "P/E", ps: "P/S", pb: "P/B", evEbitda: "EV/EBITDA", pfcf: "P/FCF" };
+  const parts = Object.entries(names).map(([k, label]) => { const r5 = h.range5 && h.range5[k], r10 = h.range10 && h.range10[k]; if (!r5 && !r10) return null; const r = r5 || r10;
+    return `${label} now ${r.now ?? "-"} vs 5y low/median/high ${r5 ? `${r5.low}/${r5.median}/${r5.high}` : "-"}${r10 ? ` (10y ${r10.low}/${r10.median}/${r10.high})` : ""}${r.percentile !== null && r.percentile !== undefined ? `, above ${r.percentile}% of the 5y fiscal-year-end values` : ""}`; }).filter(Boolean);
+  const series = h.years.map((y) => `FY${y.fy}: P/E ${y.pe ?? "-"}, P/S ${y.ps ?? "-"}, EV/EBITDA ${y.evEbitda ?? "-"}, P/FCF ${y.pfcf ?? "-"}`).join("; ");
+  return `Multiples versus own history (fiscal-year-end values; today's are TTM): ${parts.join("; ")}. Series: ${series}.`;
+}
+
 function marketDigest(bundle) {
   const v = bundle.valuation || {}, m = bundle.market || {}, d = bundle.dcf, p = bundle.prices || {};
   const yearly = (p.yearly || []).map((y) => `${y.label}: high ${y.high} low ${y.low}`).join("; ");
@@ -108,6 +118,7 @@ function marketDigest(bundle) {
   const lines = [
     `Dated market data ${bundle.asOf}: price $${m.price}, market cap ${m.marketCapM}M, trailing P/E ${v.pe}, forward P/E ${v.peForward} (FY2 ${v.peForward2}), P/S ${v.ps}, P/B ${v.pb}, P/FCF ${v.pfcf}, EV/EBITDA ${v.evEbitda}, EV/sales ${v.evSales}, FCF yield ${v.fcfYieldPct}%, dividend yield ${v.dividendYieldPct}%, beta ${v.beta}, 52-week ${v.yearLow}-${v.yearHigh}, all-time high ${v.allTimeHigh ? `${v.allTimeHigh.price} (${v.allTimeHigh.date})` : "-"}.`,
     `TTM returns: ROIC ${v.roicPct}%, ROE ${v.roePct}%, gross margin ${v.grossMarginPct}%, operating margin ${v.opMarginPct}%, net debt/EBITDA ${v.netDebtEbitda}.`,
+    multiplesDigest(v.history),
     `Yearly price range history: ${yearly || "-"}.`,
     `Consensus estimates: ${est || "-"}. Analyst rating: ${m.analystRating ? `${m.analystRating.consensus} (buy ${m.analystRating.buy}, hold ${m.analystRating.hold}, sell ${m.analystRating.sell})` : "-"}; price-target consensus ${m.analystTarget ? `$${m.analystTarget.consensus} (range ${m.analystTarget.low}-${m.analystTarget.high})` : "-"}.`,
     d ? `Site DCF (FCFF, 10-year, consensus-based, mechanical): value per share $${n2(d.perShare)} vs price $${n2(d.price)}; WACC ${n2(d.inputs.wacc)}% now to ${n2(d.inputs.waccMature)}% mature, terminal growth ${n2(d.inputs.g)}%, terminal ROIC ${n2(d.story.terminalRoic)}% (current ROIC ${n2(d.story.currentRoic)}%), year-10 revenue ${M(d.story.endRevenue)} (CAGR ${n2(d.story.revenueCagrPct)}%), target margin ${n2(d.story.targetMarginPct)}%, failure probability ${n2(d.story.failurePct)}%, terminal value share ${n2(d.terminalShare * 100, 0)}%. Reverse DCF (moat years implied by the price: years beyond year 10 that today's ROIC must persist before fading to WACC for the model to reach the price): ${d.story.impliedMoat ? (d.story.impliedMoat.noExcess ? "n/a (ROIC at or below WACC)" : d.story.impliedMoat.reached ? `${d.story.impliedMoat.years} years` : "more than 100 years (excess returns alone cannot explain the price)") : "-"}. Sensitivity (value per share) to 10-year revenue CAGR x year-10 margin: ${d.sensitivity && d.sensitivity.storyGrid ? d.sensitivity.storyGrid.map((row, i) => `CAGR ${n2(d.sensitivity.storyAxis.cagr[i], 1)}%: ${row.map((x) => `$${n2(x, 0)}`).join("/")}`).join("; ") + ` (margins ${d.sensitivity.storyAxis.margin.map((x) => n2(x, 1) + "%").join("/")})` : "-"}.` : "Site DCF: not available.",
@@ -130,7 +141,7 @@ export async function generateDeepEnglish(symbol, bundle) {
   const materials = [
     `## Research date ${bundle.asOf}; latest transcript ${bundle.latestTranscriptDate}; fiscal year ends month ${bundle.company.fiscalYearEndMonth}; reporting currency USD`,
     "## Financial data (recent)", financialDigest(bundle), "",
-    "## Ten-year history (from Financial Modeling Prep; reconcile to filings where material)", history, "",
+    "## Ten-year history (market data; reconcile to filings where material)", history, "",
     "## Market, consensus, ownership and the site's DCF / reverse-DCF outputs", marketDigest(bundle), "",
     "## Revenue by geography", geo, "",
     "## Peer metrics (trailing twelve months)", peers, "",

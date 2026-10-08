@@ -21,6 +21,7 @@ callers that can live without the panel wrap the call in `soft(promise, fallback
 | `cashFlows(symbol, {period, limit})` | `[{date, fiscalYear, period, operating, investing, financing, cashEnd, freeCashFlow, capex (negative), depreciation, buybacks (negative), dividendsPaid (negative, all classes), commonDividendsPaid, acquisitions}]` |
 | `keyMetrics(symbol, {period, limit})` | `[{date, fiscalYear, roe, roa, roic, investedCapital, capexToRevenue, rndToRevenue, sgaToRevenue, evToEbitda}]` |
 | `keyMetricsTtm(symbol)` | `{roe, roa, roic, enterpriseValue, evToSales, evToEbitda, evToOcf, evToFcf, earningsYield, fcfYield, netDebtToEbitda, rndToRevenue, sgaToRevenue, capexToRevenue, inventoryDays, investedCapital}` or `null` |
+| `ratios(symbol, {period, limit})` | fiscal-year-end multiples `[{date, fiscalYear, pe, ps, pb, pfcf, evEbitda, dividendYield}]` |
 | `ratiosTtm(symbol)` | `{pe, peg, pb, ps, pfcf, pocf, payout, epsTtm, bvps, fcfps, revenuePerShare, grossMargin, opMargin, netMargin, debtToEquity, interestCoverage, currentRatio, assetTurnover}` or `null` |
 | `incomeGrowth(symbol)` | latest fiscal year `{date, revenueGrowth, operatingIncomeGrowth}` or `null` |
 | `dividends(symbol, limit)` | `[{date (ex-date), paymentDate, amount (split-adjusted), frequency}]` |

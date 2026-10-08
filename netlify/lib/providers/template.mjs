@@ -15,6 +15,7 @@ export async function balanceSheets(symbol, { period = "annual", limit = 2 } = {
 export async function cashFlows(symbol, { period = "annual", limit = 10 } = {}) { return todo("cashFlows"); }
 export async function keyMetrics(symbol, { period = "annual", limit = 2 } = {}) { return todo("keyMetrics"); }
 export async function keyMetricsTtm(symbol) { return todo("keyMetricsTtm"); }
+export async function ratios(symbol, { period = "annual", limit = 10 } = {}) { return todo("ratios"); }
 export async function ratiosTtm(symbol) { return todo("ratiosTtm"); }
 export async function incomeGrowth(symbol) { return todo("incomeGrowth"); }
 export async function dividends(symbol, limit = 60) { return todo("dividends"); }
