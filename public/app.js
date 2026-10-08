@@ -92,7 +92,9 @@
     $("#searchInput").placeholder = t("searchPlaceholder");
     $("#searchBtn").textContent = t("search");
     $("#sectorsBtn").textContent = t("sectors.button");
-    try { localStorage.setItem("locale", loc); } catch {}
+    // Visitors: the choice lasts for this browser session only, so a new visit opens in the site
+    // language (Japanese on kabukaizu.com). Members: the choice is saved on the account below.
+    try { sessionStorage.setItem("locale", loc); localStorage.removeItem("locale"); } catch {}
     if (persist) track("lang", loc);
     if (persist && state.user && state.user.locale !== loc) api("/api/auth/locale", { method: "POST", body: { locale: loc } }).then((r) => { state.user = r.user; }).catch(() => {});
     renderUserMenu();
@@ -1070,8 +1072,8 @@
     try { state.config = await api("/api/config"); } catch { state.config = { locales: ["ja", "en"], defaultLocale: "ja", trialDays: 7, priceLabel: "US$10", billingEnabled: false, summariesEnabled: false }; }
     try { const me = await api("/api/auth/me"); state.user = me.user; state.ent = me.entitlement; } catch {}
     let loc = null;
-    try { loc = localStorage.getItem("locale"); } catch {}
-    if (!loc && state.user) loc = state.user.locale;
+    if (state.user) loc = state.user.locale; // a member's saved language
+    if (!loc) { try { loc = sessionStorage.getItem("locale"); } catch {} } // a visitor's toggle, this session only
     if (!loc) loc = state.config.defaultLocale; // site default (Japanese on the JP site), never the browser language
     state.route = parseRoute();
     applyBrand();
