@@ -193,7 +193,9 @@
         <p class="small"><span class="pill ok">${esc(L.noCard)}</span> ${esc(L.ctaAfter.replace("{price}", price))}</p>
       </div><span class="hero-credit">${esc(t("heroCredit"))}</span></section>
       <section class="land">
-        <h2>${esc(L.samplesTitle)}</h2><p class="lead">${esc(L.samplesLead)}</p>
+        <h2>${esc(L.samplesTitle)}</h2>
+        <div class="sample-links"><span class="btn small active">${esc(L.sampleStock)}</span> <a class="btn small" href="#/sector/${esc(state.config.sampleSector || "ai-chips")}">${esc(L.sampleSector)} →</a></div>
+        <p class="lead">${esc(L.samplesLead)}</p>
         <div class="demo-frame" data-demo></div>
       </section>
       <div class="land-row">
@@ -300,7 +302,7 @@
     app.innerHTML = `<div class="panel spinner">…</div>`;
     let r; try { r = await api("/api/sectors"); } catch (e) { app.innerHTML = `<div class="panel"><div class="error">${t("loadError")}</div></div>`; return; }
     const name = (o) => o[state.locale] || o.en;
-    const card = (sx) => `<a class="sector-card" href="#/sector/${esc(sx.id)}"><div class="sc-name">${esc(name(sx.name))}</div>${sx.desc ? `<div class="sc-desc muted">${esc(name(sx.desc))}</div>` : ""}<div class="sc-members muted small">${sx.members.length} ${X.names}: ${sx.members.slice(0, 12).map(esc).join(" ")}${sx.members.length > 12 ? " …" : ""}</div></a>`;
+    const card = (sx) => `<a class="sector-card" href="#/sector/${esc(sx.id)}"><div class="sc-name">${esc(name(sx.name))}${!state.ent?.access && sx.id === r.sample ? ` <span class="tag sample">${esc(X.sampleTag)}</span>` : ""}</div>${sx.desc ? `<div class="sc-desc muted">${esc(name(sx.desc))}</div>` : ""}<div class="sc-members muted small">${sx.members.length} ${X.names}: ${sx.members.slice(0, 12).map(esc).join(" ")}${sx.members.length > 12 ? " …" : ""}</div></a>`;
     const ai = r.sectors.filter((x) => x.group === "ai"), gics = r.sectors.filter((x) => x.group === "gics");
     app.innerHTML = `<section class="land sectors"><h2>${esc(X.title)}</h2><p class="lead">${esc(X.lead)}</p>
       <h3 class="sub">${esc(X.aiGroup)}</h3><div class="sector-grid">${ai.map(card).join("")}</div>
@@ -328,6 +330,7 @@
     else if (A.status === "pending" || A.status === null || A.status === undefined) { analysis = `<section class="card"><p style="margin:8px"><span class="spinner">${esc(X.generating)}</span></p></section>`; setTimeout(() => { if (state.route.view === "sector" && state.route.id === id) renderSector(id); }, 8000); }
     else if (A.status === "disabled") analysis = `<section class="card"><p class="muted" style="margin:8px">${t("summaryDisabled")}</p></section>`;
     else analysis = `<section class="card"><p class="muted" style="margin:8px">${t("summaryError")}${A.message ? ` <span class="small">(${esc(A.message)})</span>` : ""}</p></section>`;
+    if (A.sample) analysis = `<section class="card sample-note"><p>${esc(X.sampleNote)}</p><a class="btn primary" href="#/signup">${t("teaser").cta}</a> <a class="btn" href="#/login">${t("login")}</a></section>` + analysis;
     app.innerHTML = `<div class="panel"><div class="title-row"><h1>${esc(name(sx.name))}</h1><a class="btn small" href="#/sectors">← ${esc(X.title)}</a></div>${sx.desc ? `<p class="muted">${esc(name(sx.desc))}</p>` : ""}${layers}</div>
       ${sec(X.reportTitle, `<p class="muted deep-intro">${esc(X.reportIntro)}</p>`)}
       ${analysis}
@@ -755,8 +758,8 @@
       ${row(t("feature"), feature)}
       ${row(t("segments"), co.segments.length ? co.segments.map((x) => `${esc(x.name)}${x.sharePct ?? "?"}`).join("、") + (co.segmentsFiscalYear ? ` <${co.segmentsFiscalYear}>` : "") : NA)}
       ${row(t("sector"), `${esc(co.sector || "")} / ${esc(co.industry || "")}${co.sicDescription ? `　<span class="muted">${t("sic")}: ${esc(co.sicDescription)} (${esc(co.sicCode)})</span>` : ""}`)}
-      ${row(`<b>${t("story")}</b>`, aiBox(c, "story"))}
       ${row(`<b>${t("longTerm")}</b>`, aiBox(c, "longTerm"))}
+      ${row(`<b>${t("story")}</b>`, aiBox(c, "story"))}
       ${row(`<b>${t("recent")}</b>`, aiBox(c, "recent"))}
       ${row(`<b>${t("bull")}</b>`, aiBox(c, "bull"))}
       ${row(`<b>${t("bear")}</b>`, aiBox(c, "bear"))}
