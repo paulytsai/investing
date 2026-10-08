@@ -232,10 +232,11 @@ export default handler(async (req, context) => {
 
   // Drop one sector's AI report (every language, this period) so the next entitled view regenerates it.
   if (action === "polish" && req.method === "POST") {
-    // Rewrites finding shorthand (Q/T/V) and untranslated labels in every stored sector report, in the background.
-    const kind = String(query(req).get("kind") || "sector"); if (kind !== "sector") throw new HttpError(400, "kind must be sector");
+    // Rewrites finding shorthand (Q/T/V) and untranslated labels in every stored sector report or deep dive, in the background.
+    const kind = String(query(req).get("kind") || "sector"); if (!["sector", "deep"].includes(kind)) throw new HttpError(400, "kind must be sector or deep");
     const url = `${cfg.siteUrl().replace(/\/$/, "")}/.netlify/functions/polish-background`;
-    const res = await fetch(url, { method: "POST", headers: { "content-type": "application/json", "x-internal-secret": cfg.internalSecret() }, body: JSON.stringify({ kind, id: String(query(req).get("id") || "all"), lang: String(query(req).get("lang") || "all") }) });
+    const payload = kind === "deep" ? { kind, all: true } : { kind, id: String(query(req).get("id") || "all"), lang: String(query(req).get("lang") || "all") };
+    const res = await fetch(url, { method: "POST", headers: { "content-type": "application/json", "x-internal-secret": cfg.internalSecret() }, body: JSON.stringify(payload) });
     if (!res.ok && res.status !== 202) throw new HttpError(502, `trigger failed: HTTP ${res.status}`);
     return json({ ok: true, started: true });
   }
