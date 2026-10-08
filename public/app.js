@@ -15,6 +15,7 @@
     if (typeof v === "string" && vars) for (const k in vars) v = v.replace(`{${k}}`, vars[k]);
     if (typeof v === "string" && v.includes("{brand}")) v = v.split("{brand}").join(brandName());
     if (typeof v === "string" && v.includes("{currency}")) v = v.split("{currency}").join(currencyName());
+    if (typeof v === "string" && v.includes("{trial")) { const days = (state.config && state.config.trialDays) || 7; v = v.split("{trialSpan}").join(window.trialSpan(days, state.locale)).split("{trial}").join(window.trialLabel(days, state.locale)); }
     return v;
   }
   const brandName = () => (state.config && state.config.brand && state.config.brand.name) || "Kabukaizu";
