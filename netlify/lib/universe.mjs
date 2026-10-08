@@ -24,7 +24,7 @@ export function baseUniverse() {
 export async function warmUniverse() {
   const base = baseUniverse();
   if (process.env.WARM_ONLY_EXTRA === "1") return base;
-  if (process.env.WARM_SP500 === "0") return base; // S&P 500 expansion paused: only the static names are warmed
+  if (process.env.WARM_SP500 !== "1") return base; // S&P 500 pre-generation is off unless WARM_SP500=1 (about $1 per new ticker)
   let rest = [];
   try { rest = Object.values(await sp500BySector()).flat().sort(); } catch (e) { console.warn("S&P 500 list unavailable for the warmer:", e.message); }
   return [...new Set([...base, ...rest])];
