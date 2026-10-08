@@ -7,7 +7,7 @@ import { getUser, findUserByLogin, createUser, saveUser } from "../lib/users.mjs
 import { openStore } from "../lib/store.mjs";
 import { stockBundle, normalizeSymbol } from "../lib/stockdata.mjs";
 import { cfg } from "../lib/config.mjs";
-import { warmUniverse } from "../lib/universe.mjs";
+import { fullUniverse, sp500WarmingOn } from "../lib/universe.mjs";
 import { dispatchWarm, warmStatus, warmCoverage, warmSettings } from "../lib/warmer.mjs";
 import { pendingResets } from "../lib/users.mjs";
 import { createAccessCode, listAccessCodes, deactivateAccessCode } from "../lib/coupons.mjs";
@@ -65,7 +65,7 @@ export default handler(async (req, context) => {
     for (const u of users) { const st = entitlement(u).state; states[st] = (states[st] || 0) + 1; }
     const warm = (await warmStatus()).last;
     const coverage = await warmCoverage();
-    const universe = await warmUniverse();
+    const universe = await fullUniverse(); // coverage is always measured against the S&P 500
     const langs = [...new Set(["en", ...cfg.locales()])]; langs.push(...langs.map((l) => `deep-${l}`));
     const covCounts = Object.fromEntries(langs.map((l) => [l, universe.filter((sym) => coverage[sym]?.ready?.[l]).length]));
     const pending = universe.filter((sym) => !langs.every((l) => coverage[sym]?.ready?.[l]));
@@ -84,7 +84,7 @@ export default handler(async (req, context) => {
         countries: Object.entries(geo.countries).map(([code, c]) => ({ code, events: c.events, views: c.views, visitors: c.visitors.size, members: c.members.size })).sort((a, b) => b.events - a.events),
         places: Object.values(geo.places).map((t) => ({ country: t.country, region: t.region, city: t.city, events: t.events, people: t.who.size })).sort((a, b) => b.events - a.events).slice(0, 40),
       },
-      warm: { universe: universe.length, perRun: warmSettings().perRun, settings: warmSettings(), last: warm, langs, coverage: covCounts, pending, untouched, done: universe.length - pending.length, generatedToday: todayAi.length, costToday: Math.round(costToday * 100) / 100, current: warm?.running ? [].concat(warm.current || []).join(", ") : null },
+      warm: { universe: universe.length, sp500On: sp500WarmingOn(), perRun: warmSettings().perRun, settings: warmSettings(), last: warm, langs, coverage: covCounts, pending, untouched, done: universe.length - pending.length, generatedToday: todayAi.length, costToday: Math.round(costToday * 100) / 100, current: warm?.running ? [].concat(warm.current || []).join(", ") : null },
       contact: await recentMessages(),
       mail: { configured: mailConfigured(), pendingResets: (await pendingResets()).map((r) => ({ username: r.username, email: r.email, link: `${cfg.siteUrl().replace(/\/$/, "")}/#/reset/${r.token}`, expiresAt: r.expiresAt })) },
       coupons: await listAccessCodes(),

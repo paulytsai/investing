@@ -21,11 +21,19 @@ export function baseUniverse() {
  * constituent (from the market-data provider, cached a day). Falls back to the static list
  * when the index list is unavailable.
  */
-export async function warmUniverse() {
+/** The whole coverage universe (S&P 500 + the static names), whether or not pre-generation is switched on. */
+export async function fullUniverse() {
   const base = baseUniverse();
   if (process.env.WARM_ONLY_EXTRA === "1") return base;
-  if (process.env.WARM_SP500 !== "1") return base; // S&P 500 pre-generation is off unless WARM_SP500=1 (about $1 per new ticker)
   let rest = [];
-  try { rest = Object.values(await sp500BySector()).flat().sort(); } catch (e) { console.warn("S&P 500 list unavailable for the warmer:", e.message); }
+  try { rest = Object.values(await sp500BySector()).flat().sort(); } catch (e) { console.warn("S&P 500 list unavailable:", e.message); }
   return [...new Set([...base, ...rest])];
 }
+
+/** What the warmer actually works through: the full universe when WARM_SP500=1, otherwise only the static names. */
+export async function warmUniverse() {
+  if (process.env.WARM_SP500 !== "1") return baseUniverse(); // S&P 500 pre-generation is off unless WARM_SP500=1 (about $1 per new ticker)
+  return fullUniverse();
+}
+
+export function sp500WarmingOn() { return process.env.WARM_SP500 === "1"; }
