@@ -349,7 +349,7 @@
 
   function tabOverview(c) {
     const b = c.b; const co = b.company; const m = b.market; const v = b.valuation || {}; const f = b.financials;
-    const feature = c.s ? esc(c.s.feature) : esc((co.businessSummary || co.description || "").slice(0, 240));
+    const feature = c.s ? esc(c.s.feature) : (c.summaryStatus === "pending" || c.summaryStatus === null ? `<span class="spinner">${t("generating")}</span>` : esc((co.businessSummary || co.description || "").slice(0, 240)));
     const rating = m.analystRating ? `${esc(m.analystRating.consensus)}（Buy ${m.analystRating.buy} / Hold ${m.analystRating.hold ?? 0} / Sell ${m.analystRating.sell}）` : NA;
     const target = m.analystTarget ? `$${fmtDec(m.analystTarget.consensus)}（$${fmtDec(m.analystTarget.low)}〜$${fmtDec(m.analystTarget.high)}）` : NA;
     const sg = (b.growth.salesGrowth || []).map((x) => `${esc(x.label)} ${x.pct !== null ? (x.pct >= 0 ? "+" : "") + fmtDec(x.pct, 1) + "%" : NA}`).join("　");

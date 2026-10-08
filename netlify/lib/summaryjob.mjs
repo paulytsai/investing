@@ -1,5 +1,5 @@
 // Shared "return cached summary or start a background job" logic.
-import { getCachedSummary } from "./summarize.mjs";
+import { getCachedSummary, summaryKey } from "./summarize.mjs";
 import { openStore } from "./store.mjs";
 import { cfg } from "./config.mjs";
 
@@ -11,7 +11,7 @@ export async function summaryStatus(symbol, lang, bundle) {
   if (cachedSummary) return { status: "ready", summary: cachedSummary };
 
   const jobs = await openStore("jobs");
-  const jobKey = `summary:v7:${symbol}:${lang}:${bundle.latestTranscriptDate || "none"}`;
+  const jobKey = `job:${summaryKey(symbol, lang, bundle.latestTranscriptDate)}`;
   const existing = await jobs.get(jobKey);
   const now = Date.now();
   if (existing && existing.status === "error" && now - existing.updatedAt < 60 * 1000) return { status: "error", message: existing.message };

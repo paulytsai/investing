@@ -58,7 +58,7 @@ window.I18N = {
     unitM: "単位：百万ドル",
     unitUsd: "ドル",
     // basic
-    name: "銘柄名", fiscalYear: "決算", ipo: "上場", incorporation: "登記州", feature: "特色", segments: "連結事業",
+    name: "銘柄名", fiscalYear: "決算", ipo: "上場", incorporation: "登記州", feature: "プロフィール", segments: "連結事業",
     sector: "業種", sic: "SIC業種", longTerm: "長期トレンド", recent: "直近動向", hq: "本社", phone: "電話番号", employees: "従業員",
     exchange: "証券", url: "ＵＲＬ", shares: "株式", opMargin: "営業利益率", peers: "比較会社", nextEarnings: "次回決算", analysts: "アナリスト",
     target: "目標株価", ceo: "ＣＥＯ", marketCap: "時価総額", sharesOut: "発行済", million: "百万", millionShares: "百万株", billion: "億",
@@ -270,7 +270,7 @@ window.I18N = {
     },
     ranges: { "1m": "1個月", "3m": "3個月", "6m": "6個月", "1y": "1年", "3y": "3年", "5y": "5年", "10y": "10年" },
     updated: "{date}更新", unitM: "單位：百萬美元", unitUsd: "美元",
-    name: "公司名稱", fiscalYear: "會計年度結算", ipo: "上市", incorporation: "註冊州", feature: "特色", segments: "營收結構",
+    name: "公司名稱", fiscalYear: "會計年度結算", ipo: "上市", incorporation: "註冊州", feature: "プロフィール", segments: "營收結構",
     sector: "產業", sic: "SIC產業", longTerm: "長期趨勢", recent: "近期動態", hq: "總部", phone: "電話", employees: "員工人數",
     exchange: "交易所", url: "網址", shares: "股本", opMargin: "營業利益率", peers: "同業", nextEarnings: "下次財報", analysts: "分析師",
     target: "目標價", ceo: "執行長", marketCap: "市值", sharesOut: "流通在外", million: "百萬", millionShares: "百萬股", billion: "億",

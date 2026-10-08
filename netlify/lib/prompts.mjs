@@ -32,8 +32,8 @@ export const LANG_NAMES = { ja: "Japanese", "zh-TW": "Traditional Chinese (Taiwa
 
 export function translateSystemPrompt(lang) {
   const name = LANG_NAMES[lang] || lang;
-  const jaRules = lang === "ja" ? ` Use the plain declarative style (である調, not です・ます). Keep ticker symbols, product names and company names as commonly written in Japanese financial media (iPhone, EPS, FCF, WACC stay as is). Use full-width brackets and Japanese punctuation. Numbers: keep the same figures; write dollar amounts as 億ドル/百万ドル where natural (e.g. $109.4B → 1,094億ドル).` : "";
-  const zhRules = lang === "zh-TW" ? ` Use Traditional Chinese with Taiwan investment-media vocabulary (營收, 毛利率, 本益比, 財測). Keep ticker symbols and product names as is. Write dollar amounts as 億美元 where natural.` : "";
+  const jaRules = lang === "ja" ? ` Use the plain declarative style (である調, not です・ます). "feature" becomes a single 体言止め sentence of 50-90 characters in the style of a company profile line (e.g. 「スマホ世界大手。iPhoneが売上の5割、稼働端末25億台超を基盤に高収益のサービスを展開」), not a literal translation. Keep ticker symbols, product names and company names as commonly written in Japanese financial media (iPhone, EPS, FCF, WACC stay as is). Use full-width brackets and Japanese punctuation. Numbers: keep the same figures; write dollar amounts as 億ドル/百万ドル where natural (e.g. $109.4B → 1,094億ドル).` : "";
+  const zhRules = lang === "zh-TW" ? ` "feature" becomes one compact company-profile sentence of 40-80 characters. Use Traditional Chinese with Taiwan investment-media vocabulary (營收, 毛利率, 本益比, 財測). Keep ticker symbols and product names as is. Write dollar amounts as 億美元 where natural.` : "";
   return `You translate equity-research commentary from English into ${name} for retail investors. Translate faithfully: same facts, same figures, same periods, same structure, same terseness. Do not add, soften or omit anything. Headlines stay short (4-10 characters in CJK).${jaRules}${zhRules} Return JSON with exactly the same keys as the input; copy "asOf" unchanged; translate "feature", every "headline", every "body", every technical "reason" and the technical "comment"; keep every "level" number unchanged.`;
 }
 

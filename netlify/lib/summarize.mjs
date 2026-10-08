@@ -9,10 +9,12 @@ import { englishSystemPrompt, translateSystemPrompt, OUTPUT_SCHEMA, TEXT_SCHEMA 
 
 const MAX_TRANSCRIPT_CHARS = 60000;
 const TRANSCRIPTS_TO_USE = 4;
-const VERSION = "v7";
+const VERSION = "v7"; // English generation
+const TRANSLATION_VERSION = "2"; // bump to re-translate without regenerating English
 
 export function summaryKey(symbol, lang, latestTranscriptDate) {
-  return `${VERSION}:${symbol}:${lang}:${latestTranscriptDate || "none"}`;
+  const v = lang === "en" ? VERSION : `${VERSION}t${TRANSLATION_VERSION}`;
+  return `${v}:${symbol}:${lang}:${latestTranscriptDate || "none"}`;
 }
 
 export async function getCachedSummary(symbol, lang, latestTranscriptDate) {
