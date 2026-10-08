@@ -725,13 +725,14 @@
   function chipsHtml(c, inline = false) {
     const D = t("deep"); const F = c.d && c.d.findings; const S = t("simpleUi");
     if (!F) return inline ? "" : (c.deepStatus === "pending" ? `<p class="chips muted small"><span class="spinner">${esc(D.generating)}</span></p>` : `<p class="chips muted small"><a href="#" data-opendeep>${esc(S.noDeep)}</a></p>`);
-    const chip = (k) => { const f = F[k]; if (!f) return ""; const a = String(f.assessment).toLowerCase(); return `<span class="chip ${CHIP_TONE[a] || "na"}" title="${esc(f.decisive || "")}"><span class="chip-k">${esc(D.f[k])}</span><span class="chip-v">${esc(D.asm[a] || f.assessment)}</span></span>`; };
+    const FKEY = { quality: "fQuality", trajectory: "fTrajectory", valuation: "fValuation" };
+    const chip = (k) => { const f = F[k]; if (!f) return ""; const a = String(f.assessment).toLowerCase(); return `<span class="chip ${CHIP_TONE[a] || "na"}" title="${esc(f.decisive || "")}"><span class="chip-k">${esc(D.f[k])}</span><span class="chip-v">${esc(D.asm[a] || f.assessment)}</span>${inline ? "" : helpBtn(FKEY[k])}</span>`; };
     return `<${inline ? "span" : "div"} class="chips">${chip("quality")}${chip("trajectory")}${chip("valuation")}</${inline ? "span" : "div"}>`;
   }
   function renderSimple(c) {
     const el = c.root && c.root.querySelector("[data-simple]"); if (!el) return;
     const S = t("simpleUi"); const r = c.simple; const st = c.simpleStatus;
-    const body = r ? `<dl class="sr-list">${["what", "growth", "profit", "price", "watch"].map((k) => `<div class="sr-row"><dt>${esc(S.labels[k])}${k === "price" ? helpBtn("pe") : ""}</dt><dd>${esc(r[k])}</dd></div>`).join("")}</dl>`
+    const body = r ? `<dl class="sr-list">${["what", "growth", "profit", "price", "watch"].map((k) => `<div class="sr-row"><dt>${esc(S.labels[k])}${k === "price" ? helpBtn("peNtm") : ""}</dt><dd>${esc(r[k])}</dd></div>`).join("")}</dl>`
       : st === "disabled" ? `<p class="muted">${t("summaryDisabled")}</p>` : st === "error" ? `<p class="muted">${t("summaryError")}</p>` : `<p><span class="spinner">${esc(S.generating)}</span></p>`;
     el.innerHTML = `<section class="card simple-read"><h3 class="sec"><span class="sec-t">${esc(S.title)}</span><span class="sec-extra">${esc(S.sub)}</span></h3>${chipsHtml(c)}${body}<p class="sr-links"><a href="#/guide">${esc(S.guideLink)}</a>${viewMode() === "simple" ? ` · <a href="#" data-fullview>${esc(S.fullLink)}</a>` : ` · <a href="#" data-simpleview>${esc(S.simpleLink)}</a>`}</p></section>`;
     const fv = el.querySelector("[data-fullview]"); if (fv) fv.addEventListener("click", (ev) => { ev.preventDefault(); setViewMode("full"); });
@@ -819,7 +820,11 @@
   function glossaryReading(key, b) {
     if (!b) return ""; const S = t("simpleUi"); const v = b.valuation || {}, h = v.history && v.history.range5;
     const rng = (k, now) => (h && h[k] && now !== null && now !== undefined ? S.reading.replace("{now}", fmtDec(now, 1)).replace("{low}", fmtDec(h[k].low, 1)).replace("{high}", fmtDec(h[k].high, 1)).replace("{pos}", rangePos(h[k], S)) : "");
+    const d = (state.route.view === "stock" ? state.stock.d : null) || (state.demo && state.demo.d) || null;
+    const FK = { fQuality: "quality", fTrajectory: "trajectory", fValuation: "valuation" };
+    if (FK[key]) { const f = d && d.findings && d.findings[FK[key]]; return f ? `${t("deep").asm[String(f.assessment).toLowerCase()] || f.assessment}: ${f.decisive || f.mechanism || ""}` : ""; }
     switch (key) {
+      case "peNtm": { const ntm = v.epsNtm && b.market && b.market.price ? b.market.price / v.epsNtm : v.peForward; return ntm ? `${S.readingNtm.replace("{x}", fmtDec(ntm, 1))} ${rng("pe", v.pe)}`.trim() : ""; }
       case "pe": return rng("pe", v.pe); case "pb": return rng("pb", v.pb); case "ps": return rng("ps", v.ps); case "pfcf": return rng("pfcf", v.pfcf); case "evEbitda": return rng("evEbitda", v.evEbitda);
       case "roic": return v.roicPct !== null && v.roicPct !== undefined && b.dcf && b.dcf.inputs ? S.readingRoic.replace("{roic}", fmtDec(v.roicPct, 1)).replace("{wacc}", fmtDec(b.dcf.inputs.wacc, 1)) : "";
       case "netDebtEbitda": return v.netDebtEbitda !== null && v.netDebtEbitda !== undefined ? S.readingNd.replace("{x}", fmtDec(v.netDebtEbitda, 1)) : "";
@@ -1110,8 +1115,10 @@
     const F = d.findings || {};
     const names = opts.findingNames || D.f;
     const open = viewMode() !== "simple" ? " open" : "";
+    const FKEYS = { Q: "fQuality", T: "fTrajectory", V: "fValuation" };
     const letter = (x) => ({ Q: names.quality, T: names.trajectory, V: names.valuation }[String(x || "").toUpperCase()] || x);
-    const card = (key, f) => f ? `<details class="finding"${open}><summary class="f-head"><span class="f-title">${names[key]}</span><span class="pill asm ${esc(String(f.assessment).toLowerCase()).replace(/[^a-z]/g, "")}">${esc(D.asm[String(f.assessment).toLowerCase()] || f.assessment)}</span><span class="muted small">${D.conf[String(f.confidence).toLowerCase()] || esc(f.confidence)}</span></summary>
+    const tag = (x) => `<span class="tag">${esc(letter(x))}</span>${FKEYS[String(x || "").toUpperCase()] ? helpBtn(FKEYS[String(x || "").toUpperCase()]) : ""}`;
+    const card = (key, f) => f ? `<details class="finding"${open}><summary class="f-head"><span class="f-title">${names[key]}${helpBtn({ quality: "fQuality", trajectory: "fTrajectory", valuation: "fValuation" }[key])}</span><span class="pill asm ${esc(String(f.assessment).toLowerCase()).replace(/[^a-z]/g, "")}">${esc(D.asm[String(f.assessment).toLowerCase()] || f.assessment)}</span><span class="muted small">${D.conf[String(f.confidence).toLowerCase()] || esc(f.confidence)}</span></summary>
       <p class="f-mech">${esc(f.mechanism)}</p>
       <p><b>${D.evidence}:</b> ${esc(f.evidence)}</p><p><b>${D.counter}:</b> ${esc(f.counterevidence)}</p><p class="f-dec"><b>${D.decisive}:</b> ${esc(f.decisive)}</p></details>` : "";
     const findings = `<div class="findings">${card("quality", F.quality)}${card("trajectory", F.trajectory)}${card("valuation", F.valuation)}</div>${F.divergences ? `<p class="divergences"><b>${D.divergences}:</b> ${esc(F.divergences)}</p>` : ""}`;
@@ -1121,9 +1128,9 @@
     const piece = (k) => secs[k] ? `<div class="ai"><span class="hl">${esc(secs[k].headline)}</span><span class="body">${esc(secs[k].body)}</span></div>` : "";
     const rows = ["history", "detective", "moat", "outlook", "cycle", "management", "valuationDetail", "consensus"].filter((k) => secs[k]).map((k) => `<details class="dd-sec"${open}><summary><b>${D[k]}</b><span class="hl">${esc(secs[k].headline)}</span></summary><p class="body">${esc(secs[k].body)}</p></details>`).join("");
     const cons = d.constituents && d.constituents.length ? (wrap(`<table class="tbl"><thead><tr><th>${D.symbol}</th><th>${D.role}</th><th>${D.read}</th></tr></thead><tbody>${d.constituents.map((x) => `<tr><th><a href="#/s/${esc(x.symbol)}">${esc(x.symbol)}</a></th><td>${esc(x.role)}</td><td>${esc(x.read)}</td></tr>`).join("")}</tbody></table>`)) : "";
-    const risks = wrap(`<table class="tbl"><thead><tr><th>${D.risk}</th><th>${D.indicator}</th><th>${D.affects}</th></tr></thead><tbody>${(d.risks || []).map((r) => `<tr><td>${esc(r.risk)}</td><td>${esc(r.indicator)}</td><td class="c"><span class="tag">${esc(letter(r.finding))}</span></td></tr>`).join("")}</tbody></table>`);
+    const risks = wrap(`<table class="tbl"><thead><tr><th>${D.risk}</th><th>${D.indicator}</th><th>${D.affects}</th></tr></thead><tbody>${(d.risks || []).map((r) => `<tr><td>${esc(r.risk)}</td><td>${esc(r.indicator)}</td><td class="c">${tag(r.finding)}</td></tr>`).join("")}</tbody></table>`);
     const qs = `<ol class="imps">${(d.questions || []).map((q) => `<li>${esc(q)}</li>`).join("")}</ol>`;
-    const cps = wrap(`<table class="tbl cps"><thead><tr><th>${D.premise}</th><th>${D.kpi}</th><th>${D.latest}</th><th>${D.failure}</th><th>${D.next}</th></tr></thead><tbody>${(d.checkpoints || []).map((x) => `<tr><td>${esc(x.premise)} <span class="tag">${esc(letter(x.finding))}</span></td><td>${esc(x.kpi)}</td><td>${esc(x.latest)}</td><td>${esc(x.failure)}</td><td>${esc(x.next)}</td></tr>`).join("")}</tbody></table>`);
+    const cps = wrap(`<table class="tbl cps"><thead><tr><th>${D.premise}</th><th>${D.kpi}</th><th>${D.latest}</th><th>${D.failure}</th><th>${D.next}</th></tr></thead><tbody>${(d.checkpoints || []).map((x) => `<tr><td>${esc(x.premise)} ${tag(x.finding)}</td><td>${esc(x.kpi)}</td><td>${esc(x.latest)}</td><td>${esc(x.failure)}</td><td>${esc(x.next)}</td></tr>`).join("")}</tbody></table>`);
     const note = `<p class="note"><b>${D.caveats}:</b> ${esc(d.caveats)}</p><p class="note">${opts.updated || ""} ${esc(D.noAdvice)}</p>`;
     const dd = (title, inner, isOpen = open) => `<details class="dd"${isOpen}><summary class="sec"><span class="sec-t">${title}</span></summary>${inner}</details>`;
     return `${sec(opts.storyTitle || D.storyTitle, story)}
