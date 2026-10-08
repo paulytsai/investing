@@ -1,7 +1,7 @@
 // UI strings for Kabukaizu (ja / en / zh-TW).
 window.I18N = {
   ja: {
-    siteName: "Kabukaizu",
+    siteName: "{brand}",
     tagline: "米国上場企業の業績・財務・株主・役員を1ページに。決算説明会と最新ニュースをAIが要約する米国株アルマナック。",
     searchPlaceholder: "ティッカー・会社名",
     search: "検索",
@@ -84,7 +84,7 @@ window.I18N = {
     language: "言語",
     landing: {
       heroTitle: "米国株という大海原の、あなたの水先案内人。",
-      heroLead: "Kabukaizuは、米国上場企業の業績・財務・株主・役員を1ページに収めた米国株アルマナック。決算説明会の内容と最新ニュースをAIが読み込み、長期トレンドと直近動向を日本語で要約します。",
+      heroLead: "{brand}は、米国上場企業の業績・財務・株主・役員を1ページに収めた米国株アルマナック。決算説明会の内容と最新ニュースをAIが読み込み、長期トレンドと直近動向を日本語で要約します。",
       ctaPrimary: "7日間無料で試す",
       ctaSecondary: "ログイン",
       ctaNote: "クレジットカード不要。トライアル後は月額 {price}（現地通貨換算）、いつでも解約可。",
@@ -125,7 +125,7 @@ window.I18N = {
     },
   },
   en: {
-    siteName: "Kabukaizu",
+    siteName: "{brand}",
     tagline: "One-page profiles of US-listed companies: results, financials, holders and officers, plus AI digests of earnings calls and news.",
     searchPlaceholder: "Ticker or company name",
     search: "Search", login: "Log in", signup: "Sign up", logout: "Log out", account: "Account",
@@ -189,7 +189,7 @@ window.I18N = {
     language: "Language",
     landing: {
       heroTitle: "Your pilot guide for the blue ocean of US stocks.",
-      heroLead: "Kabukaizu is a US stock almanac: results, financials, holders and officers for any US-listed company on one page, with AI digests of the earnings calls and latest news so you can see the long-term trend and the recent quarters at a glance.",
+      heroLead: "{brand} is a US stock almanac: results, financials, holders and officers for any US-listed company on one page, with AI digests of the earnings calls and latest news so you can see the long-term trend and the recent quarters at a glance.",
       ctaPrimary: "Start 7-day free trial",
       ctaSecondary: "Log in",
       ctaNote: "No card needed for the trial. Then {price}, billed in your local currency, cancel anytime.",
@@ -230,7 +230,7 @@ window.I18N = {
     },
   },
   "zh-TW": {
-    siteName: "Kabukaizu",
+    siteName: "{brand}",
     tagline: "一頁掌握美國上市公司的業績、財務、股東與經營層，並以AI摘要財報電話會議與最新新聞的美股年鑑。",
     searchPlaceholder: "代號或公司名稱",
     search: "搜尋", login: "登入", signup: "註冊", logout: "登出", account: "帳戶",
@@ -294,7 +294,7 @@ window.I18N = {
     language: "語言",
     landing: {
       heroTitle: "引領您航向美股藍海的領航指南。",
-      heroLead: "Kabukaizu 是美股年鑑：任何美國上市公司的業績、財務、股東與經營層，一頁看完。AI 讀取財報電話會議與最新新聞，整理出長期趨勢與近期動態。",
+      heroLead: "{brand} 是美股年鑑：任何美國上市公司的業績、財務、股東與經營層，一頁看完。AI 讀取財報電話會議與最新新聞，整理出長期趨勢與近期動態。",
       ctaPrimary: "免費試用7天",
       ctaSecondary: "登入",
       ctaNote: "試用不需信用卡。之後每月 {price}，以當地貨幣計價，隨時可取消。",

@@ -69,6 +69,12 @@ export const cfg = {
   internalSecret() {
     return env("INTERNAL_SECRET") || cfg.authSecret();
   },
+  brand() {
+    const id = env("SITE_BRAND") || (cfg.defaultLocale() === "zh-TW" ? "guhaitu" : "kabukaizu");
+    return id === "guhaitu"
+      ? { id, name: "Guhaitu", seal: "股海圖", sub: "US Stock Almanac", sealImage: "/img/seal-guhaitu.png", favicon: "/favicon-guhaitu.png", touchIcon: "/apple-touch-icon-guhaitu.png" }
+      : { id: "kabukaizu", name: "Kabukaizu", seal: "株海図", sub: "US Stock Almanac", sealImage: "/img/seal.png", favicon: "/favicon.png", touchIcon: "/apple-touch-icon.png" };
+  },
   isProduction() {
     return env("CONTEXT") === "production";
   },

@@ -10,6 +10,7 @@ export default handler(async () => {
     priceLabel: lemon.priceLabel,
     billingEnabled: !!(lemon.checkoutUrl || (lemon.store && lemon.variantId)),
     summariesEnabled: !!cfg.anthropicKey(),
+    brand: cfg.brand(),
   });
 });
 

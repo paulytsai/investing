@@ -13,7 +13,16 @@
     let v = key.split(".").reduce((o, k) => (o ? o[k] : undefined), dict);
     if (v === undefined) v = key.split(".").reduce((o, k) => (o ? o[k] : undefined), window.I18N.en) ?? key;
     if (typeof v === "string" && vars) for (const k in vars) v = v.replace(`{${k}}`, vars[k]);
+    if (typeof v === "string" && v.includes("{brand}")) v = v.split("{brand}").join(brandName());
     return v;
+  }
+  const brandName = () => (state.config && state.config.brand && state.config.brand.name) || "Kabukaizu";
+  function applyBrand() {
+    const b = (state.config && state.config.brand) || {};
+    document.querySelectorAll(".brand-name").forEach((el) => (el.textContent = b.name || "Kabukaizu"));
+    document.querySelectorAll(".brand-sub").forEach((el) => (el.textContent = b.sub || "US Stock Almanac"));
+    const ico = document.querySelector('link[rel="icon"]'); if (ico && b.favicon) ico.href = b.favicon;
+    const touch = document.querySelector('link[rel="apple-touch-icon"]'); if (touch && b.touchIcon) touch.href = b.touchIcon;
   }
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const isCJK = () => state.locale !== "en";
@@ -129,9 +138,9 @@
     stopSummaryPolling(state.stock); stopSummaryPolling(state.demo);
     const price = state.config.priceLabel;
     if (!state.user) {
-      const L = t("landing");
+      const L = JSON.parse(JSON.stringify(t("landing")).split("{brand}").join(brandName()));
       app.innerHTML = `
-      <section class="hero hero-wave"><img class="hero-seal" src="/img/seal.png" alt="株海図"><div class="hero-inner"><div class="brand"><span class="brand-text"><span class="brand-name">Kabukaizu</span><span class="brand-sub">US Stock Almanac</span></span></div>
+      <section class="hero hero-wave"><img class="hero-seal" src="${esc((state.config.brand && state.config.brand.sealImage) || "/img/seal.png")}" alt="${esc((state.config.brand && state.config.brand.seal) || "株海図")}"><div class="hero-inner"><div class="brand"><span class="brand-text"><span class="brand-name">${esc(brandName())}</span><span class="brand-sub">${esc((state.config.brand && state.config.brand.sub) || "US Stock Almanac")}</span></span></div>
         <h1>${esc(L.heroTitle)}</h1><p class="lead">${esc(L.heroLead)}</p>
         <div class="actions"><a class="btn primary big" href="#/signup">${esc(L.ctaPrimary)}</a><a class="btn big" href="#/login">${esc(L.ctaSecondary)}</a></div>
         <p class="small">${esc(L.ctaNote.replace("{price}", price))}</p>
@@ -570,6 +579,7 @@
     if (!loc && state.user) loc = state.user.locale;
     if (!loc) loc = state.config.defaultLocale; // site default (Japanese on the JP site), never the browser language
     state.route = parseRoute();
+    applyBrand();
     setLocale(loc, false);
   }
   init();

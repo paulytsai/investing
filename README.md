@@ -28,8 +28,11 @@ One codebase, deployed as separate Netlify sites with different `SITE_LOCALES` (
 
 | Site | `SITE_LOCALES` | Toggle shown |
 | --- | --- | --- |
-| Japanese site | `ja,en` | 日本語 / English |
-| Traditional Chinese site | `zh-TW,en` | 繁體中文 / English |
+| Japanese site (Kabukaizu, 株海図 seal) | `ja,en` | 日本語 / English |
+| Traditional Chinese site (Guhaitu, 股海圖 seal) | `zh-TW,en` | 繁體中文 / English |
+
+`SITE_BRAND` (`kabukaizu` or `guhaitu`) picks the wordmark, seal and favicon;
+it defaults from `SITE_DEFAULT_LOCALE`.
 
 UI strings live in `public/i18n.js`. AI commentary is generated and cached per
 ticker **and** per language, so switching the toggle shows native-language text,
