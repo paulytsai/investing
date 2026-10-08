@@ -340,6 +340,9 @@ table.shk th.rowh { width: 8.5em; }
 .btn.danger-outline { color: #b42318; border-color: #e2a5a0; background: #fff; }
 .form #deletePw { margin-top: 8px; }
 .admin h2 { font-size: 22px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.admin .sec .ranges { display: inline-flex; gap: 4px; margin-left: 10px; vertical-align: middle; }
+.admin .sec .ranges button { font-size: 12px; padding: 2px 8px; }
+.admin .kv { margin: 8px 0 12px; }
 .stats-admin { grid-template-columns: repeat(6, 1fr); margin-bottom: 12px; }
 .bars { display: flex; align-items: flex-end; gap: 4px; height: 160px; padding: 0 8px 22px; position: relative; }
 .bar { flex: 1; position: relative; height: 100%; display: flex; align-items: flex-end; }

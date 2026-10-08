@@ -42,7 +42,7 @@ export async function logEvent(action, { user, detail, req } = {}) {
     const day = now.toISOString().slice(0, 10).replace(/-/g, "");
     const geo = geoOf(req);
     const who = user ? user.username : (req ? visitorId(req) : "anon");
-    const place = clean(`${geo.region || ""}~${geo.city || ""}`);
+    const place = `${clean(geo.region || "")}~${clean(geo.city || "")}`; // "~" separates region and city inside the key
     const key = `ev:${day}:${now.getTime()}:${Math.random().toString(36).slice(2, 6)}:${clean(who)}:${clean(action)}:${clean(detail)}:${clean(geo.country)}:${place}`;
     const ua = req && req.headers && req.headers.get ? String(req.headers.get("user-agent") || "").slice(0, 160) : "";
     const value = { geo, ua, lang: req && req.headers && req.headers.get ? String(req.headers.get("accept-language") || "").slice(0, 40) : "", ref: req && req.headers && req.headers.get ? String(req.headers.get("referer") || "").slice(0, 200) : "", visitor: req ? visitorId(req) : null };
@@ -55,7 +55,8 @@ export async function logEvent(action, { user, detail, req } = {}) {
 function parseKey(k) {
   const [, day, ms, , user, action, detail, country = "ZZ", place = ""] = k.split(":");
   const [region = "", city = ""] = place.split("~");
-  return { key: k, day: `${day.slice(0, 4)}-${day.slice(4, 6)}-${day.slice(6, 8)}`, ts: Number(ms), user, action, detail, country: country || "ZZ", region: region.replace(/_/g, " ") || null, city: city.replace(/_/g, " ") || null, anon: !user || user === "anon" || user.startsWith("v_") };
+  const tidy = (x) => x.replace(/_/g, " ").trim() || null;
+  return { key: k, day: `${day.slice(0, 4)}-${day.slice(4, 6)}-${day.slice(6, 8)}`, ts: Number(ms), user, action, detail, country: country || "ZZ", region: tidy(region), city: tidy(city), anon: !user || user === "anon" || user.startsWith("v_") };
 }
 
 /** Events for the last `days` days (newest first); location comes from the key, so no values are read. */

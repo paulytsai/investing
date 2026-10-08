@@ -93,9 +93,21 @@
     $("#searchBtn").textContent = t("search");
     $("#sectorsBtn").textContent = t("sectors.button");
     try { localStorage.setItem("locale", loc); } catch {}
+    if (persist) track("lang", loc);
     if (persist && state.user && state.user.locale !== loc) api("/api/auth/locale", { method: "POST", body: { locale: loc } }).then((r) => { state.user = r.user; }).catch(() => {});
     renderUserMenu();
     render();
+  }
+
+  // ---------- usage tracking (what each member does on the page; admin traffic is dropped server-side) ----------
+  const TAB_KEYS = ["overview", "financials", "valuation", "technical", "holders", "deep"];
+  function track(action, detail) {
+    try { if (state.user && state.user.role === "admin") return; fetch("/api/track", { method: "POST", keepalive: true, headers: { "content-type": "application/json" }, body: JSON.stringify({ action, detail: String(detail || "").slice(0, 40) }) }).catch(() => {}); } catch {}
+  }
+  let lastTrackedPage = null;
+  function trackPage(view) {
+    const key = `${view}|${location.hash}`; if (key === lastTrackedPage) return; lastTrackedPage = key;
+    if (view !== "stock") track("page", view); // stock pages are logged by the data request itself
   }
 
   // ---------- user menu ----------
@@ -130,8 +142,9 @@
     const pm = !location.hash && location.pathname.match(/^\/s\/([A-Za-z0-9.\-]+)\/?$/);
     if (pm) return { view: "stock", symbol: decodeURIComponent(pm[1]).toUpperCase(), ssr: true };
     const h = location.hash.replace(/^#\/?/, "").split("?")[0];
-    const [a, b] = h.split("/");
+    const [a, b, c] = h.split("/");
     if (a === "s" && b) return { view: "stock", symbol: decodeURIComponent(b).toUpperCase() };
+    if (a === "admin" && b === "user" && c) return { view: "adminUser", username: decodeURIComponent(c) };
     if (a === "reset" && b) return { view: "reset", token: b };
     if (a === "sector" && b) return { view: "sector", id: decodeURIComponent(b) };
     if (a === "sectors") return { view: "sectors" };
@@ -147,6 +160,8 @@
 
   function render() {
     const r = state.route;
+    trackPage(r.view);
+    if (r.view === "adminUser") return state.user && state.user.role === "admin" ? renderAdminUser(r.username) : renderAuth("login");
     if (r.view === "login") return renderAuth("login");
     if (r.view === "signup") return renderAuth("signup");
     if (r.view === "forgot") return renderForgot();
@@ -290,6 +305,7 @@
       <div class="footer">${t("disclaimer")}<br><a href="#/about">${t("about.link")}</a> · <a href="#/contact">${t("contact.link")}</a></div>`;
   }
   async function renderSector(id) {
+    track("sector_report", id);
     stopSummaryPolling(state.stock); stopSummaryPolling(state.demo);
     const X = t("sectors"); const D = t("deep");
     app.innerHTML = `<div class="panel spinner">…</div>`;
@@ -423,8 +439,7 @@
     try { d = await api("/api/admin/stats"); } catch (e) { app.innerHTML = `<div class="panel"><div class="error">${esc(e.message)}</div></div>`; return; }
     const T = d.totals;
     const tile = (l, v, sub = "") => `<div class="stat"><div class="stat-l">${l}</div><div class="stat-v">${v}</div>${sub ? `<div class="stat-s">${sub}</div>` : ""}</div>`;
-    const maxV = Math.max(1, ...d.series.map((x) => x.views + x.demo));
-    const bars = d.series.map((x) => `<div class="bar" title="${x.day}: views ${x.views}, demo ${x.demo}, logins ${x.logins}, signups ${x.signups}, AI ${x.ai}"><div class="bar-fill" style="height:${Math.round(((x.views + x.demo) / maxV) * 100)}%"></div><div class="bar-fill demo" style="height:${Math.round((x.demo / maxV) * 100)}%"></div><span class="bar-l">${x.day.slice(5)}</span></div>`).join("");
+    const bars = activityBars(d.series);;
     const states = Object.entries(T.states).map(([k, v]) => `${k} ${v}`).join(" · ");
     const w = d.warm.last;
     app.innerHTML = `<div class="admin">
@@ -435,14 +450,22 @@
         ${d.warm.langs.map((l) => { const n = d.warm.coverage[l] || 0; const p = Math.round((n / d.warm.universe) * 100); return `<div class="cov"><span class="cov-l">${esc(l)}</span><div class="cov-bar"><div class="cov-fill" style="width:${p}%"></div></div><span class="cov-n">${fmtInt(n)} / ${fmtInt(d.warm.universe)}</span></div>`; }).join("")}
         <p class="note">${d.warm.pending.length ? `Queued (${d.warm.pending.length}): ${d.warm.pending.slice(0, 80).map((x) => esc(x)).join(", ")}${d.warm.pending.length > 80 ? ", …" : ""}` : "All tickers have every language."}</p>
       </section>
-      <section class="card"><h3 class="sec">Daily activity (30 days)<span class="sec-extra">views + demo (light)</span></h3><div class="bars">${bars}</div></section>
+      <section class="card"><h3 class="sec">Daily activity <span class="ranges" data-actranges>${[[30, "30d"], [60, "60d"], [90, "90d"], [180, "6m"], [365, "1y"]].map(([n, l]) => `<button data-range="${n}" class="${n === 30 ? "active" : ""}">${l}</button>`).join("")}</span><span class="sec-extra">views + demo (light) · weekly bars beyond 90 days · JST days</span></h3><div class="bars" id="activityBars">${bars}</div><p class="note" id="activityNote"></p></section>
+      <section class="card"><h3 class="sec">Where visitors are from (30 days)<span class="sec-extra">by Netlify geolocation of each request · members and anonymous visitors</span></h3>
+        <div class="grid2b">${wrap(`<table class="tbl"><thead><tr><th>Country</th><th>Events</th><th>Page views</th><th>Visitors</th><th>Members</th></tr></thead><tbody>${(d.geo.countries || []).map((c) => `<tr><td>${esc(countryName(c.code))}</td><td class="num">${fmtInt(c.events)}</td><td class="num">${fmtInt(c.views)}</td><td class="num">${fmtInt(c.visitors)}</td><td class="num">${fmtInt(c.members)}</td></tr>`).join("") || "<tr><td>—</td></tr>"}</tbody></table>`)}
+        ${wrap(`<table class="tbl"><thead><tr><th>City</th><th>Events</th><th>People</th></tr></thead><tbody>${(d.geo.places || []).map((p) => `<tr><td>${esc([p.city, p.region, countryName(p.country)].filter(Boolean).join(", "))}</td><td class="num">${fmtInt(p.events)}</td><td class="num">${fmtInt(p.people)}</td></tr>`).join("") || "<tr><td>—</td></tr>"}</tbody></table>`)}</div>
+      </section>
       <div class="grid2b">
         <section class="card"><h3 class="sec">Top tickers (30 days)</h3>${wrap(`<table class="tbl"><tbody>${d.topSymbols.map((x) => `<tr><th><a href="#/s/${esc(x.symbol)}">${esc(x.symbol)}</a></th><td class="num">${x.views}</td></tr>`).join("") || "<tr><td>—</td></tr>"}</tbody></table>`)}</section>
         ${d.contact && d.contact.length ? `<section class="card"><h3 class="sec">Contact messages</h3>${wrap(`<table class="tbl"><tbody>${d.contact.map((m) => `<tr><th>${esc(m.createdAt.slice(0, 16).replace("T", " "))}</th><td>${esc(m.name)}<br><a href="mailto:${esc(m.email)}">${esc(m.email)}</a>${m.username ? `<br><span class="muted">user ${esc(m.username)}</span>` : ""}</td><td style="white-space:pre-wrap">${esc(m.message)}</td><td class="muted">${m.sent ? "emailed" : "stored"}</td></tr>`).join("")}</tbody></table>`)}</section>` : ""}
         ${d.mail && d.mail.pendingResets.length ? `<section class="card"><h3 class="sec">Password reset links${d.mail.configured ? "" : " (email not configured: send these by hand)"}</h3>${wrap(`<table class="tbl"><tbody>${d.mail.pendingResets.map((r) => `<tr><th>${esc(r.username)}</th><td>${esc(r.email)}</td><td><a href="${esc(r.link)}">${esc(r.link)}</a></td><td class="muted">${esc(new Date(r.expiresAt).toISOString().slice(11, 16))} UTC</td></tr>`).join("")}</tbody></table>`)}</section>` : ""}
-        <section class="card"><h3 class="sec">Recent activity</h3>${wrap(`<table class="tbl"><tbody>${d.recent.map((e) => `<tr><th>${esc(new Date(e.ts).toISOString().slice(5, 16).replace("T", " "))}</th><td>${esc(e.user)}</td><td>${esc(e.action)}</td><td>${esc(e.detail)}</td></tr>`).join("")}</tbody></table>`)}</section>
+        <section class="card"><h3 class="sec">Recent activity<span class="sec-extra">JST</span></h3>${wrap(`<table class="tbl"><tbody>${d.recent.map((e) => `<tr><th>${esc(fmtJst(e.ts))}</th><td>${whoLink(e.user)}</td><td>${esc(e.action)}</td><td>${esc(e.detail)}</td><td class="muted">${esc(placeOf(e))}</td></tr>`).join("")}</tbody></table>`)}</section>
       </div>
-      <section class="card"><h3 class="sec">Users</h3>${wrap(`<table class="tbl"><thead><tr><th>User</th><th>Email</th><th>Signed up</th><th>Status</th><th>Last seen (30d)</th></tr></thead><tbody>${d.users.map((u) => `<tr><td>${esc(u.username)}${u.role ? ` <span class="pill">${esc(u.role)}</span>` : ""}</td><td>${esc(u.email)}</td><td>${esc(fmtDate(new Date(u.createdAt).toISOString()))}</td><td>${esc(u.state)}${u.status ? ` (${esc(u.status)})` : ""}</td><td>${u.lastSeen ? esc(new Date(u.lastSeen).toISOString().slice(0, 16).replace("T", " ")) : "—"}</td></tr>`).join("")}</tbody></table>`)}</section>
+      <section class="card"><h3 class="sec">Access log<span class="sec-extra">every recorded request · JST</span></h3>
+        <form id="logForm" class="coupon-admin"><select name="days"><option value="1">today</option><option value="7" selected>7 days</option><option value="30">30 days</option></select> <input name="user" placeholder="user or visitor id" style="width:12em"> <input name="action" placeholder="action (view, tab, search…)" style="width:14em"> <input name="country" placeholder="CC" maxlength="2" style="width:4em;text-transform:uppercase"> <button class="btn small" type="submit">Load</button> <span id="logMsg" class="muted small"></span></form>
+        <div id="logTable"></div>
+      </section>
+      <section class="card"><h3 class="sec">Users<span class="sec-extra">click a name for everything that member did</span></h3>${wrap(`<table class="tbl"><thead><tr><th>User</th><th>Email</th><th>Signed up</th><th>Status</th><th>Lang</th><th>Events 30d</th><th>Last seen (JST)</th><th>Location</th></tr></thead><tbody>${d.users.map((u) => `<tr><td><a href="#/admin/user/${esc(encodeURIComponent(u.username))}">${esc(u.username)}</a>${u.role ? ` <span class="pill">${esc(u.role)}</span>` : ""}</td><td>${esc(u.email)}</td><td>${esc(fmtDate(new Date(u.createdAt).toISOString()))}</td><td>${esc(u.state)}${u.status ? ` (${esc(u.status)})` : ""}</td><td>${esc(u.locale || "")}</td><td class="num">${fmtInt(u.events30d || 0)}</td><td>${u.lastSeen ? esc(fmtJst(u.lastSeen)) : "—"}</td><td class="muted">${u.location ? esc(placeOf(u.location)) : ""}</td></tr>`).join("")}</tbody></table>`)}</section>
       <section class="card"><h3 class="sec">Access codes (free months, no card)</h3>
         <form id="couponForm" class="coupon-admin"><input name="code" placeholder="CODE" required maxlength="40" style="text-transform:uppercase"> <input name="months" type="number" min="1" max="60" value="6" style="width:5em" title="months"> <input name="max" type="number" min="0" value="0" style="width:5em" title="max uses (0 = unlimited)"> <input name="expires" type="date" title="expires"> <input name="note" placeholder="note" maxlength="120"> <button class="btn small" type="submit">Create / update</button> <span id="couponMsg" class="muted small"></span></form>
         <div id="couponList">${wrap(`<table class="tbl"><thead><tr><th>Code</th><th>Months</th><th>Uses</th><th>Expires</th><th>Note</th><th></th></tr></thead><tbody>${(d.coupons || []).map((c) => `<tr><td><code>${esc(c.code)}</code>${c.active ? "" : " <span class=\"pill\">off</span>"}</td><td class="num">${c.months}</td><td class="num">${c.uses}${c.maxUses ? ` / ${c.maxUses}` : ""}</td><td>${c.expiresAt ? esc(new Date(c.expiresAt).toISOString().slice(0, 10)) : "—"}</td><td>${esc(c.note || "")}</td><td>${c.active ? `<button class="btn small" data-off="${esc(c.code)}">Deactivate</button>` : ""}</td></tr>`).join("") || `<tr><td colspan="6" class="muted">None yet. A code gives its months of free access, no card; a link such as ${esc(location.origin)}/?coupon=CODE pre-fills it.</td></tr>`}</tbody></table>`)}</div>
@@ -454,8 +477,52 @@
       try { await api(`/api/admin/coupon?${q}`, { method: "POST" }); renderAdmin(); } catch (e) { $("#couponMsg").textContent = e.message; }
     });
     document.querySelectorAll("#couponList [data-off]").forEach((b) => b.addEventListener("click", async () => { try { await api(`/api/admin/coupon?deactivate=1&code=${encodeURIComponent(b.dataset.off)}`, { method: "POST" }); renderAdmin(); } catch (e) { $("#couponMsg").textContent = e.message; } }));
+    // activity chart ranges (rolled up server-side; long ranges may need a second request)
+    document.querySelectorAll("[data-actranges] button").forEach((btn) => btn.addEventListener("click", async () => {
+      document.querySelectorAll("[data-actranges] button").forEach((x) => x.classList.toggle("active", x === btn));
+      const n = Number(btn.dataset.range); $("#activityNote").textContent = "loading…";
+      try { let r, tries = 0; do { r = await api(`/api/admin/series?days=${n}`); tries++; } while (r.incomplete && tries < 12); $("#activityBars").innerHTML = activityBars(r.series.filter((x) => !x.pending)); $("#activityNote").textContent = r.incomplete ? "Some older days are still being rolled up; click again." : ""; }
+      catch (e) { $("#activityNote").textContent = e.message; }
+    }));
+    // access log
+    const loadLog = async () => {
+      const f = $("#logForm"); const q = new URLSearchParams({ days: f.days.value, user: f.user.value.trim(), action: f.action.value.trim(), country: f.country.value.trim(), limit: "300" });
+      $("#logMsg").textContent = "loading…";
+      try { const r = await api(`/api/admin/events?${q}`); $("#logMsg").textContent = `${fmtInt(r.total)} events in ${r.days} day(s)${r.total > r.events.length ? `, showing ${r.events.length}` : ""}`; $("#logTable").innerHTML = wrap(`<table class="tbl"><thead><tr><th>Time (JST)</th><th>Who</th><th>Action</th><th>Detail</th><th>Location</th></tr></thead><tbody>${r.events.map((e) => `<tr><th>${esc(fmtJst(e.ts))}</th><td>${whoLink(e.user)}</td><td>${esc(e.action)}</td><td>${esc(e.detail)}</td><td class="muted">${esc(placeOf(e))}</td></tr>`).join("") || "<tr><td>—</td></tr>"}</tbody></table>`); }
+      catch (e) { $("#logMsg").textContent = e.message; }
+    };
+    $("#logForm").addEventListener("submit", (ev) => { ev.preventDefault(); loadLog(); }); loadLog();
     const warmClick = (id, url, label) => $(id).addEventListener("click", async () => { $(id).disabled = true; try { const r = await api(url, { method: "POST" }); $(id).textContent = `${label} (${r.shards} shards)`; } catch (e) { $(id).textContent = e.message; } });
     warmClick("#warmBtn", "/api/admin/warm", "Warmer started"); warmClick("#warmAllBtn", "/api/admin/warm?full=1", "Full run started");
+  }
+
+  // ---------- admin helpers ----------
+  const fmtJst = (ts) => { try { return new Intl.DateTimeFormat("ja-JP", { timeZone: "Asia/Tokyo", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false }).format(new Date(ts)); } catch { return new Date(ts).toISOString().slice(0, 16).replace("T", " "); } };
+  const countryName = (code) => { if (!code || code === "ZZ") return "unknown"; try { return `${new Intl.DisplayNames(["en"], { type: "region" }).of(code)} (${code})`; } catch { return code; } };
+  const placeOf = (e) => [e.city, e.region, e.country && e.country !== "ZZ" ? e.country : null].filter(Boolean).join(", ") || (e.country === "ZZ" ? "unknown" : "");
+  const whoLink = (u) => !u || u === "anon" || u === "system" ? esc(u || "") : `<a href="#/admin/user/${esc(encodeURIComponent(u))}">${esc(u)}</a>${u.startsWith("v_") ? ' <span class="muted small">visitor</span>' : ""}`;
+  function activityBars(series) {
+    let rows = series;
+    if (rows.length > 90) { // weekly buckets for long ranges
+      const weeks = []; for (let i = 0; i < rows.length; i += 7) { const w = rows.slice(i, i + 7); weeks.push({ day: `${w[0].day} – ${w[w.length - 1].day.slice(5)}`, views: w.reduce((a, x) => a + (x.views || 0), 0), demo: w.reduce((a, x) => a + (x.demo || 0), 0), logins: w.reduce((a, x) => a + (x.logins || 0), 0), signups: w.reduce((a, x) => a + (x.signups || 0), 0), ai: w.reduce((a, x) => a + (x.ai || 0), 0), activeUsers: Math.max(...w.map((x) => x.activeUsers || 0)) }); } rows = weeks;
+    }
+    const maxV = Math.max(1, ...rows.map((x) => (x.views || 0) + (x.demo || 0)));
+    const every = rows.length > 40 ? Math.ceil(rows.length / 20) : 1;
+    return rows.map((x, i) => `<div class="bar" title="${esc(x.day)}: views ${x.views || 0}, demo ${x.demo || 0}, logins ${x.logins || 0}, signups ${x.signups || 0}, AI ${x.ai || 0}, active members ${x.activeUsers || 0}"><div class="bar-fill" style="height:${Math.round((((x.views || 0) + (x.demo || 0)) / maxV) * 100)}%"></div><div class="bar-fill demo" style="height:${Math.round(((x.demo || 0) / maxV) * 100)}%"></div>${i % every === 0 ? `<span class="bar-l">${esc(String(x.day).slice(5, 10))}</span>` : ""}</div>`).join("");
+  }
+  async function renderAdminUser(username) {
+    stopSummaryPolling(state.stock); stopSummaryPolling(state.demo);
+    app.innerHTML = `<div class="panel spinner">…</div>`;
+    let d; try { d = await api(`/api/admin/user?username=${encodeURIComponent(username)}`); } catch (e) { app.innerHTML = `<div class="panel"><div class="error">${esc(e.message)}</div></div>`; return; }
+    const u = d.user; const tile = (l, v, sub = "") => `<div class="stat"><div class="stat-l">${l}</div><div class="stat-v">${v}</div>${sub ? `<div class="stat-s">${sub}</div>` : ""}</div>`;
+    const list = (title, rows, fmt = (r) => esc(r.key)) => `<section class="card"><h3 class="sec">${title}</h3>${rows.length ? wrap(`<table class="tbl"><tbody>${rows.map((r) => `<tr><th>${fmt(r)}</th><td class="num">${fmtInt(r.n)}</td></tr>`).join("")}</tbody></table>`) : "<p class='muted'>—</p>"}</section>`;
+    app.innerHTML = `<div class="admin">
+      <h2><a class="btn small" href="#/admin">← ${t("billing.adminPanel")}</a> ${esc(u.username)}${u.anonymous ? ' <span class="pill">anonymous visitor</span>' : u.role ? ` <span class="pill">${esc(u.role)}</span>` : ""}</h2>
+      ${u.anonymous ? "" : `<div class="kv"><div>Email</div><div>${esc(u.email)}</div><div>Signed up</div><div>${esc(fmtJst(u.createdAt))}</div><div>Status</div><div>${esc(u.entitlement.state)}${u.subscription ? ` · ${esc(u.subscription.status)}${u.subscription.cardBrand ? ` · ${esc(u.subscription.cardBrand)} ${esc(u.subscription.cardLastFour || "")}` : ""}${u.subscription.renewsAt ? ` · renews ${esc(fmtDate(u.subscription.renewsAt))}` : ""}` : u.trialEndsAt ? ` · free until ${esc(fmtDate(new Date(u.trialEndsAt).toISOString()))}` : ""}</div><div>Language</div><div>${esc(u.locale || "")}</div>${u.coupons && u.coupons.length ? `<div>Codes</div><div>${u.coupons.map((c) => `${esc(c.code)} (${c.months}m, ${esc(fmtJst(c.at))})`).join(", ")}</div>` : ""}</div>`}
+      <div class="stats stats-admin">${tile("Events (90d)", fmtInt(d.total))}${tile("Days active", fmtInt(d.daysActive))}${tile("First seen", d.firstSeen ? esc(fmtJst(d.firstSeen)) : "—")}${tile("Last seen", d.lastSeen ? esc(fmtJst(d.lastSeen)) : "—")}${tile("Devices", d.devices.map((x) => `${esc(x.key)} ${x.n}`).join(" · ") || "—")}</div>
+      <div class="grid2b">${list("Locations", d.locations)}${list("Tickers viewed", d.tickers, (r) => `<a href="#/s/${esc(r.key)}">${esc(r.key)}</a>`)}${list("Tabs opened", d.tabs)}${list("Actions", d.actions)}${list("Sectors", d.sectors)}${list("Searches", d.searches)}</div>
+      <section class="card"><h3 class="sec">Timeline<span class="sec-extra">JST · newest first</span></h3>${wrap(`<table class="tbl"><thead><tr><th>Time</th><th>Action</th><th>Detail</th><th>Location</th><th>Device</th></tr></thead><tbody>${d.timeline.map((e) => `<tr><th>${esc(fmtJst(e.ts))}</th><td>${esc(e.action)}</td><td>${esc(e.detail)}</td><td class="muted">${esc(placeOf(e))}</td><td class="muted">${esc(e.device || "")}</td></tr>`).join("") || "<tr><td>—</td></tr>"}</tbody></table>`)}</section>
+    </div>`;
   }
 
   function renderPaywall() {
@@ -583,8 +650,8 @@
       </div>
       <div class="tabs" data-tabs>${t("tabs").map((x, i) => `<button data-tab="${i}" class="${i === c.tab ? "active" : ""}">${esc(x)}</button>`).join("")}</div>
       <div data-tabbody></div>`;
-    container.querySelectorAll("[data-ranges] button").forEach((btn) => btn.addEventListener("click", () => { c.chartRange = btn.dataset.range; container.querySelectorAll("[data-ranges] button").forEach((x) => x.classList.toggle("active", x === btn)); loadChart(c); }));
-    container.querySelectorAll("[data-tabs] button").forEach((btn) => btn.addEventListener("click", () => { c.tab = Number(btn.dataset.tab); container.querySelectorAll("[data-tabs] button").forEach((x) => x.classList.toggle("active", x === btn)); renderTab(c); if (!c.demo) window.scrollTo({ top: container.querySelector("[data-tabs]").offsetTop - 8, behavior: "smooth" }); }));
+    container.querySelectorAll("[data-ranges] button").forEach((btn) => btn.addEventListener("click", () => { c.chartRange = btn.dataset.range; if (!c.demo) track("range", `${state.symbol}_${c.chartRange}`); container.querySelectorAll("[data-ranges] button").forEach((x) => x.classList.toggle("active", x === btn)); loadChart(c); }));
+    container.querySelectorAll("[data-tabs] button").forEach((btn) => btn.addEventListener("click", () => { c.tab = Number(btn.dataset.tab); if (!c.demo) track("tab", `${state.symbol}_${TAB_KEYS[c.tab] || c.tab}`); container.querySelectorAll("[data-tabs] button").forEach((x) => x.classList.toggle("active", x === btn)); renderTab(c); if (!c.demo) window.scrollTo({ top: container.querySelector("[data-tabs]").offsetTop - 8, behavior: "smooth" }); }));
     renderTab(c);
     loadChart(c);
   }
@@ -611,7 +678,7 @@
     const body = c.root && c.root.querySelector("[data-tabbody]"); if (!body) return;
     body.innerHTML = [tabOverview, tabFinancials, tabValuation, tabTechnical, tabHolders, tabDeep][c.tab](c);
     if (c.tab === 2) bindTarget(c);
-    if (c.tab === 3) { body.querySelectorAll("[data-techranges] button").forEach((btn) => btn.addEventListener("click", () => { c.techRange = btn.dataset.range; body.querySelectorAll("[data-techranges] button").forEach((x) => x.classList.toggle("active", x === btn)); loadTechChart(c); })); loadTechChart(c); }
+    if (c.tab === 3) { body.querySelectorAll("[data-techranges] button").forEach((btn) => btn.addEventListener("click", () => { c.techRange = btn.dataset.range; if (!c.demo) track("techrange", `${state.symbol}_${c.techRange}`); body.querySelectorAll("[data-techranges] button").forEach((x) => x.classList.toggle("active", x === btn)); loadTechChart(c); })); loadTechChart(c); }
     if (c.tab === 5 && !c.d && c.deepStatus !== "pending" && c.deepStatus !== "disabled") loadDeep(c);
     markScrollable(body);
   }
@@ -803,6 +870,7 @@
   function bindTarget(c) {
     const root = c.root; if (!root) return;
     const input = root.querySelector("input.tpe"); if (!input) return;
+    if (!c.demo) input.addEventListener("input", () => { if (!c._tpTracked) { c._tpTracked = true; track("target", state.symbol); } });
     const v = c.b.valuation; const eps = v.epsNtm || v.epsForward;
     const update = () => {
       const m = Number(input.value);

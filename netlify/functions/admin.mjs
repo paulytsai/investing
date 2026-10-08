@@ -91,6 +91,32 @@ export default handler(async (req, context) => {
     });
   }
 
+  // Daily activity series for up to a year. Past days are rolled up once and stored
+  // (rollup:YYYYMMDD in the jobs store); today is always counted live. At most 45 missing
+  // rollups are computed per call; the response says when more remain.
+  if (action === "series") {
+    const days = Math.min(366, Math.max(1, Number(query(req).get("days") || 30)));
+    const jobs = await openStore("jobs");
+    const adminNames = new Set((await listUsers()).filter((u) => u.role === "admin").map((u) => u.username));
+    const fold = (evs) => { const d = { views: 0, demo: 0, logins: 0, signups: 0, searches: 0, ai: 0, users: new Set(), visitors: new Set() }; for (const e of evs) { if (adminNames.has(e.user)) continue; if (e.action === "view") d.views++; else if (e.action === "demo_view" || e.action === "teaser_page") d.demo++; else if (e.action === "login") d.logins++; else if (e.action === "signup") d.signups++; else if (e.action === "search") d.searches++; else if (["ai_generate", "ai_deep", "ai_sector"].includes(e.action)) d.ai++; if (e.user && !e.anon && e.user !== "system") d.users.add(e.user); else if (e.user && e.user.startsWith("v_")) d.visitors.add(e.user); } return { views: d.views, demo: d.demo, logins: d.logins, signups: d.signups, searches: d.searches, ai: d.ai, activeUsers: d.users.size, visitors: d.visitors.size }; };
+    const now = Date.now(); const out = []; let computed = 0, incomplete = false;
+    const todayKey = new Date(now).toISOString().slice(0, 10);
+    for (let i = days - 1; i >= 0; i--) {
+      const day = new Date(now - i * 86400000).toISOString().slice(0, 10);
+      const k = `rollup:${day.replace(/-/g, "")}`;
+      let rec = day === todayKey ? null : await jobs.get(k);
+      if (!rec) {
+        if (day !== todayKey && computed >= 45) { incomplete = true; out.push({ day, pending: true }); continue; }
+        const store = await openStore("events");
+        const keys = await store.list(`ev:${day.replace(/-/g, "")}:`);
+        rec = fold(keys.map((key) => { const [, , ms, , user, action, detail] = key.split(":"); return { ts: Number(ms), user, action, detail, anon: !user || user === "anon" || user.startsWith("v_") }; }));
+        if (day !== todayKey) { await jobs.set(k, rec); computed++; }
+      }
+      out.push({ day, ...rec });
+    }
+    return json({ days, series: out, incomplete });
+  }
+
   // Access log: every recorded event for the last `days` days (max 30), filtered by user, action or country.
   if (action === "events") {
     const q = query(req);
@@ -120,8 +146,8 @@ export default handler(async (req, context) => {
       actions: count((e) => e.action),
       sectors: count((e) => e.action === "sector_view" || e.action === "sector_report" ? e.detail : null),
       searches: count((e) => e.action === "search" ? e.detail : null).slice(0, 30),
-      locations: count((e) => [e.country, e.region, e.city].filter(Boolean).join(" / ")),
-      devices: count((e) => e.ua ? (/(iPhone|iPad|Android)/.test(e.ua) ? "mobile" : "desktop") : null),
+      locations: count((e) => [e.city, e.region, e.country !== "ZZ" ? e.country : null].filter(Boolean).join(", ") || "unknown"),
+      devices: (() => { const m = {}; for (const e of details) { if (!e.ua) continue; const k = /(iPhone|iPad|Android)/.test(e.ua) ? "mobile" : "desktop"; m[k] = (m[k] || 0) + 1; } return Object.entries(m).map(([key, n]) => ({ key, n })); })(),
       timeline: details.slice(0, 400).map(({ key, ua, ...e }) => ({ ...e, device: ua ? (/iPhone|iPad/.test(ua) ? "iOS" : /Android/.test(ua) ? "Android" : /Macintosh/.test(ua) ? "Mac" : /Windows/.test(ua) ? "Windows" : "other") : null })),
     });
   }
