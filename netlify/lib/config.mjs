@@ -32,7 +32,11 @@ export const cfg = {
     return env("SITE_URL") || env("URL") || "http://localhost:8888";
   },
   authSecret() {
-    return env("AUTH_SECRET") || (env("NETLIFY") ? require("AUTH_SECRET") : "dev-only-insecure-secret");
+    const v = env("AUTH_SECRET");
+    if (v) return v;
+    // On Netlify (Lambda runtime / Blobs context present) a real secret is mandatory.
+    if (env("NETLIFY") || env("AWS_LAMBDA_FUNCTION_NAME") || env("NETLIFY_BLOBS_CONTEXT")) require("AUTH_SECRET");
+    return "dev-only-insecure-secret";
   },
   trialDays() {
     return Number(env("TRIAL_DAYS", "7"));
