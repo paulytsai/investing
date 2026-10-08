@@ -32,6 +32,7 @@ export async function readJson(req) {
 export function handler(fn) {
   return async (req, context) => {
     try {
+      if (context && context.geo) req.nfGeo = context.geo; // Netlify's per-request geolocation, read by the event log
       return await fn(req, context);
     } catch (e) {
       if (e instanceof HttpError) return error(e.status, e.code, e.message, e.extra);

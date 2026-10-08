@@ -27,7 +27,7 @@ export default async (req) => {
   const saveCoverage = async () => { try { await status.set(`warm:coverage:${shard}`, coverage); } catch (e) { console.warn("coverage save failed", e.message); } };
   await save();
   const coverage = (await status.get(`warm:coverage:${shard}`)) || {};
-  const queue = shardSymbols(shard, shards);
+  const queue = await shardSymbols(shard, shards);
   const overBudget = () => Date.now() - started > RUN_BUDGET_MS;
   let generations = 0;
   const active = new Set();

@@ -7,10 +7,24 @@ export const SP100 = [
   "QCOM", "RTX", "SBUX", "SCHW", "SO", "SPG", "T", "TGT", "TMO", "TMUS", "TSLA", "TXN", "UBER", "UNH", "UNP", "UPS", "USB", "V", "VZ", "WFC", "WMT", "XOM",
 ];
 
-import { sectorSymbols } from "./sectors.mjs";
+import { sectorSymbols, sp500BySector } from "./sectors.mjs";
 
-export function warmUniverse() {
+/** Static part of the universe: S&P 100, the curated AI names and WARM_SYMBOLS. */
+export function baseUniverse() {
   const extra = String(process.env.WARM_SYMBOLS || "").split(",").map((s) => s.trim().toUpperCase()).filter(Boolean);
   if (process.env.WARM_ONLY_EXTRA === "1") return extra; // testing: restrict to WARM_SYMBOLS
   return [...new Set([...extra, ...SP100, ...sectorSymbols()])];
+}
+
+/**
+ * Tickers to pre-generate: the static names first, then every other current S&P 500
+ * constituent (from the market-data provider, cached a day). Falls back to the static list
+ * when the index list is unavailable.
+ */
+export async function warmUniverse() {
+  const base = baseUniverse();
+  if (process.env.WARM_ONLY_EXTRA === "1") return base;
+  let rest = [];
+  try { rest = Object.values(await sp500BySector()).flat().sort(); } catch (e) { console.warn("S&P 500 list unavailable for the warmer:", e.message); }
+  return [...new Set([...base, ...rest])];
 }

@@ -11,7 +11,7 @@ export default handler(async (req) => {
     return json(await dispatchWarm({ full: query(req).get("full") === "1" }));
   }
   const { last } = await warmStatus();
-  return json({ universe: warmUniverse().length, locales: [...new Set(["en", ...cfg.locales()])], settings: warmSettings(), schedule: "hourly at :17", last });
+  return json({ universe: (await warmUniverse()).length, locales: [...new Set(["en", ...cfg.locales()])], settings: warmSettings(), schedule: "hourly at :17", last });
 });
 
 export const config = { path: "/api/warm" };

@@ -64,6 +64,6 @@ export async function warmCoverage() {
   return merged;
 }
 
-export function shardSymbols(shard, shards) {
-  return warmUniverse().filter((_, i) => i % shards === shard);
+export async function shardSymbols(shard, shards) {
+  return (await warmUniverse()).filter((_, i) => i % shards === shard);
 }

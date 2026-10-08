@@ -2,7 +2,8 @@
 import { json, handler, param, query, HttpError } from "../lib/http.mjs";
 import { requireAdmin, entitlement } from "../lib/entitlement.mjs";
 import { listUsers } from "../lib/users.mjs";
-import { listEvents } from "../lib/events.mjs";
+import { listEvents, eventDetails } from "../lib/events.mjs";
+import { getUser, findUserByLogin } from "../lib/users.mjs";
 import { openStore } from "../lib/store.mjs";
 import { stockBundle, normalizeSymbol } from "../lib/stockdata.mjs";
 import { cfg } from "../lib/config.mjs";
@@ -35,7 +36,8 @@ export default handler(async (req, context) => {
     const dayKey = (ts) => new Date(ts).toISOString().slice(0, 10);
     const byDay = {};
     for (let i = days - 1; i >= 0; i--) byDay[dayKey(now - i * 86400000)] = { views: 0, demo: 0, logins: 0, signups: 0, searches: 0, ai: 0, users: new Set() };
-    const bySymbol = {}, lastSeen = {};
+    const bySymbol = {}, lastSeen = {}, lastLoc = {}, visitors = new Set();
+    const geo = { countries: {}, places: {} };
     let cost = 0, generations = 0, translations = 0;
     for (const e of events) {
       const d = byDay[e.day]; if (!d) continue;
@@ -47,29 +49,80 @@ export default handler(async (req, context) => {
       else if (e.action === "ai_generate") { d.ai++; generations++; const [, inp, out] = e.detail.split("_"); cost += Number(inp || 0) * PRICE_IN + Number(out || 0) * PRICE_OUT; }
       else if (e.action === "ai_deep") { d.ai++; generations++; const [, inp, out] = e.detail.split("_"); cost += Number(inp || 0) * PRICE_IN + Number(out || 0) * PRICE_OUT; }
       else if (e.action === "ai_translate") { translations++; cost += 0.03; }
-      if (e.user && e.user !== "anon" && e.user !== "system") { d.users.add(e.user); if (!lastSeen[e.user]) lastSeen[e.user] = e.ts; }
+      if (e.user && !e.anon && e.user !== "system") { d.users.add(e.user); if (!lastSeen[e.user]) { lastSeen[e.user] = e.ts; lastLoc[e.user] = { country: e.country, region: e.region, city: e.city }; } }
+      if (e.user && e.user.startsWith("v_")) visitors.add(e.user);
+      if (!["ai_generate", "ai_deep", "ai_translate", "ai_sector"].includes(e.action) && e.user !== "system") {
+        const c = (geo.countries[e.country] ||= { events: 0, views: 0, visitors: new Set(), members: new Set() });
+        c.events++; if (e.action === "view" || e.action === "page" || e.action === "demo_view" || e.action === "teaser_page" || e.action === "sector_view") c.views++;
+        if (e.anon) { if (e.user && e.user !== "anon") c.visitors.add(e.user); } else c.members.add(e.user);
+        if (e.city || e.region) { const k = `${e.country}|${e.region || ""}|${e.city || ""}`; const t = (geo.places[k] ||= { country: e.country, region: e.region, city: e.city, events: 0, who: new Set() }); t.events++; t.who.add(e.user); }
+      }
     }
     const series = Object.entries(byDay).map(([day, d]) => ({ day, views: d.views, demo: d.demo, logins: d.logins, signups: d.signups, searches: d.searches, ai: d.ai, activeUsers: d.users.size }));
-    const activeIn = (ms) => new Set(events.filter((e) => now - e.ts < ms && e.user && e.user !== "anon" && e.user !== "system").map((e) => e.user)).size;
+    const activeIn = (ms) => new Set(events.filter((e) => now - e.ts < ms && e.user && !e.anon && e.user !== "system").map((e) => e.user)).size;
     const states = {};
     for (const u of users) { const st = entitlement(u).state; states[st] = (states[st] || 0) + 1; }
     const warm = (await warmStatus()).last;
     const coverage = await warmCoverage();
-    const universe = warmUniverse();
+    const universe = await warmUniverse();
     const langs = [...new Set(["en", ...cfg.locales()])]; langs.push(...langs.map((l) => `deep-${l}`));
     const covCounts = Object.fromEntries(langs.map((l) => [l, universe.filter((sym) => coverage[sym]?.ready?.[l]).length]));
     const pending = universe.filter((sym) => !langs.every((l) => coverage[sym]?.ready?.[l]));
+    const untouched = universe.filter((sym) => !coverage[sym]).length; // never visited by the warmer yet
+    const todayKey = dayKey(now);
+    const todayAi = allEvents.filter((e) => e.day === todayKey && ["ai_generate", "ai_deep", "ai_sector"].includes(e.action));
+    const costToday = todayAi.reduce((a, e) => { const [, inp, out] = e.detail.split("_"); return a + Number(inp || 0) * PRICE_IN + Number(out || 0) * PRICE_OUT; }, 0) + allEvents.filter((e) => e.day === todayKey && e.action === "ai_translate").length * 0.03;
     return json({
       generatedAt: new Date().toISOString(),
       totals: { users: users.length, states, signups7d: users.filter((u) => now - u.createdAt < 7 * 86400000).length, signups30d: users.filter((u) => now - u.createdAt < 30 * 86400000).length, activeToday: activeIn(86400000), active7d: activeIn(7 * 86400000), active30d: activeIn(30 * 86400000), views30d: series.reduce((a, d) => a + d.views, 0), demo30d: series.reduce((a, d) => a + d.demo, 0), aiGenerations30d: generations, aiTranslations30d: translations, aiCostUsd30d: Math.round(cost * 100) / 100 },
       series,
       topSymbols: Object.entries(bySymbol).sort((a, b) => b[1] - a[1]).slice(0, 25).map(([symbol, views]) => ({ symbol, views })),
-      recent: events.slice(0, 60),
-      warm: { universe: universe.length, perRun: warmSettings().perRun, settings: warmSettings(), last: warm, langs, coverage: covCounts, pending, current: warm?.running ? [].concat(warm.current || []).join(", ") : null },
+      recent: events.slice(0, 150).map(({ key, ...e }) => e),
+      visitors30d: visitors.size,
+      geo: {
+        countries: Object.entries(geo.countries).map(([code, c]) => ({ code, events: c.events, views: c.views, visitors: c.visitors.size, members: c.members.size })).sort((a, b) => b.events - a.events),
+        places: Object.values(geo.places).map((t) => ({ country: t.country, region: t.region, city: t.city, events: t.events, people: t.who.size })).sort((a, b) => b.events - a.events).slice(0, 40),
+      },
+      warm: { universe: universe.length, perRun: warmSettings().perRun, settings: warmSettings(), last: warm, langs, coverage: covCounts, pending, untouched, done: universe.length - pending.length, generatedToday: todayAi.length, costToday: Math.round(costToday * 100) / 100, current: warm?.running ? [].concat(warm.current || []).join(", ") : null },
       contact: await recentMessages(),
       mail: { configured: mailConfigured(), pendingResets: (await pendingResets()).map((r) => ({ username: r.username, email: r.email, link: `${cfg.siteUrl().replace(/\/$/, "")}/#/reset/${r.token}`, expiresAt: r.expiresAt })) },
       coupons: await listAccessCodes(),
-      users: allUsers.slice(0, 200).map((u) => ({ username: u.username, email: u.email, createdAt: u.createdAt, state: entitlement(u).state, status: u.subscription?.status || null, role: u.role || null, lastSeen: lastSeen[u.username] || null })),
+      users: allUsers.slice(0, 200).map((u) => ({ username: u.username, email: u.email, createdAt: u.createdAt, state: entitlement(u).state, status: u.subscription?.status || null, role: u.role || null, locale: u.locale || null, lastSeen: lastSeen[u.username] || null, location: lastLoc[u.username] || null, events30d: events.filter((e) => e.user === u.username).length })),
+    });
+  }
+
+  // Access log: every recorded event for the last `days` days (max 30), filtered by user, action or country.
+  if (action === "events") {
+    const q = query(req);
+    const days = Math.min(30, Math.max(1, Number(q.get("days") || 7)));
+    const f = { user: (q.get("user") || "").toLowerCase(), action: q.get("action") || "", country: (q.get("country") || "").toUpperCase() };
+    const all = (await listEvents(days)).filter((e) => (!f.user || String(e.user).toLowerCase().includes(f.user)) && (!f.action || e.action === f.action) && (!f.country || e.country === f.country));
+    const offset = Math.max(0, Number(q.get("offset") || 0)), limit = Math.min(500, Math.max(1, Number(q.get("limit") || 200)));
+    const page = all.slice(offset, offset + limit);
+    const withDetails = q.get("details") === "1" ? await eventDetails(page, limit) : page;
+    return json({ days, total: all.length, offset, events: withDetails.map(({ key, ...e }) => e), actions: [...new Set(all.map((e) => e.action))].sort() });
+  }
+  // One member's (or anonymous visitor's) activity over the last 90 days.
+  if (action === "user") {
+    const name = String(query(req).get("username") || "").trim();
+    if (!name) throw new HttpError(400, "username required");
+    const u = name.startsWith("v_") ? null : await findUserByLogin(name);
+    const uname = u ? u.username : name;
+    const events = (await listEvents(90)).filter((e) => e.user === uname);
+    const count = (fn) => { const m = {}; for (const e of events) { const k = fn(e); if (k) m[k] = (m[k] || 0) + 1; } return Object.entries(m).sort((a, b) => b[1] - a[1]).map(([k, n]) => ({ key: k, n })); };
+    const details = await eventDetails(events, 400);
+    return json({
+      user: u ? { username: u.username, email: u.email, createdAt: u.createdAt, locale: u.locale || null, role: u.role || null, plan: u.plan || null, trialEndsAt: u.trialEndsAt || null, coupons: u.coupons || [], subscription: u.subscription ? { status: u.subscription.status, renewsAt: u.subscription.renewsAt, endsAt: u.subscription.endsAt, cardBrand: u.subscription.cardBrand, cardLastFour: u.subscription.cardLastFour } : null, entitlement: entitlement(u) } : { username: uname, anonymous: true },
+      firstSeen: events.length ? events[events.length - 1].ts : null, lastSeen: events.length ? events[0].ts : null, total: events.length,
+      daysActive: new Set(events.map((e) => e.day)).size,
+      tickers: count((e) => (e.action === "view" || e.action === "teaser" || e.action === "teaser_page" || e.action === "demo_view") ? e.detail : null).slice(0, 40),
+      tabs: count((e) => e.action === "tab" ? e.detail.split("_").slice(1).join("_") || e.detail : null),
+      actions: count((e) => e.action),
+      sectors: count((e) => e.action === "sector_view" || e.action === "sector_report" ? e.detail : null),
+      searches: count((e) => e.action === "search" ? e.detail : null).slice(0, 30),
+      locations: count((e) => [e.country, e.region, e.city].filter(Boolean).join(" / ")),
+      devices: count((e) => e.ua ? (/(iPhone|iPad|Android)/.test(e.ua) ? "mobile" : "desktop") : null),
+      timeline: details.slice(0, 400).map(({ key, ua, ...e }) => ({ ...e, device: ua ? (/iPhone|iPad/.test(ua) ? "iOS" : /Android/.test(ua) ? "Android" : /Macintosh/.test(ua) ? "Mac" : /Windows/.test(ua) ? "Windows" : "other") : null })),
     });
   }
 
@@ -84,6 +137,18 @@ export default handler(async (req, context) => {
     const keys = (await store.list("")).filter((k) => k.includes(`:${symbol}:`));
     for (const k of keys) await store.delete(k);
     return json({ symbol, reportingCurrency: bundle.company.reportingCurrency, fxToUsd: bundle.company.fxToUsd, peForward: bundle.valuation.peForward, deleted: keys });
+  }
+
+  // Drop one ticker's translated AI records (digest and deep dive) in one language so the next
+  // warmer run translates them again from the unchanged English.
+  if (action === "retranslate" && req.method === "POST") {
+    const symbol = normalizeSymbol(query(req).get("symbol"));
+    const lang = String(query(req).get("lang") || "ja");
+    if (lang === "en") throw new HttpError(400, "lang must not be en");
+    const store = await openStore("summaries");
+    const keys = (await store.list("")).filter((k) => { const p = k.split(":"); return p.includes(symbol) && p.includes(lang) && !k.startsWith("sector:"); });
+    for (const k of keys) await store.delete(k);
+    return json({ symbol, lang, deleted: keys });
   }
 
   // Access codes (free months, no card): list, create or update, deactivate.
