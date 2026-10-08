@@ -498,3 +498,11 @@ table.cons .small { line-height: 1.4; }
 .land.spec .spec-list li { margin: 6px 0; }
 
 .pricecard .amount .per { font-size: 14px; font-weight: 400; color: var(--muted); }
+
+/* ---------- composite support / resistance ---------- */
+.composite { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin: 8px 8px 12px; }
+.cpx { border: 1px solid var(--border); padding: 10px 12px; background: #fff; }
+.cpx.res { border-top: 3px solid #c93c37; } .cpx.sup { border-top: 3px solid #1a7f37; } .cpx.px { border-top: 3px solid #1f2328; }
+.cp-num { font-size: 22px; font-weight: 700; margin: 2px 0; }
+.cp-move { font-size: 13px; }
+@media (max-width: 720px) { .composite { grid-template-columns: 1fr; } }

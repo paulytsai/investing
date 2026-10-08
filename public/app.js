@@ -552,12 +552,12 @@
     return `<p class="note">${esc(t("updatedNote", { period: tr ? tr.period : "—", date: tr ? fmtDate(tr.date) : "—", gen: fmtDate(s.generatedAt) }))}</p>`;
   }
 
-  function financeBox(f) {
+  function financeBox(f, b) {
     if (!f) return "";
     const F = t("fin");
     const sgn = (v, d = 1) => (v === null || v === undefined ? NA : `${v > 0 ? "+" : ""}${fmtDec(v, d)}%`);
     const r = (k, v) => `<tr><th class="rowh">${k}</th><td class="num">${v}</td></tr>`;
-    return `<table class="shk fin"><tr><th class="rowh"><b>【${t("financials")}】</b></th><th>&lt;${yymm(f.asOf)}&gt; ${t("unitM")}${fxNote(c.b)}</th></tr>
+    return `<table class="shk fin"><tr><th class="rowh"><b>【${t("financials")}】</b></th><th>&lt;${yymm(f.asOf)}&gt; ${t("unitM")}${fxNote(b)}</th></tr>
       ${r(t("totalAssets"), fmtInt(f.totalAssets))}
       ${r(F.equityWithRatio, `${fmtInt(f.equity)} <span class="muted">(${fmtPct(f.equityRatioPct)})</span>`)}
       ${r(F.cash, fmtInt(f.cashAndShortTerm))}
@@ -608,7 +608,7 @@
       ${row(t("nextEarnings"), `${fmtDate(b.nextEarnings)}　<span class="muted">${t("analysts")}: ${rating}　${t("target")}: ${target}</span>`)}
     </table>
     ${updatedNote(c)}
-    ${financeBox(f)}`;
+    ${financeBox(f, b)}`;
   }
 
   function tabFinancials(c) {
@@ -631,7 +631,7 @@
       [t("capex"), pair(ind.capex, ind.capexPrev)], [t("depreciation"), pair(ind.depreciation, ind.depreciationPrev)], [t("rnd"), pair(ind.rnd, ind.rndPrev)],
     ]) + `<p class="note">${t("unitM")} · ( ) = ${isCJK() ? "前期" : "prior year"}${fxNote(c.b)}</p>`;
     const cfl = cf ? kv([[t("opCF"), pair(cf.operating, cf.operatingPrev)], [t("invCF"), pair(cf.investing, cf.investingPrev)], [t("finCF"), pair(cf.financing, cf.financingPrev)], [t("cashEq"), pair(cf.cash, cf.cashPrev)], [t("fcf"), fmtInt(cf.freeCashFlow)], [t("buyback"), fmtInt(cf.buybacks)], [t("divPaid"), fmtInt(cf.dividendsPaid)]]) + `<p class="note">FY${esc(cf.fiscalYear)} · ${t("unitM")}</p>` : NA;
-    const bal = financeBox(f) || NA;
+    const bal = financeBox(f, c.b) || NA;
     return `<div class="grid2">${sec(t("performance"), perf)}${sec(t("dividends"), divs)}</div>
       <div class="grid2b">${sec(t("indicators"), indic, ind.fiscalYear ? `FY${esc(ind.fiscalYear)}` : "")}${sec(t("cashflow"), cfl)}</div>
       ${bal}`;
@@ -735,14 +735,25 @@
     update();
   }
 
+  // Composite support and resistance: the average of the AI's levels, with the move to each.
+  function composite(tech, price) {
+    const avg = (rows) => { const xs = (rows || []).map((r) => r.level).filter((x) => Number.isFinite(x) && x > 0); return xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null; };
+    const res = tech ? avg(tech.resistance) : null, sup = tech ? avg(tech.support) : null;
+    const pct = (lv) => lv && price ? (lv / price - 1) * 100 : null;
+    return { res, sup, upPct: pct(res), downPct: pct(sup) };
+  }
   function tabTechnical(c) {
     const b = c.b; const v = b.valuation || {}; const K = t("tech"); const tech = c.s && c.s.technical;
     const lv = (rows, kind) => rows && rows.length ? `<table class="tbl"><thead><tr><th class="num">${K.level}</th><th>${K.reason}</th></tr></thead><tbody>${rows.slice().sort((p, q) => q.level - p.level).map((r) => `<tr><td class="num"><span class="lvl ${kind}">$${fmtDec(r.level, 1)}</span></td><td>${esc(r.reason)}</td></tr>`).join("")}</tbody></table>` : `<p class="muted">${NA}</p>`;
     const chart = `<div class="ranges" data-techranges>${["3m", "6m", "1y", "3y"].map((r) => `<button data-range="${r}" class="${r === (c.techRange || "1y") ? "active" : ""}">${t("ranges")[r]}</button>`).join("")}</div><div class="chart tech-chart" data-techchart></div>
       <p class="note legend"><span class="lg res"></span>${K.resistance}　<span class="lg sup"></span>${K.support}　<span class="lg ma50"></span>${K.ma50}　<span class="lg ma200"></span>${K.ma200}　<span class="lg px"></span>${K.current} $${fmtDec(v.price, 2)}</p>`;
     const ctx = kv([[K.current, `$${fmtDec(v.price, 2)}`], [K.high52, `$${fmtDec(v.yearHigh, 2)}${v.yearHighDate ? ` <span class="muted">(${fmtDate(v.yearHighDate)})</span>` : ""}`], [K.low52, `$${fmtDec(v.yearLow, 2)}${v.yearLowDate ? ` <span class="muted">(${fmtDate(v.yearLowDate)})</span>` : ""}`], v.allTimeHigh ? [K.ath, `$${fmtDec(v.allTimeHigh.price, 2)} <span class="muted">(${fmtDate(v.allTimeHigh.date)})</span>`] : null, [K.ma50, `$${fmtDec(v.priceAvg50, 2)}`], [K.ma200, `$${fmtDec(v.priceAvg200, 2)}`]]);
+    const cp = composite(tech, v.price);
+    const compo = tech && (cp.res || cp.sup) ? `<div class="composite"><div class="cpx res"><div class="stat-l">${K.compositeRes}</div><div class="cp-num">${cp.res ? `$${fmtDec(cp.res, 2)}` : NA}</div><div class="cp-move">${cp.upPct !== null ? `${K.upside} <b class="${cp.upPct >= 0 ? "up" : "down"}">${cp.upPct >= 0 ? "+" : ""}${fmtDec(cp.upPct, 1)}%</b>` : ""}</div></div>
+        <div class="cpx px"><div class="stat-l">${K.current}</div><div class="cp-num">$${fmtDec(v.price, 2)}</div><div class="cp-move muted">${K.compositeNote}</div></div>
+        <div class="cpx sup"><div class="stat-l">${K.compositeSup}</div><div class="cp-num">${cp.sup ? `$${fmtDec(cp.sup, 2)}` : NA}</div><div class="cp-move">${cp.downPct !== null ? `${K.downside} <b class="${cp.downPct >= 0 ? "up" : "down"}">${cp.downPct >= 0 ? "+" : ""}${fmtDec(cp.downPct, 1)}%</b>` : ""}</div></div></div>` : "";
     const read = tech
-      ? `<div class="grid2b"><div><h4 class="sub">${K.resistance}</h4>${wrap(lv(tech.resistance, "res"))}</div><div><h4 class="sub">${K.support}</h4>${wrap(lv(tech.support, "sup"))}</div></div><p class="tech-comment">${esc(tech.comment)}</p>${updatedNote(c)}`
+      ? `${compo}<div class="grid2b"><div><h4 class="sub">${K.resistance}</h4>${wrap(lv(tech.resistance, "res"))}</div><div><h4 class="sub">${K.support}</h4>${wrap(lv(tech.support, "sup"))}</div></div><p class="tech-comment">${esc(tech.comment)}</p>${updatedNote(c)}`
       : `<p class="muted" style="margin:8px">${c.summaryStatus === "pending" || c.summaryStatus === null ? t("generating") : t("summaryError")}</p>`;
     return `${sec(K.title, chart + read, `$${fmtDec(v.price, 2)}`)}${sec(K.context, ctx)}`;
   }
@@ -756,11 +767,12 @@
       if (!document.body.contains(el)) return;
     }
     const v = c.b.valuation || {}; const K = t("tech"); const tech = c.s && c.s.technical; const ch = c.techCache[key];
-    // Levels within 5% of each other merge into one band (width measured from the band's lowest level).
-    const cluster = (rows) => { const out = []; for (const lv of (rows || []).map((r) => r.level).filter(Number.isFinite).sort((a, b) => a - b)) { const g = out[out.length - 1]; if (g && lv <= g.low * 1.05) g.high = lv; else out.push({ low: lv, high: lv }); } return out; };
-    const levels = [], bands = [];
-    const place = (groups, kind, name) => { for (const g of groups) { if (g.high > g.low) bands.push({ low: g.low, high: g.high, kind, label: `${name} $${fmtDec(g.low, 1)}〜${fmtDec(g.high, 1)}` }); else levels.push({ price: g.low, kind, label: `${name} $${fmtDec(g.low, 1)}` }); } };
-    if (tech) { place(cluster(tech.resistance), "res", K.resistance.split("（")[0]); place(cluster(tech.support), "sup", K.support.split("（")[0]); }
+    // Two lines only: the composite resistance and the composite support (averages of the AI's levels).
+    const cp = composite(tech, v.price);
+    const levels = [];
+    if (cp.res) levels.push({ price: cp.res, kind: "res", label: `${K.resistance.split("（")[0]} $${fmtDec(cp.res, 1)}${cp.upPct !== null ? ` (${cp.upPct >= 0 ? "+" : ""}${fmtDec(cp.upPct, 1)}%)` : ""}` });
+    if (cp.sup) levels.push({ price: cp.sup, kind: "sup", label: `${K.support.split("（")[0]} $${fmtDec(cp.sup, 1)}${cp.downPct !== null ? ` (${cp.downPct >= 0 ? "+" : ""}${fmtDec(cp.downPct, 1)}%)` : ""}` });
+    const bands = [];
     const series = [];
     if (ch.ma50) series.push({ points: ch.ma50, color: "#d08c1a", label: K.ma50 });
     if (ch.ma200) series.push({ points: ch.ma200, color: "#6b4fbb", label: K.ma200 });
