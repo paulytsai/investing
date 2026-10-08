@@ -7,9 +7,9 @@ import { cfg } from "./config.mjs";
 import { runJson } from "./summarize.mjs";
 import { logEvent } from "./events.mjs";
 
-const VERSION = "1";
+const VERSION = "2"; // 2: adds report, story and findings sentences
 const LANG_NAMES = { ja: "Japanese", en: "English", "zh-TW": "Traditional Chinese (Taiwan)" };
-export const GIST_KEYS = ["battlefields", "analysis", "risks", "questions", "checkpoints", "constituents"];
+export const GIST_KEYS = ["report", "story", "findings", "battlefields", "analysis", "risks", "questions", "checkpoints", "constituents"];
 const SCHEMA = { type: "object", additionalProperties: false, required: GIST_KEYS, properties: Object.fromEntries(GIST_KEYS.map((k) => [k, { type: "string" }])) };
 
 export function gistKey(kind, id, lang, generatedAt) { return `gist:${VERSION}:${kind}:${id}:${lang}:${String(generatedAt || "").slice(0, 19)}`; }
@@ -22,6 +22,9 @@ export async function ensureGist(kind, id, lang, record) {
   const hit = await store.get(key);
   if (hit && hit.gists) return hit.gists;
   const src = {
+    story: record.story ? { headline: record.story.headline, body: record.story.body } : null,
+    findings: record.findings ? Object.fromEntries(["quality", "trajectory", "valuation"].map((k) => [k, record.findings[k] ? { assessment: record.findings[k].assessment, mechanism: String(record.findings[k].mechanism || "").slice(0, 400) } : null])) : null,
+    divergences: record.findings ? record.findings.divergences : null,
     battlefields: (record.battlefields || []).map((b) => ({ segment: b.segment, share: b.revenueShare, position: b.position })),
     chapters: (record.sections || []).map((s) => ({ key: s.key, headline: s.headline, body: String(s.body || "").slice(0, 600) })),
     risks: (record.risks || []).map((r) => r.risk),
@@ -31,7 +34,7 @@ export async function ensureGist(kind, id, lang, record) {
   };
   const { parsed, message } = await runJson({
     system: `You summarise sections of an equity research report for a one-line preview shown while the section is collapsed. Write in ${LANG_NAMES[lang] || lang}. Each field is exactly one concise sentence (at most 25 words in English, 60 characters in Japanese or Chinese) that states the substance, not the topic: name the main point, the biggest risk, the decisive question. Use only what the report says; no advice. If a section is empty, return an empty string for it. Return JSON.`,
-    user: `Report sections:\n${JSON.stringify(src)}\n\nFields: "battlefields" (who captures the profit across the segments), "analysis" (the one thing the chapters together establish), "risks" (the principal risk), "questions" (the decisive question), "checkpoints" (what to watch and the failure condition), "constituents" (how the constituents divide, or empty). Return JSON only.`,
+    user: `Report sections:\n${JSON.stringify(src)}\n\nFields: "report" (the whole report in one sentence: what kind of business this is, which way it is heading and what the price assumes), "story" (the business model and what has to be true, in one sentence), "findings" (the three findings in one sentence, naming each label), "battlefields" (who captures the profit across the segments), "analysis" (the one thing the chapters together establish), "risks" (the principal risk), "questions" (the decisive question), "checkpoints" (what to watch and the failure condition), "constituents" (how the constituents divide, or empty). Return JSON only.`,
     schema: SCHEMA, effort: "low", maxTokens: 1500, model: cfg.translationModel(),
   });
   const gists = Object.fromEntries(GIST_KEYS.map((k) => [k, String(parsed[k] || "").trim()]));

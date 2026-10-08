@@ -1167,10 +1167,11 @@
     };
     const gist = (k) => ({ key: k, text: esc(G[k] || fb[k] || "") });
     const dd = (title, inner, isOpen = open, g = null) => `<details class="dd"${isOpen}><summary class="sec"><span class="sec-t">${title}</span>${g && g.text !== undefined ? `<span class="gist" data-gist="${esc(g.key)}">${g.text}</span>` : ""}</summary>${inner}</details>`;
-    const findingsGist = { key: "", text: `<span class="chips inline">${["quality", "trajectory", "valuation"].map((k) => F[k] ? `<span class="chip ${CHIP_TONE[String(F[k].assessment).toLowerCase()] || "na"}"><span class="chip-k">${names[k]}</span><span class="chip-v">${esc(D.asm[String(F[k].assessment).toLowerCase()] || F[k].assessment)}</span></span>` : "").join("")}</span>` };
-    return `${sec(opts.storyTitle || D.storyTitle, story, "", d.story ? esc(d.story.headline) : "")}
+    fb.story = d.story ? firstSentence(d.story.body) || d.story.headline : "";
+    fb.findings = ["quality", "trajectory", "valuation"].filter((k) => F[k]).map((k) => `${names[k]}: ${D.asm[String(F[k].assessment).toLowerCase()] || F[k].assessment}`).join("、");
+    return `${sec(opts.storyTitle || D.storyTitle, story, "", gist("story"))}
       ${dd(opts.battlefieldsTitle || D.battlefields, bf, open, gist("battlefields"))}
-      ${sec(D.findingsTitle, findings, "", findingsGist)}
+      ${sec(D.findingsTitle, findings, "", gist("findings"))}
       ${dd(D.analysisTitle || "", `<table class="shk ov">${rows}</table>`, open, gist("analysis"))}
       ${cons ? dd(D.constituentReads, cons, open, gist("constituents")) : ""}
       ${dd(D.risks, risks, open, gist("risks"))}
@@ -1185,7 +1186,7 @@
       return `<section class="card"><h3 class="sec"><span class="sec-t">${D.title}</span></h3><p class="muted" style="margin:8px">${esc(D.intro)}</p><p style="margin:8px">${msg}</p></section>`;
     }
     const tr = (d.transcriptsUsed || [])[0];
-    return `${sec(D.title, `<p class="muted deep-intro">${esc(D.intro)} <b>${esc(D.readTime)}</b></p>`, "", esc(D.readTime))}` + researchHtml(d, D, { gists: c.gists, updated: esc(t("updatedNote", { period: tr ? tr.period : "—", date: tr ? fmtDate(tr.date) : "—", gen: fmtDate(d.generatedAt) })) });
+    return `${sec(D.title, `<p class="muted deep-intro">${esc(D.intro)} <b>${esc(D.readTime)}</b></p>`, "", { key: "report", text: esc((c.gists && c.gists.report) || D.readTime) })}` + researchHtml(d, D, { gists: c.gists, updated: esc(t("updatedNote", { period: tr ? tr.period : "—", date: tr ? fmtDate(tr.date) : "—", gen: fmtDate(d.generatedAt) })) });
   }
   function stopSummaryPolling(c) { if (c && c.timer) clearTimeout(c.timer); if (c) c.timer = null; }
   function applySummary(c, r, lang) {
