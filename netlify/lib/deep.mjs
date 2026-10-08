@@ -183,12 +183,18 @@ export async function generateDeepEnglish(symbol, bundle) {
 
 export async function translateDeep(en, lang, bundle) {
   const source = Object.fromEntries(Object.keys(DEEP_SCHEMA.properties).map((k) => [k, en[k]]));
-  const { parsed, message } = await runJson({
+  const request = (extra) => runJson({
     system: translateDeepPrompt(lang),
-    user: `Translate this JSON. Return JSON only.\n\n${JSON.stringify(source)}`,
+    user: `Translate this JSON. Return JSON only.${extra}\n\n${JSON.stringify(source)}`,
     schema: DEEP_SCHEMA, effort: "medium", maxTokens: 32000,
   });
-  if (!isDeepComplete(parsed, lang)) throw new Error(`Translation to ${lang} came back incomplete`);
+  // A translation occasionally shortens a field below the completeness floor: ask once more.
+  let { parsed, message } = await request("");
+  if (!isDeepComplete(parsed, lang)) {
+    console.warn(`translation of ${en.symbol} to ${lang} incomplete (${deepIncompleteReason(parsed, lang)}); retrying`);
+    ({ parsed, message } = await request(" Translate every string in full; do not shorten or summarise any field."));
+    if (!isDeepComplete(parsed, lang)) throw new Error(`Translation to ${lang} came back incomplete (${deepIncompleteReason(parsed, lang)})`);
+  }
   const record = { ...en, ...parsed, lang, translatedFrom: "en", model: message.model, generatedAt: new Date().toISOString(), usage: { input: message.usage?.input_tokens, output: message.usage?.output_tokens } };
   const store = await openStore("summaries");
   await store.set(deepKey(en.symbol, lang, bundle.latestTranscriptDate), record);

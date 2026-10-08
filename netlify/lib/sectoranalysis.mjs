@@ -158,8 +158,13 @@ export async function generateSectorEnglish(id) {
 
 export async function translateSector(en, lang) {
   const source = Object.fromEntries(Object.keys(SECTOR_SCHEMA.properties).map((k) => [k, en[k]]));
-  const { parsed, message } = await runJson({ system: translateSectorPrompt(lang), user: `Translate this JSON. Return JSON only.\n\n${JSON.stringify(source)}`, schema: SECTOR_SCHEMA, effort: "medium", maxTokens: 32000 });
-  if (!isSectorComplete(parsed, lang)) throw new Error(`Translation to ${lang} came back incomplete (${sectorIncompleteReason(parsed, lang)})`);
+  const request = (extra) => runJson({ system: translateSectorPrompt(lang), user: `Translate this JSON. Return JSON only.${extra}\n\n${JSON.stringify(source)}`, schema: SECTOR_SCHEMA, effort: "medium", maxTokens: 32000 });
+  let { parsed, message } = await request("");
+  if (!isSectorComplete(parsed, lang)) {
+    console.warn(`sector translation ${en.id} to ${lang} incomplete (${sectorIncompleteReason(parsed, lang)}); retrying`);
+    ({ parsed, message } = await request(" Translate every string in full; do not shorten or summarise any field."));
+    if (!isSectorComplete(parsed, lang)) throw new Error(`Translation to ${lang} came back incomplete (${sectorIncompleteReason(parsed, lang)})`);
+  }
   const record = { ...en, ...parsed, lang, translatedFrom: "en", model: message.model, generatedAt: new Date().toISOString(), usage: { input: message.usage?.input_tokens, output: message.usage?.output_tokens } };
   const store = await openStore("summaries");
   await store.set(sectorKey(en.id, lang), record);
