@@ -512,3 +512,8 @@ table.cons .small { line-height: 1.4; }
 .annual-line { font-size: 14px; margin: -4px 0 10px; color: var(--accent); font-weight: 600; }
 .plans { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .plans .small { flex-basis: 100%; margin: 2px 0 0; }
+.coupon { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; margin-top: 10px; font-size: 14px; }
+.coupon input { padding: 6px 10px; border: 1px solid var(--border); border-radius: 3px; width: 11em; text-transform: uppercase; font-size: 14px; }
+.coupon input::placeholder { text-transform: none; }
+.coupon #couponError { flex-basis: 100%; }
+.coupon.applied span { color: var(--accent, #0b5bd3); font-weight: 600; }

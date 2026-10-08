@@ -55,6 +55,19 @@ not a translation.
   is granted for `active`, `on_trial`, `past_due`, and `cancelled` until
   `ends_at`.
 
+### Coupon codes
+
+Coupons are Stripe promotion codes. Create them in the Stripe Dashboard (Product catalog →
+Coupons → New, then "Add promotion code" for the customer-facing string) or via the API; they
+are per mode, so codes made in the sandbox must be created again in live mode. A member types
+the code in the box under the subscribe buttons (`GET /api/billing/coupon?code=` checks it and
+shows the discount), or arrives through a link such as `https://kabukaizu.com/?coupon=FREE6`,
+and the code is pre-applied on the Stripe page; without a code the Stripe page shows its own
+promotion-code field. Typical codes: `percent_off: 100, duration: repeating, duration_in_months: 6`
+gives six months free and then normal billing (the card is taken at checkout, so the
+subscription continues without another step); set `restrictions.first_time_transaction` so a
+code works only for new customers, and `max_redemptions` or `expires_at` to limit it.
+
 ### Admin maintenance endpoints
 
 - `POST /api/admin/rebuild?symbol=TSM` (admin cookie) force-rebuilds one ticker's bundle and drops its AI records so the warmer regenerates them.

@@ -152,11 +152,11 @@ function translateSectorPrompt(lang) {
   return `You translate a sector research report from English into ${name} for retail investors. Translate faithfully: same facts, figures, periods, structure and terseness.${jaRules}${zhRules} Return JSON with exactly the same keys and array lengths. Translate every free-text string; keep "key", "symbol", "assessment", "confidence" and "finding" values exactly as given in English.`;
 }
 
-export async function generateSectorEnglish(id) {
+export async function generateSectorEnglish(id, { model = undefined, save = true } = {}) {
   const sector = await sectorById(id); if (!sector) throw new Error("unknown sector");
   const rows = await constituentRows(sector, { full: true });
   const materials = sectorMaterials(sector, rows, "en");
-  const request = (extra) => runJson({ system: sectorSystemPrompt(), user: `Apply the specification to the sector "${sector.name.en}". Return JSON only.${extra}\n\n${materials}`, schema: SECTOR_SCHEMA, effort: "high", maxTokens: 32000 });
+  const request = (extra) => runJson({ system: sectorSystemPrompt(), user: `Apply the specification to the sector "${sector.name.en}". Return JSON only.${extra}\n\n${materials}`, schema: SECTOR_SCHEMA, effort: "high", maxTokens: 32000, model });
   let { parsed, message } = await request("").catch((e) => { if (!/truncated/.test(e.message)) throw e; console.warn(`sector report ${id} truncated; retrying with a word budget`); return request(" Keep the whole report within 1,600 words; every string must respect its word range."); });
   if (!isSectorComplete(parsed, "en")) {
     console.warn(`incomplete sector report for ${id} (${sectorIncompleteReason(parsed, "en")}); retrying`);
@@ -167,6 +167,7 @@ export async function generateSectorEnglish(id) {
   for (const r of parsed.risks) r.finding = String(r.finding).toUpperCase();
   for (const c of parsed.checkpoints) c.finding = String(c.finding).toUpperCase();
   const record = { id, lang: "en", period: sectorPeriod(), ...parsed, model: message.model, generatedAt: new Date().toISOString(), usage: { input: message.usage?.input_tokens, output: message.usage?.output_tokens } };
+  if (!save) return record;
   const store = await openStore("summaries");
   await store.set(sectorKey(id, "en"), record);
   await logEvent("ai_sector", { detail: `${id}_${message.usage?.input_tokens || 0}_${message.usage?.output_tokens || 0}` });

@@ -139,6 +139,11 @@
     return { view: "home" };
   }
   window.addEventListener("hashchange", () => { state.route = parseRoute(); render(); });
+  // /?coupon=CODE or /#/signup?coupon=CODE from a marketing link: remember the code for checkout.
+  {
+    const m = (location.search + " " + location.hash).match(/[?&]coupon=([A-Za-z0-9_-]{1,40})/);
+    if (m) { try { localStorage.setItem("coupon", JSON.stringify({ code: m[1].toUpperCase(), pending: true })); } catch {} }
+  }
 
   function render() {
     const r = state.route;
@@ -464,19 +469,52 @@
     setTimeout(tick, 1500);
   }
   // One button for the monthly plan, a second for the annual plan when the site offers one.
+  // ---------- coupon codes (Stripe promotion codes) ----------
+  // A code comes from the box below or from a link like /?coupon=CODE; it is kept on this
+  // device until checkout and pre-applied to the Stripe page.
+  const coupon = { get: () => { try { return JSON.parse(localStorage.getItem("coupon") || "null"); } catch { return null; } }, set: (c) => { try { if (c) localStorage.setItem("coupon", JSON.stringify(c)); else localStorage.removeItem("coupon"); } catch {} } };
+  function couponDesc(c) {
+    const what = c.percentOff === 100 ? t("coupon.free") : c.percentOff ? t("coupon.off", { pct: c.percentOff }) : t("coupon.offAmount", { amount: `${c.amountOff}${c.currency ? " " + String(c.currency).toUpperCase() : ""}` });
+    const when = c.duration === "repeating" ? t("coupon.forMonths", { months: c.months }) : c.duration === "forever" ? t("coupon.forever") : t("coupon.once");
+    return `${what} ${when}`;
+  }
+  function couponBox() {
+    if (state.config.billingProvider !== "stripe") return "";
+    const c = coupon.get();
+    if (c && c.pending) {
+      // A code from a link has not been checked yet: verify it, then redraw.
+      api(`/api/billing/coupon?code=${encodeURIComponent(c.code)}`).then((r) => { coupon.set(r.coupon); render(); }).catch(() => { coupon.set(null); render(); });
+      return `<div class="coupon applied"><span>${esc(t("coupon.applied", { desc: c.code }))}</span></div>`;
+    }
+    if (c) return `<div class="coupon applied"><span>${esc(t("coupon.applied", { desc: `${c.code}: ${couponDesc(c)}` }))}</span> <button class="btn small" id="couponRemove">${esc(t("coupon.remove"))}</button></div>`;
+    return `<div class="coupon"><label for="couponInput">${esc(t("coupon.label"))}</label> <input id="couponInput" placeholder="${esc(t("coupon.placeholder"))}" maxlength="40" autocapitalize="characters"> <button class="btn small" id="couponApply">${esc(t("coupon.apply"))}</button><div id="couponError"></div></div>`;
+  }
   function subscribeButtons() {
     const a = annualInfo();
     const monthly = `<button class="btn primary" id="subscribeBtn">${t("subscribe")} — ${esc(state.config.priceLabel)} ${esc(t("perMonth"))}</button>`;
-    if (!a) return monthly;
-    return `<div class="plans">${monthly} <button class="btn primary" id="subscribeAnnualBtn">${esc(t("annual.button", { price: a.label, pct: a.pct }))}</button><p class="muted small">${esc(t("annual.note", { perMonth: a.perMonth }))}</p></div>`;
+    if (!a) return monthly + couponBox();
+    return `<div class="plans">${monthly} <button class="btn primary" id="subscribeAnnualBtn">${esc(t("annual.button", { price: a.label, pct: a.pct }))}</button><p class="muted small">${esc(t("annual.note", { perMonth: a.perMonth }))}</p></div>` + couponBox();
   }
   function bindBilling() {
+    const err = (e) => `<div class="error">${esc(t(`errors.${e.code}`) !== `errors.${e.code}` ? t(`errors.${e.code}`) : e.message)}</div>`;
     const go = async (action) => {
-      try { const r = await api(`/api/billing/${action}`); window.location.href = r.url; }
-      catch (e) { $("#formError").innerHTML = `<div class="error">${esc(t(`errors.${e.code}`) !== `errors.${e.code}` ? t(`errors.${e.code}`) : e.message)}</div>`; }
+      const c = coupon.get();
+      try { const r = await api(`/api/billing/${action}${c ? `&coupon=${encodeURIComponent(c.code)}` : ""}`); window.location.href = r.url; }
+      catch (e) { if (e.code === "invalid_coupon") coupon.set(null); $("#formError").innerHTML = err(e); if (e.code === "invalid_coupon") render(); }
     };
     const s = $("#subscribeBtn"); if (s) s.addEventListener("click", () => go("checkout?plan=monthly"));
     const sa = $("#subscribeAnnualBtn"); if (sa) sa.addEventListener("click", () => go("checkout?plan=annual"));
+    const ca = $("#couponApply");
+    if (ca) {
+      const apply = async () => {
+        const code = ($("#couponInput").value || "").trim().toUpperCase(); if (!code) return;
+        try { const r = await api(`/api/billing/coupon?code=${encodeURIComponent(code)}`); coupon.set(r.coupon); render(); }
+        catch (e) { $("#couponError").innerHTML = err(e); }
+      };
+      ca.addEventListener("click", apply);
+      $("#couponInput").addEventListener("keydown", (ev) => { if (ev.key === "Enter") { ev.preventDefault(); apply(); } });
+    }
+    const cr = $("#couponRemove"); if (cr) cr.addEventListener("click", () => { coupon.set(null); render(); });
     const p = $("#portalBtn"); if (p) p.addEventListener("click", () => go("portal"));
   }
 
