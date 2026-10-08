@@ -20,6 +20,7 @@ export default handler(async () => {
     FMP_API_KEY: !!cfg.fmpKey(),
     EDGAR_TOOLS_API_KEY: !!cfg.edgarKey(),
     ANTHROPIC_API_KEY: !!cfg.anthropicKey(),
+    anthropicRoute: cfg.anthropicBaseUrl() ? `gateway: ${new URL(cfg.anthropicBaseUrl()).host}` : "direct (api.anthropic.com)",
     AUTH_SECRET: !!process.env.AUTH_SECRET,
     SITE_URL: cfg.siteUrl(),
     LEMONSQUEEZY_STORE: !!cfg.lemon().store,
