@@ -23,7 +23,8 @@ export default async (req) => {
   const langs = [...new Set(["en", ...cfg.locales()])];
   const status = await openStore("jobs");
   const log = { startedAt: new Date(started).toISOString(), shard, shards, full, generated: [], translated: [], refreshed: 0, errors: [], finishedAt: null, current: null, running: true };
-  const save = () => status.set(`warm:shard:${shard}`, log);
+  const save = async () => { try { await status.set(`warm:shard:${shard}`, log); } catch (e) { console.warn("warm log save failed", e.message); } };
+  const saveCoverage = async () => { try { await status.set(`warm:coverage:${shard}`, coverage); } catch (e) { console.warn("coverage save failed", e.message); } };
   await save();
   const coverage = (await status.get(`warm:coverage:${shard}`)) || {};
   const queue = shardSymbols(shard, shards);
@@ -67,7 +68,7 @@ export default async (req) => {
     } finally {
       active.delete(symbol); log.current = [...active].join(",") || null;
       await save();
-      await status.set(`warm:coverage:${shard}`, coverage);
+      await saveCoverage();
     }
   }
 
@@ -77,6 +78,6 @@ export default async (req) => {
   await Promise.all(Array.from({ length: st.concurrency }, worker));
   log.finishedAt = new Date().toISOString(); log.current = null; log.running = false;
   await save();
-  await status.set(`warm:coverage:${shard}`, coverage);
+  await saveCoverage();
   return new Response("", { status: 202 });
 };

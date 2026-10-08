@@ -43,7 +43,9 @@ export async function warmStatus() {
     startedAt: dispatch.startedAt, full: dispatch.full, shards: dispatch.shards,
     generated: logs.flatMap((l) => l.generated || []), translated: logs.flatMap((l) => l.translated || []), errors: logs.flatMap((l) => l.errors || []),
     refreshed: logs.reduce((a, l) => a + (l.refreshed || 0), 0),
-    running: logs.some((l) => l.running), current: logs.map((l) => l.current).filter(Boolean),
+    // A shard still marked running after the 15-minute function limit died without finalising its log.
+    running: logs.some((l) => l.running && Date.now() - Date.parse(l.startedAt || dispatch.startedAt) < 16 * 60 * 1000),
+    current: logs.filter((l) => l.running && Date.now() - Date.parse(l.startedAt || dispatch.startedAt) < 16 * 60 * 1000).map((l) => l.current).filter(Boolean),
     finishedAt: logs.every((l) => l.finishedAt) ? logs.map((l) => l.finishedAt).sort().pop() : null,
   };
   return { last, dispatch };
