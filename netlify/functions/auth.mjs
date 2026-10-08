@@ -1,6 +1,6 @@
 import { json, error, readJson, handler, param, HttpError } from "../lib/http.mjs";
 import { createUser, findUserByLogin, verifyPassword, publicUser, saveUser, loginBuiltin, deleteUser } from "../lib/users.mjs";
-import { logEvent } from "../lib/events.mjs";
+import { logEvent, DEV_COOKIE } from "../lib/events.mjs";
 import { cancelSubscription } from "../lib/lemonsqueezy.mjs";
 import { createToken, sessionCookie, clearCookie } from "../lib/session.mjs";
 import { currentUser, entitlement } from "../lib/entitlement.mjs";
@@ -23,7 +23,7 @@ export default handler(async (req, context) => {
     const body = await readJson(req);
     const locale = SUPPORTED_LOCALES.includes(body.locale) ? body.locale : cfg.defaultLocale();
     const user = await createUser({ username: String(body.username || "").trim(), email: String(body.email || "").trim(), password: body.password, locale });
-    await logEvent("signup", { user });
+    await logEvent("signup", { user, req });
     const token = createToken({ uid: user.id });
     return json(userResponse(user), 201, { "set-cookie": sessionCookie(token, req) });
   }
@@ -35,9 +35,13 @@ export default handler(async (req, context) => {
       user = await loginBuiltin(body.login || body.username, String(body.password || ""));
       if (!user) throw new HttpError(401, "invalid_credentials");
     }
-    await logEvent("login", { user });
+    await logEvent("login", { user, req });
     const token = createToken({ uid: user.id });
-    return json(userResponse(user), 200, { "set-cookie": sessionCookie(token, req) });
+    const headers = new Headers({ "set-cookie": sessionCookie(token, req) });
+    if (user.role === "admin") headers.append("set-cookie", DEV_COOKIE + (new URL(req.url).protocol === "https:" ? "; Secure" : ""));
+    headers.set("content-type", "application/json; charset=utf-8");
+    headers.set("cache-control", "no-store");
+    return new Response(JSON.stringify(userResponse(user)), { status: 200, headers });
   }
 
   if (action === "logout" && req.method === "POST") {
@@ -62,7 +66,7 @@ export default handler(async (req, context) => {
     if (!r) throw new HttpError(503, "billing_not_configured", "Cancel from the billing portal");
     user.subscription = { ...user.subscription, status: r.status, endsAt: r.endsAt, renewsAt: r.renewsAt, lastEvent: "cancelled_by_user", updatedAt: new Date().toISOString() };
     await saveUser(user);
-    await logEvent("cancel", { user });
+    await logEvent("cancel", { user, req });
     return json(userResponse(user));
   }
 
@@ -75,7 +79,7 @@ export default handler(async (req, context) => {
     if (user.subscription?.id && ["active", "on_trial", "past_due"].includes(user.subscription.status)) {
       try { await cancelSubscription(user.subscription.id); } catch (e) { console.warn("cancel on delete failed", e.message); }
     }
-    await logEvent("delete_account", { user });
+    await logEvent("delete_account", { user, req });
     await deleteUser(user);
     return json({ ok: true }, 200, { "set-cookie": clearCookie() });
   }

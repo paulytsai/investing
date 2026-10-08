@@ -8,7 +8,7 @@ export default handler(async (req) => {
   const user = await currentUser(req);
   if (!user) throw new HttpError(401, "unauthenticated");
   const q = query(req).get("q") || "";
-  await logEvent("search", { user, detail: q });
+  await logEvent("search", { user, detail: q, req });
   return json({ results: await searchSymbols(q) }, 200, { "cache-control": "private, max-age=60" });
 });
 

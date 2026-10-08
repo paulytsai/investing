@@ -12,7 +12,7 @@ export default handler(async (req) => {
   const lang = query(req).get("lang") || cfg.defaultLocale();
   if (!SUPPORTED_LOCALES.includes(lang)) throw new HttpError(400, "invalid_locale");
   const bundle = await stockBundle(symbol);
-  await logEvent("demo_view", { detail: symbol });
+  await logEvent("demo_view", { detail: symbol, req });
   const [charts, summary] = await Promise.all([
     Promise.all(RANGES.map((r) => chartSeries(symbol, r).then((c) => [r, c.points]))),
     summaryStatus(symbol, lang, bundle),

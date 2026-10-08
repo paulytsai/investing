@@ -5,8 +5,17 @@ import { openStore } from "./store.mjs";
 
 const clean = (s) => String(s ?? "").replace(/[^A-Za-z0-9_.\-]/g, "_").slice(0, 40);
 
-export async function logEvent(action, { user, detail } = {}) {
+/** True when the request comes from a browser that has logged in as admin (developer traffic). */
+export function isDevRequest(req) {
+  const cookie = req && req.headers && req.headers.get ? req.headers.get("cookie") || "" : "";
+  return /(^|;\s*)kz_dev=1(;|$)/.test(cookie);
+}
+
+export const DEV_COOKIE = "kz_dev=1; Path=/; Max-Age=31536000; SameSite=Lax";
+
+export async function logEvent(action, { user, detail, req } = {}) {
   try {
+    if ((user && user.role === "admin") || isDevRequest(req)) return; // developer traffic is never recorded
     const store = await openStore("events");
     const now = new Date();
     const day = now.toISOString().slice(0, 10).replace(/-/g, "");

@@ -7,7 +7,7 @@ export default handler(async (req, context) => {
   const { user } = await requireEntitled(req);
   const symbol = normalizeSymbol(param(context, "symbol"));
   const bundle = await stockBundle(symbol);
-  await logEvent("view", { user, detail: symbol });
+  await logEvent("view", { user, detail: symbol, req });
   // Refresh the headline quote more often than the rest of the bundle.
   try {
     const q = await liveQuote(symbol);
