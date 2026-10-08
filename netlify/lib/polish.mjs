@@ -21,8 +21,16 @@ export const FINDING_NAMES = {
   },
 };
 
+// The site's own renderings of the assessment labels, so prose and the label pills agree.
+export const LABEL_WORDS = {
+  ja: { strong: "強い", adequate: "妥当", weak: "弱い", mixed: "混在", uncertain: "不確実", improving: "改善", stable: "安定", deteriorating: "悪化", demanding: "厳しい（高い期待）", moderate: "妥当", undemanding: "控えめ", indeterminate: "判定不能" },
+  "zh-TW": { strong: "強", adequate: "尚可", weak: "弱", mixed: "混合", uncertain: "不確定", improving: "改善", stable: "穩定", deteriorating: "惡化", demanding: "要求高", moderate: "合理", undemanding: "要求低", indeterminate: "無法判定" },
+};
+// Bump when the pass itself improves: records polished by an older version run again.
+export const POLISH_VERSION = 2;
+
 // Fields that legitimately hold codes, labels or identifiers rather than prose.
-const SKIP_KEYS = new Set(["finding", "assessment", "confidence", "key", "symbol", "id", "lang", "period", "model", "translatedFrom", "generatedAt", "polishedAt", "usage", "transcriptsUsed", "snapshot", "verification"]);
+const SKIP_KEYS = new Set(["finding", "assessment", "confidence", "key", "symbol", "id", "lang", "period", "model", "translatedFrom", "generatedAt", "polishedAt", "polishVersion", "usage", "transcriptsUsed", "snapshot", "verification"]);
 // A standalone Q, T or V: not part of a word, a ticker-like token (AT&T, N.V., T-Mobile) or a quarter (Q3).
 const STRAY = /(?<![A-Za-z0-9&＆.\-])[QTV](?![A-Za-z0-9\-])/;
 const ENGLISH_LABELS = /\b(strong|adequate|weak|mixed|uncertain|improving|stable|deteriorating|demanding|moderate|undemanding|indeterminate)\b/i;
@@ -54,7 +62,8 @@ export function setPath(obj, path, value) {
 function systemPrompt(kind, lang) {
   const names = FINDING_NAMES[kind]?.[lang] || FINDING_NAMES[kind].en;
   const language = lang === "en" ? "English" : (LANG_NAMES[lang] || lang);
-  const labelRule = lang === "en" ? "" : ` The text is in ${language}: where an English assessment word (strong, adequate, weak, mixed, uncertain, improving, stable, deteriorating, demanding, moderate, undemanding, indeterminate) was left untranslated inside a sentence, render it in natural ${language}.`;
+  const glossary = LABEL_WORDS[lang] ? Object.entries(LABEL_WORDS[lang]).map(([k, v]) => `${k} = ${v}`).join(", ") : "";
+  const labelRule = lang === "en" ? "" : ` The text is in ${language}: where an English assessment word (strong, adequate, weak, mixed, uncertain, improving, stable, deteriorating, demanding, moderate, undemanding, indeterminate) was left inside a sentence, replace it with the ${language} word the site uses (${glossary}), adjusted to the sentence; never keep the English word, not even in parentheses.`;
   return `You copy-edit strings from a ${kind === "sector" ? "sector" : "company"} research report written in ${language}. In these strings a standalone letter Q, T or V may be shorthand for one of the three findings: Q means "${names.Q}", T means "${names.T}", V means "${names.V}". Replace each such shorthand with the full finding name in ${language}, adjusting grammar so the sentence reads naturally; "T and V" becomes the two names. Leave letters that are stock tickers or part of a name untouched (V for Visa, T for AT&T, T-Mobile, Q1 and the like) and change nothing else: same facts, figures, periods and length.${labelRule} Return JSON {"items": [...]} with exactly the same number of strings in the same order, each the edited (or unchanged) string.`;
 }
 
@@ -67,7 +76,7 @@ const SCHEMA = { type: "object", additionalProperties: false, required: ["items"
  */
 export async function polishFindings(record, { kind, lang = "en" }) {
   const flagged = flaggedStrings(record, lang);
-  const stamp = () => { record.polishedAt = new Date().toISOString(); return record; };
+  const stamp = () => { record.polishedAt = new Date().toISOString(); record.polishVersion = POLISH_VERSION; return record; };
   if (!flagged.length) return { record: stamp(), changed: 0 };
   const request = (extra) => runJson({ system: systemPrompt(kind, lang), user: `Edit these strings. Return JSON only.${extra}\n\n${JSON.stringify({ items: flagged.map((f) => f.text) })}`, schema: SCHEMA, effort: "medium", maxTokens: 16000, model: cfg.translationModel() });
   let { parsed } = await request("");
@@ -102,5 +111,5 @@ export async function requestPolish(key, { kind, lang }) {
 
 /** A cached record that still carries shorthand and has never been through the pass. */
 export function wantsPolish(record, lang) {
-  return !!record && !record.polishedAt && flaggedStrings(record, lang).length > 0;
+  return !!record && (record.polishVersion || 0) < POLISH_VERSION && flaggedStrings(record, lang).length > 0;
 }

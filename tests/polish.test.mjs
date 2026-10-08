@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { needsPolish, flaggedStrings, setPath, wantsPolish } from "../netlify/lib/polish.mjs";
+import { needsPolish, flaggedStrings, setPath, wantsPolish, POLISH_VERSION } from "../netlify/lib/polish.mjs";
 
 test("standalone finding letters are flagged, tickers and quarters are not", () => {
   assert.equal(needsPolish("If margins fall for two years, Q tilts to weak."), true);
@@ -24,6 +24,8 @@ test("flagged strings skip code fields and carry their path", () => {
   setPath(rec, f[1].path, "セクターの方向性が改善する");
   assert.equal(rec.checkpoints[0].premise, "セクターの方向性が改善する");
   assert.equal(wantsPolish(rec, "ja"), true);
-  rec.polishedAt = "2026-10-08T00:00:00Z";
+  rec.polishedAt = "2026-10-08T00:00:00Z"; rec.polishVersion = 1;
+  assert.equal(wantsPolish(rec, "ja"), true, "an older pass runs again");
+  rec.polishVersion = POLISH_VERSION;
   assert.equal(wantsPolish(rec, "ja"), false);
 });
