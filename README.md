@@ -122,7 +122,8 @@ canonical, Open Graph, JSON-LD for WebSite, SoftwareApplication and the creator)
 server-rendered public preview of a ticker page (profile, the past year's story,
 key figures, JSON-LD) that the app upgrades to the full page for subscribers;
 `/sitemap.xml` lists every warmed ticker. The landing page carries a bio of the
-creator.
+creator, and `#/about` (linked from every footer next to Contact) repeats it with
+a short description of the site.
 
 ### Project layout
 

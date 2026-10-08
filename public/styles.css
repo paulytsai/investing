@@ -462,3 +462,6 @@ details.dcf-card[open] > summary.sec .sec-t::before { content: "▾ 【"; }
 .teaser .blur { color: var(--muted); }
 .teaser-lock { margin: 16px 0 8px; padding: 16px; background: var(--bg); border: 1px solid var(--border); text-align: center; }
 .teaser-lock p { margin: 0 0 12px; }
+
+.about-page { margin: 12px auto; max-width: 980px; text-align: center; }
+.about-page .bio-text h4 { margin: 14px 0 6px; }

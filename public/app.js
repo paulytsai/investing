@@ -123,7 +123,7 @@
     const [a, b] = h.split("/");
     if (a === "s" && b) return { view: "stock", symbol: decodeURIComponent(b).toUpperCase() };
     if (a === "reset" && b) return { view: "reset", token: b };
-    if (["login", "signup", "account", "subscribe", "admin", "forgot", "contact"].includes(a)) return { view: a };
+    if (["login", "signup", "account", "subscribe", "admin", "forgot", "contact", "about"].includes(a)) return { view: a };
     return { view: "home" };
   }
   window.addEventListener("hashchange", () => { state.route = parseRoute(); render(); });
@@ -134,6 +134,7 @@
     if (r.view === "signup") return renderAuth("signup");
     if (r.view === "forgot") return renderForgot();
     if (r.view === "contact") return renderContact();
+    if (r.view === "about") return renderAbout();
     if (r.view === "reset") return renderReset(r.token);
     if (r.view === "account") return state.user ? renderAccount() : renderAuth("login");
     if (r.view === "subscribe") return renderPaywall();
@@ -172,7 +173,7 @@
           <a class="btn primary big" href="#/signup">${esc(L.ctaPrimary)}</a>
           <p class="muted small">${esc(L.pricingNote)}</p></div>
       </section>
-      <div class="footer center">${esc(L.disclaimer)}<br><a href="#/contact">${t("contact.link")}</a></div>`;
+      <div class="footer center">${esc(L.disclaimer)}<br><a href="#/about">${t("about.link")}</a> · <a href="#/contact">${t("contact.link")}</a></div>`;
       mountDemo(app.querySelector("[data-demo]"));
       return;
     }
@@ -245,9 +246,22 @@
       ${d.headlines ? `<div class="teaser-locked"><h2 class="sub">${K.inside}</h2><ul>${[["longTerm", d.headlines.longTerm], ["recent", d.headlines.recent], ["bull", d.headlines.bull], ["bear", d.headlines.bear]].map(([k, h]) => `<li><b>${t(k)}</b>${h ? `: <span class="blur">${esc(h)}</span>` : ""} 🔒</li>`).join("")}<li>${K.more}</li></ul></div>` : ""}
       <div class="teaser-lock"><p>${K.locked}</p><a class="btn primary big" href="#/signup">${K.cta}</a> <a class="btn" href="#/login">${t("login")}</a></div>
       <p class="note">${d.nextEarnings ? `${t("nextEarnings")}: ${fmtDate(d.nextEarnings)} · ` : ""}${t("updated", { date: fmtDate(d.generatedAt || d.asOf) })}</p></article>
-      <div class="footer">${t("aiNote")}<br>${t("disclaimer")}<br><a href="#/contact">${t("contact.link")}</a></div>`;
+      <div class="footer">${t("aiNote")}<br>${t("disclaimer")}<br><a href="#/about">${t("about.link")}</a> · <a href="#/contact">${t("contact.link")}</a></div>`;
   }
   const kv2 = (rows) => `<dl class="kv2">${rows.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join("")}</dl>`;
+  function renderAbout() {
+    stopSummaryPolling(state.stock); stopSummaryPolling(state.demo);
+    const A = t("about"); const B = JSON.parse(JSON.stringify(t("landing.bio")).split("{brand}").join(brandName()));
+    document.title = `${A.title} | ${t("siteName")}`;
+    app.innerHTML = `<section class="land bio about-page"><h2>${esc(A.title)}</h2>
+      <div class="bio-row"><img class="bio-photo" src="/img/paul-tsai.jpg" alt="${esc(B.name)}" width="240" height="320">
+        <div class="bio-text"><h3>${esc(B.name)} <span class="muted">${esc(B.role)}</span></h3>
+        ${B.paragraphs.map((p) => `<p>${esc(p)}</p>`).join("")}
+        <h4 class="sub">${esc(A.siteTitle)}</h4>${A.site.map((p) => `<p>${esc(p.split("{brand}").join(brandName()))}</p>`).join("")}
+        <p class="muted small">${esc(B.book)}</p>
+        <p><a class="btn" href="https://paultsai.net" target="_blank" rel="noopener">${esc(A.more)}</a> <a class="btn" href="#/contact">${t("contact.link")}</a></p></div></div></section>
+      <div class="footer">${t("disclaimer")}<br><a href="#/about">${t("about.link")}</a> · <a href="#/contact">${t("contact.link")}</a></div>`;
+  }
   function renderContact() {
     stopSummaryPolling(state.stock); stopSummaryPolling(state.demo);
     const C = t("contact"); const u = state.user;
@@ -413,7 +427,7 @@
       } catch {}
     }
     document.title = `${symbol} | ${t("siteName")}`;
-    app.innerHTML = `<div data-stock></div><div class="footer">${t("aiNote")}<br>${t("disclaimer")}<br><a href="#/contact">${t("contact.link")}</a></div>`;
+    app.innerHTML = `<div data-stock></div><div class="footer">${t("aiNote")}<br>${t("disclaimer")}<br><a href="#/about">${t("about.link")}</a> · <a href="#/contact">${t("contact.link")}</a></div>`;
     mountStock(app.querySelector("[data-stock]"), c);
     loadSummary(c);
   }
