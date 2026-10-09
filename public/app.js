@@ -705,8 +705,9 @@
     const i = b && b.insider; if (!i) return null; const I = t("simpleUi").insider;
     // Open-market buys versus sales by count: share totals include stock awards, which are not purchases.
     const buys = i.purchases || 0, sells = i.sales || 0;
-    const tone = buys > sells ? "good" : sells > buys ? "bad" : "na";
-    const text = buys > sells ? I.buying : sells > buys ? I.selling : I.flat;
+    // Only buying is a signal: there is one reason to buy but many reasons to sell, so selling is reported neutrally.
+    const tone = buys > sells ? "good" : "na";
+    const text = buys > sells ? I.buying : buys || sells ? I.none : I.flat;
     const detail = I.detail.replace("{y}", i.year).replace("{q}", i.quarter).replace("{b}", fmtInt(i.purchases || 0)).replace("{bs}", fmtInt(i.acquiredShares || 0)).replace("{s}", fmtInt(i.sales || 0)).replace("{ss}", fmtInt(i.disposedShares || 0));
     return { tone, text, detail, html: `<span class="chip ${tone}" title="${esc(detail)}"><span class="chip-v">${esc(text)}</span></span>` };
   }
@@ -876,11 +877,12 @@
 
   // ---- small builders ----
   // gist: one line shown in the collapsed header (simple view); a string, or { key, text } so it can be filled in later
-  const sec = (title, inner, extra = "", gist = "") => {
+  // opts.open: in the beginner view the card still folds, but starts expanded (the valuation tables).
+  const sec = (title, inner, extra = "", gist = "", opts = {}) => {
     const g = gist && typeof gist === "object" ? gist : { key: "", text: gist || "" };
     const gistHtml = viewMode() === "simple" && (g.text || g.key) ? `<span class="gist"${g.key ? ` data-gist="${esc(g.key)}"` : ""}>${g.text}</span>` : "";
     return viewMode() === "simple" && state.route.view !== "admin"
-      ? `<details class="card dd"><summary class="sec"><span class="sec-t">${title}</span>${extra ? `<span class="sec-extra">${extra}</span>` : ""}${gistHtml}</summary>${inner}</details>`
+      ? `<details class="card dd"${opts.open ? " open" : ""}><summary class="sec"><span class="sec-t">${title}</span>${extra ? `<span class="sec-extra">${extra}</span>` : ""}${gistHtml}</summary>${inner}</details>`
       : `<section class="card"><h3 class="sec"><span class="sec-t">${title}</span>${extra ? `<span class="sec-extra">${extra}</span>` : ""}</h3>${inner}</section>`;
   };
   const clip = (text, n = 90) => { const x = String(text || "").replace(/\s+/g, " ").trim(); return x.length > n ? x.slice(0, n - 1) + "…" : x; };
@@ -1014,9 +1016,9 @@
     const gOff = b.officers.length ? `${esc(b.officers[0].name)}（${esc(b.officers[0].title)}）${b.officers.length > 1 ? ` +${b.officers.length - 1}` : ""}` : "";
     const gCap = caps.length ? `${caps.length}: ${yymm(caps[0].date)}` : `${t("tech").high52} $${fmtDec((p.yearly[0] || {}).high)}`;
     const gFil = b.filings[0] ? `${esc(b.filings[0].form)} ${esc(b.filings[0].filingDate || b.filings[0].date || "")}` : "";
-    return `<div class="grid2">${sec(t("holders"), insiderLine + holders, "", gHold)}${sec(t("officers"), officers, "", gOff)}</div>
+    return `<div class="grid2">${sec(t("holders"), insiderLine + holders, "", gHold)}${sec(t("officers"), officers, "", gOff, { open: true })}</div>
       <div class="grid2b">${sec(t("capitalChanges"), wrap(`<table class="tbl"><tbody>${capRows}</tbody></table>`) + prices, "", gCap)}
-      ${sec(t("filings"), wrap(`<table class="tbl"><tbody>${filings || `<tr><td class="c">${NA}</td></tr>`}</tbody></table>`), "", gFil) + (events ? sec(t("events"), wrap(`<table class="tbl"><tbody>${events}</tbody></table>`)) : "")}</div>`;
+      ${sec(t("filings"), wrap(`<table class="tbl"><tbody>${filings || `<tr><td class="c">${NA}</td></tr>`}</tbody></table>`), "", gFil, { open: true }) + (events ? sec(t("events"), wrap(`<table class="tbl"><tbody>${events}</tbody></table>`), "", "", { open: true }) : "")}</div>`;
   }
 
   // Current multiple against its own 5- and 10-year fiscal-year-end range.
@@ -1029,7 +1031,7 @@
     const rows = Object.entries(names).map(([k, label]) => { const r5 = h.range5[k], r10 = h.range10 && h.range10[k]; if (!r5 && !r10) return ""; const r = r5 || r10;
       return `<tr><th>${label}</th><td class="num"><b>${fmtDec(r.now, 1)}</b></td><td class="num">${r5 ? `${fmtDec(r5.low, 1)} / ${fmtDec(r5.median, 1)} / ${fmtDec(r5.high, 1)}` : NA}</td><td class="num">${r10 && r10.n > (r5 ? r5.n : 0) ? `${fmtDec(r10.low, 1)} / ${fmtDec(r10.median, 1)} / ${fmtDec(r10.high, 1)}` : NA}</td><td>${pos(r5 || r10)}</td></tr>`; }).join("");
     const S2 = t("simpleUi"); const gHist = ["pe", "evEbitda", "pfcf"].filter((k) => h.range5[k]).map((k) => `${names[k]} ${rangePos(h.range5[k], S2)}`).join(" · ");
-    return sec(H.title, wrap(`<table class="tbl hist"><thead><tr><th>${H.metric}</th><th class="num">${H.now}</th><th class="num">${H.range5}</th><th class="num">${H.range10}</th><th>${H.position}</th></tr></thead><tbody>${rows}</tbody></table>`) + `<p class="note">${esc(H.note)}</p>`, "", gHist);
+    return sec(H.title, wrap(`<table class="tbl hist"><thead><tr><th>${H.metric}</th><th class="num">${H.now}</th><th class="num">${H.range5}</th><th class="num">${H.range10}</th><th>${H.position}</th></tr></thead><tbody>${rows}</tbody></table>`) + `<p class="note">${esc(H.note)}</p>`, "", gHist, { open: true });
   }
   function tabValuation(c) {
     const b = c.b; const v = b.valuation; const d = b.dcf; const V = t("val");
@@ -1042,8 +1044,7 @@
       [V.quality, [[V.gm, fmtPct(v.grossMarginPct)], [V.om, fmtPct(v.opMarginPct)], [V.nm, fmtPct(v.netMarginPct)], [V.roe, fmtPct(v.roePct)], [V.roic, fmtPct(v.roicPct)], [V.roa, fmtPct(v.roaPct)], [V.ndEbitda, x(v.netDebtEbitda, 2)], [V.de, x(v.debtEquity, 2)], [V.cov, x(v.interestCoverage)], [V.cr, x(v.currentRatio, 2)]]],
       [V.market, [[V.beta, x(v.beta, 2)], [t("tech").high52, `$${x(v.yearHigh, 2)}${v.yearHighDate ? ` <span class="muted">(${fmtDate(v.yearHighDate)})</span>` : ""}`], [t("tech").low52, `$${x(v.yearLow, 2)}${v.yearLowDate ? ` <span class="muted">(${fmtDate(v.yearLowDate)})</span>` : ""}`], v.allTimeHigh ? [t("tech").ath, `$${x(v.allTimeHigh.price, 2)} <span class="muted">(${fmtDate(v.allTimeHigh.date)})</span>`] : null, [V.ma, `$${x(v.priceAvg50, 2)} / $${x(v.priceAvg200, 2)}`], [V.target, v.analystTarget ? `$${x(v.analystTarget.consensus, 2)} (${v.analystTarget.upsidePct >= 0 ? "+" : ""}${x(v.analystTarget.upsidePct)}%)` : NA]]],
     ];
-    const strip = (h) => String(h).replace(/<[^>]+>/g, "");
-    const metrics = `<div class="grid3">${groups.map(([title, rows]) => sec(title, kv(rows), "", clip(rows.filter((r) => r).slice(0, 3).map(([k, val]) => `${strip(k)} ${strip(val)}`).join(" · ")))).join("")}</div>` + multiplesHistoryHtml(v.history, V);
+    const metrics = `<div class="grid3">${groups.map(([title, rows]) => sec(title, kv(rows), "", "", { open: true })).join("")}</div>` + multiplesHistoryHtml(v.history, V);
     let dcfHtml;
     if (!d) dcfHtml = `<p class="muted">${V.noDcf}</p>`;
     else {
@@ -1081,7 +1082,7 @@
     }
     const dcfExtra = d && d.riskFreeDate ? `<span class="sec-extra">${V.rf}: ${fmtPct(d.inputs.riskFree, 2)} (${esc(d.riskFreeDate)})</span>` : "";
     const dcfCard = `<details class="card dcf-card"><summary class="sec"><span class="sec-t">${V.dcfTitle}</span>${dcfExtra} <span class="muted small">${V.dcfHint}</span></summary>${dcfHtml}</details>`;
-    return `${sec(T.title, targetHtml)}<h3 class="sec plain">${V.title}</h3>${metrics}${dcfCard}`;
+    return `${sec(T.title, targetHtml, "", "", { open: true })}<h3 class="sec plain">${V.title}</h3>${metrics}${dcfCard}`;
   }
   function bindTarget(c) {
     const root = c.root; if (!root) return;
