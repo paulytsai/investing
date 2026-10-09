@@ -31,7 +31,11 @@ async function call(method, path, body, { idempotencyKey } = {}) {
   else if (body) { headers["content-type"] = "application/x-www-form-urlencoded"; init.body = formEncode(body).toString(); }
   const res = await fetch(url, init);
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(`Stripe ${method} ${path}: ${data?.error?.message || `HTTP ${res.status}`}`);
+  if (!res.ok) {
+    const err = new Error(`Stripe ${method} ${path}: ${data?.error?.message || `HTTP ${res.status}`}`);
+    err.stripeCode = data?.error?.code || null; err.status = res.status;
+    throw err;
+  }
   return data;
 }
 
@@ -47,13 +51,43 @@ export async function findPromotionCode(code) {
   if (!c || c.length > 40) return null;
   const r = await call("GET", `promotion_codes?code=${encodeURIComponent(c)}&active=true&limit=1`);
   const p = r.data && r.data[0];
-  if (!p || !p.active || !p.coupon || !p.coupon.valid) return null;
+  if (!p || !p.active) return null;
+  // API 2025-03-31 returns the coupon object on p.coupon; later versions moved it to
+  // p.promotion.coupon (an id unless expanded). Accept both so a version bump cannot break codes.
+  let coupon = p.coupon && typeof p.coupon === "object" ? p.coupon : null;
+  const cid = !coupon && (typeof p.coupon === "string" ? p.coupon : p.promotion && p.promotion.coupon);
+  if (!coupon && cid) coupon = typeof cid === "object" ? cid : await call("GET", `coupons/${encodeURIComponent(cid)}`).catch(() => null);
+  if (!coupon || !coupon.valid) return null;
+  p.coupon = coupon;
   if (p.expires_at && p.expires_at * 1000 < Date.now()) return null;
   if (p.max_redemptions && p.times_redeemed >= p.max_redemptions) return null;
   return { id: p.id, code: p.code, percentOff: p.coupon.percent_off || null, amountOff: p.coupon.amount_off || null, currency: p.coupon.currency || null, duration: p.coupon.duration, months: p.coupon.duration_in_months || null, name: p.coupon.name || null, firstTimeOnly: !!(p.restrictions && p.restrictions.first_time_transaction) };
 }
 
-export async function createCheckoutSession(user, { siteUrl, plan = "monthly", promotionCode = null }) {
+/** The Stripe customer for this user: the stored one, or a new one (saved by the caller). */
+export async function ensureCustomer(user) {
+  const known = user.stripeCustomerId || (user.subscription && user.subscription.provider === "stripe" && user.subscription.customerId) || null;
+  if (known) {
+    try { const c = await call("GET", `customers/${encodeURIComponent(known)}`); if (c && !c.deleted) return c.id; }
+    catch (e) { if (e.stripeCode !== "resource_missing") throw e; } // e.g. a sandbox customer after switching to live keys
+  }
+  const c = await call("POST", "customers", { email: user.email, name: user.username, metadata: { user_id: user.id, username: user.username } }, { idempotencyKey: `customer:${user.id}:${cfg.stripe().testMode ? "test" : "live"}:${known || "new"}` });
+  return c.id;
+}
+
+/** Expire an open Checkout Session so a second tab cannot complete a second purchase. */
+export async function expireCheckoutSession(id) {
+  if (!id) return;
+  try { await call("POST", `checkout/sessions/${encodeURIComponent(id)}/expire`); } catch { /* already completed or expired */ }
+}
+
+/**
+ * Hosted Checkout. Returns { url, sessionId, customerId }.
+ * trialEndMs: the end of the site's free period; when it is more than 48 hours away (Stripe's
+ * minimum for Checkout) the subscription starts with a Stripe trial and the first charge is on
+ * that day, so subscribing early never costs the remaining free time.
+ */
+export async function createCheckoutSession(user, { siteUrl, plan = "monthly", promotionCode = null, allowPromotionCodes = true, trialEndMs = null, customerId = null }) {
   const s = cfg.stripe();
   const base = siteUrl.replace(/\/$/, "");
   const price = plan === "annual" && s.priceIdAnnual ? s.priceIdAnnual : s.priceId;
@@ -64,19 +98,21 @@ export async function createCheckoutSession(user, { siteUrl, plan = "monthly", p
     cancel_url: `${base}/#/account`,
     client_reference_id: user.id,
     metadata: { user_id: user.id, username: user.username, plan },
-    subscription_data: { metadata: { user_id: user.id, plan } },
+    subscription_data: { metadata: { user_id: user.id, plan, site: cfg.brand().id || "" } },
     // Managed Payments requires adaptive pricing: the price is set in the site's currency and
     // visitors abroad see their own currency with a selector to switch back.
     locale: CHECKOUT_LOCALES[user.locale] || "auto",
   };
   if (s.managedPayments) params.managed_payments = { enabled: true };
+  if (trialEndMs && trialEndMs - Date.now() > 49 * 3600 * 1000) params.subscription_data.trial_end = Math.floor(trialEndMs / 1000);
   // A code applied on the site is pre-filled; otherwise Checkout shows its own promotion-code
-  // field (Stripe allows one or the other, not both).
-  if (promotionCode) params.discounts = [{ promotion_code: promotionCode }]; else params.allow_promotion_codes = true;
-  const existing = user.subscription && user.subscription.provider === "stripe" && user.subscription.customerId;
-  if (existing) params.customer = existing; else params.customer_email = user.email;
+  // field (Stripe allows one or the other, not both) when the plan allows codes at all.
+  if (promotionCode) params.discounts = [{ promotion_code: promotionCode }];
+  else if (allowPromotionCodes) params.allow_promotion_codes = true;
+  const customer = customerId || (await ensureCustomer(user));
+  params.customer = customer;
   const session = await call("POST", "checkout/sessions", params, { idempotencyKey: `checkout:${user.id}:${Date.now()}` });
-  return session.url;
+  return { url: session.url, sessionId: session.id, customerId: customer };
 }
 
 /** Customer portal: update the card, see invoices, cancel. */
@@ -93,7 +129,32 @@ export async function retrieveCustomer(id) {
 }
 /** Cancel at the end of the current period (the user keeps access until then). */
 export async function cancelAtPeriodEnd(id) {
-  return call("POST", `subscriptions/${encodeURIComponent(id)}`, { cancel_at_period_end: true });
+  return call("POST", `subscriptions/${encodeURIComponent(id)}`, { cancel_at_period_end: true, "expand[]": "default_payment_method" });
+}
+/** Undo a scheduled cancellation: the subscription renews again. */
+export async function resumeSubscription(id) {
+  return call("POST", `subscriptions/${encodeURIComponent(id)}`, { cancel_at_period_end: false, "expand[]": "default_payment_method" });
+}
+/** End the subscription now (account deleted, refund or dispute): no further charges. */
+export async function cancelNow(id) {
+  return call("DELETE", `subscriptions/${encodeURIComponent(id)}`);
+}
+/** The customer's invoices, newest first, for the site's billing history. */
+export async function listInvoices(customerId, limit = 24) {
+  const r = await call("GET", "invoices", { customer: customerId, limit });
+  return (r.data || []).filter((i) => i.status !== "draft");
+}
+/** The subscription a payment belongs to (refund and dispute events carry only the payment). */
+export async function subscriptionForPayment({ paymentIntent, invoice }) {
+  let invId = invoice || null;
+  if (!invId && paymentIntent) {
+    const r = await call("GET", "invoice_payments", { "payment[type]": "payment_intent", "payment[payment_intent]": paymentIntent, limit: 1 }).catch(() => null);
+    const ip = r && r.data && r.data[0];
+    invId = ip ? (typeof ip.invoice === "string" ? ip.invoice : ip.invoice && ip.invoice.id) : null;
+  }
+  if (!invId) return null;
+  const inv = await call("GET", `invoices/${encodeURIComponent(invId)}`);
+  return inv.subscription || (inv.parent && inv.parent.subscription_details && inv.parent.subscription_details.subscription) || null;
 }
 
 // ---- mapping ----
@@ -121,6 +182,11 @@ export function subscriptionRecord(sub) {
     renewsAt: status === "cancelled" ? null : iso(periodEnd),
     endsAt: sub.cancel_at ? iso(sub.cancel_at) : sub.ended_at ? iso(sub.ended_at) : status === "cancelled" ? iso(periodEnd) : null,
     trialEndsAt: iso(sub.trial_end),
+    interval: sub.items?.data?.[0]?.price?.recurring?.interval || null, // "month" | "year"
+    plan: sub.metadata?.plan || (sub.items?.data?.[0]?.price?.recurring?.interval === "year" ? "annual" : "monthly"),
+    livemode: sub.livemode === true,
+    createdAt: iso(sub.created),
+    cancelAtPeriodEnd: !!sub.cancel_at_period_end,
     cardBrand: card ? card.brand : null,
     cardLastFour: card ? card.last4 : null,
     portalUrl: null,

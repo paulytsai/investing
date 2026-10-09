@@ -282,7 +282,9 @@ one recurring price per currency, and each site points at its own price.
    events `checkout.session.completed`, `customer.subscription.created`,
    `customer.subscription.updated`, `customer.subscription.deleted`,
    `customer.subscription.paused`, `customer.subscription.resumed`, `invoice.paid`,
-   `invoice.payment_failed`. Copy the signing secret (`whsec_...`). One endpoint per site.
+   `invoice.payment_failed`, `charge.refunded`, `charge.dispute.created`. Create it through the
+   API with `api_version=2025-03-31.basil` (the version the code pins) rather than the Dashboard,
+   which picks the newest version. Copy the signing secret (`whsec_...`). One endpoint per site.
 4. Settings → Billing → Customer portal: enable it, allow cancellation and payment-method
    updates. The "Manage billing" button opens it.
 5. Set on the site: `STRIPE_SECRET_KEY`, `STRIPE_PRICE_ID`, `STRIPE_WEBHOOK_SECRET`,
@@ -292,8 +294,29 @@ one recurring price per currency, and each site points at its own price.
    sandbox key, a sandbox price and the card 4242 4242 4242 4242.
 
 The checkout carries the user id; the webhook matches the subscription to the account by
-that id, or by email. Cancelling from the account page sets cancel-at-period-end, and the
-user keeps access until the period ends.
+that id (by email only when a subscription has no user id at all). Billing rules:
+
+* **Free time is never lost.** Subscribing during the trial or an access-code period starts a
+  Stripe trial that ends on the same day, so the first charge falls when the free period ends
+  (when more than 48 hours remain; Stripe's minimum).
+* **One subscription per account.** Checkout is refused while a subscription runs (including a
+  scheduled cancel); the account page offers "Resume subscription" instead, and a second open
+  Checkout tab is expired. The webhook never lets an older, ended subscription overwrite a running one.
+* **Cancel** from the account page = cancel at period end (access continues). **Delete account** ends
+  the subscription immediately; if Stripe cannot be reached, nothing is deleted. A subscription
+  whose account no longer exists is cancelled by the webhook instead of being re-attached by email.
+* **Refunds and disputes.** A full refund or a dispute ends the subscription immediately (Stripe
+  handles the money under Managed Payments). Partial refunds change nothing.
+* **Promotion codes** (LAUNCH25) apply to a first monthly subscription only; the annual plan is
+  already discounted, so Checkout shows no code field for it.
+* **Billing history.** The account page lists every invoice (date, period, amount, tax, status)
+  with links to Stripe's invoice PDF and hosted receipt; `GET /api/billing/history`.
+* **Sandbox keys on a public site.** With `sk_test_`/`rk_test_` keys only test accounts
+  (`stripetest…`, `qtv…`, `cptest…`, admins, and usernames in `STRIPE_TEST_USERS`) can start a
+  checkout, so a test card cannot unlock paid access. Events for prices this site does not sell
+  are ignored (`STRIPE_EXTRA_PRICE_IDS` lists retired prices that still bill).
+* Failed renewals: the account shows "update your card" while Stripe retries. Set the final
+  action in Dashboard → Billing → Revenue recovery → Retries to cancel the subscription.
 
 ### Lemon Squeezy setup (legacy)
 

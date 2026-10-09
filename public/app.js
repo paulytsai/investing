@@ -24,7 +24,7 @@
   const currencyName = () => { const c = (state.config && state.config.priceCurrency) || "USD"; const names = (window.CURRENCY_NAMES || {})[state.locale] || {}; return names[c] || c; };
   // " in Japanese and English" on a two-language site, nothing on a single-language one (English copy only).
   // Annual plan line: "¥26,550 / year (25% off, ¥2,213 a month)" when the site offers one.
-  const annualInfo = () => { const a = state.config && state.config.annual; const m = state.config && state.config.priceAmount; if (!a || !m) return null; const yearly = Number(a.amount); const pct = Math.round((1 - yearly / (12 * m)) * 100); const sym = String(state.config.priceLabel || "").replace(/[\d.,\s]/g, ""); const perMonth = yearly / 12; const dec = state.config.priceCurrency === "JPY" || state.config.priceCurrency === "TWD" ? 0 : 2; return { label: a.label, pct, perMonth: `${sym}${perMonth.toLocaleString(undefined, { minimumFractionDigits: dec, maximumFractionDigits: dec })}` }; };
+  const annualInfo = () => { const a = state.config && state.config.annual; const m = state.config && state.config.priceAmount; if (!a || !m) return null; const yearly = Number(a.amount); const pct = Math.round((1 - yearly / (12 * m)) * 100); const sym = String(state.config.priceLabel || "").replace(/[\d.,\s]/g, ""); const perMonth = yearly / 12; const dec = state.config.priceCurrency === "JPY" || state.config.priceCurrency === "TWD" ? 0 : 2; return { label: a.label, pct, perMonth: `${sym}${perMonth.toLocaleString(state.locale === "ja" ? "ja-JP" : state.locale === "zh-TW" ? "zh-TW" : "en-US", { minimumFractionDigits: dec, maximumFractionDigits: dec })}` }; };
   const langsNote = () => { const ls = (state.config && state.config.locales) || []; return ls.length > 1 ? ` in ${ls.map((l) => window.LOCALE_NAMES_EN[l] || l).join(" and ")}` : ""; };
   function applyBrand() {
     const b = (state.config && state.config.brand) || {};
@@ -57,9 +57,13 @@
   }
   function fmtDate(iso, opts) {
     if (!iso) return NA;
-    const d = new Date(iso.length === 10 ? iso + "T00:00:00Z" : iso);
+    // A calendar date ("2026-10-08": report and filing dates) is shown as written, in UTC; a full
+    // timestamp (renewal, trial end, payment) in the reader's own time zone, so a purchase at
+    // 07:00 in Tokyo does not show the previous day.
+    const dateOnly = String(iso).length === 10;
+    const d = new Date(dateOnly ? iso + "T00:00:00Z" : iso);
     const loc = state.locale === "ja" ? "ja-JP" : state.locale === "zh-TW" ? "zh-TW" : "en-US";
-    return d.toLocaleDateString(loc, { year: "numeric", month: "short", day: "numeric", timeZone: "UTC", ...(opts || {}) });
+    return d.toLocaleDateString(loc, { year: "numeric", month: "short", day: "numeric", ...(dateOnly ? { timeZone: "UTC" } : {}), ...(opts || {}) });
   }
   function yymm(iso) { return iso ? `${iso.slice(2, 4)}.${Number(iso.slice(5, 7))}` : NA; }
   function monthName(m) {
@@ -284,6 +288,8 @@
     if (e.state === "admin") return t("billing.admin");
     if (e.state === "complimentary") return t("billing.complimentary");
     if (e.state === "trial") return t("trialDaysLeft", { n: e.daysLeft }) + ` (${fmtDate(new Date(e.trialEndsAt).toISOString())})`;
+    if (e.state === "subscribed" && e.status === "on_trial") return t("bill.onTrial", { date: fmtDate(e.renewsAt || (state.user && state.user.subscription && state.user.subscription.trialEndsAt)) });
+    if (e.state === "subscribed" && e.status === "past_due") return `${t("subscribed")} · ${t("bill.pastDue")}`;
     if (e.state === "subscribed") return `${t("subscribed")}${e.renewsAt ? ` · ${fmtDate(e.renewsAt)}` : ""}`;
     if (e.state === "cancelled_grace") return t("cancelledGrace", { date: fmtDate(e.endsAt) });
     return t(e.state === "lapsed" ? "lapsed" : "trialExpired");
@@ -415,21 +421,38 @@
   function renderAccount() {
     stopSummaryPolling(state.stock); stopSummaryPolling(state.demo);
     const u = state.user; const e = state.ent; const B = t("billing");
-    const canSubscribe = state.config.billingEnabled && !["subscribed", "admin", "complimentary"].includes(e && e.state);
+    const confirming = location.hash.includes("checkout=success") && !(e && e.state === "subscribed");
+    // In a cancelled-but-paid period the answer is "resume", never a second purchase.
+    const canSubscribe = state.config.billingEnabled && !confirming && !["subscribed", "admin", "complimentary", "cancelled_grace"].includes(e && e.state);
     const hasSub = u.subscription && u.subscription.id;
+    const hasBilling = hasSub || !!u.stripeCustomerId;
     const canCancel = hasSub && ["active", "on_trial", "past_due"].includes(u.subscription.status);
+    const canResume = hasSub && u.subscription.provider === "stripe" && e && e.state === "cancelled_grace";
+    const pastDue = hasSub && u.subscription.status === "past_due";
+    const carry = e && e.state === "trial" && e.trialEndsAt && e.trialEndsAt - Date.now() > 49 * 3600 * 1000;
+    const Bl = t("bill");
     app.innerHTML = `<div class="panel form"><h2>${t("account")}</h2>
       <div class="kv"><div>${t("username")}</div><div>${esc(u.username)}</div><div>${t("email")}</div><div>${esc(u.email)}</div><div>${t("pricing")}</div><div>${statusLine()}</div></div>
-      <div id="formError">${location.hash.includes("checkout=success") && !hasSub ? `<div class="pill">${esc(B.checkoutDone)}</div>` : ""}</div>
+      <div id="formError">${confirming ? `<div class="pill" id="confirmMsg">${esc(Bl.confirming)}</div>` : ""}</div>
+      ${canSubscribe && carry ? `<p class="muted small">${esc(t("bill.trialCarry", { date: fmtDate(new Date(e.trialEndsAt).toISOString()) }))}</p>` : ""}
       ${canSubscribe ? subscribeButtons() : ""}
       ${u.builtin ? "" : `<h3 class="billing-h">${t("pw.changeTitle")}</h3><form id="pwForm"><label>${t("pw.current")}<input name="currentPassword" type="password" required autocomplete="current-password"></label><label>${t("pw.newPassword")}<input name="newPassword" type="password" required minlength="8" autocomplete="new-password"></label><label>${t("pw.confirm")}<input name="confirm" type="password" required minlength="8" autocomplete="new-password"></label><button class="btn" type="submit">${t("pw.change")}</button> <span id="pwMsg" class="muted small"></span></form>`}
       <h3 class="billing-h">${B.title}</h3>
-      ${hasSub ? `<button class="btn" id="portalBtn">${t("manageBilling")}</button><p class="muted small">${B.portalHint}</p>` : ""}
+      ${pastDue ? `<div class="error">${esc(Bl.pastDue)} <button class="btn small primary" id="portalBtn2">${esc(Bl.updateCard)}</button></div>` : ""}
+      ${canResume ? `<div class="resume-box"><button class="btn primary" id="resumeBtn">${esc(Bl.resume)}</button> <span class="muted small">${esc(t("bill.resumeHint", { date: fmtDate(e.endsAt) }))}</span></div>` : ""}
+      ${hasBilling ? `<div id="billSummary"></div><div id="billHistory" class="muted small">${esc(Bl.loading)}</div>` : ""}
+      ${hasBilling ? `<button class="btn" id="portalBtn">${t("manageBilling")}</button><p class="muted small">${B.portalHint}</p>` : ""}
       ${canCancel ? `<button class="btn" id="cancelBtn">${B.cancelSub}</button><div id="cancelBox" hidden><p>${B.cancelConfirm}</p><button class="btn danger" id="cancelYes">${B.cancelSub}</button> <button class="btn" id="cancelNo">${B.back}</button></div>` : ""}
       ${u.builtin ? "" : `<button class="btn danger-outline" id="deleteBtn">${B.deleteAcct}</button><div id="deleteBox" hidden><p>${B.deleteConfirm}</p><input type="password" id="deletePw" autocomplete="current-password" placeholder="${t("password")}"><div style="margin-top:8px"><button class="btn danger" id="deleteYes">${B.deleteBtn}</button> <button class="btn" id="deleteNo">${B.back}</button></div></div>`}
       <p class="muted" style="margin-top:14px">${t("priceLine", { price: state.config.priceLabel })}</p></div>`;
     bindBilling();
     pollAfterCheckout();
+    if (hasBilling) loadBillingHistory();
+    const rb = $("#resumeBtn"); if (rb) rb.addEventListener("click", async () => {
+      rb.disabled = true;
+      try { const r = await api("/api/auth/resume-subscription", { method: "POST" }); state.user = r.user; state.ent = r.entitlement; renderUserMenu(); renderAccount(); $("#formError").innerHTML = `<div class="pill">${esc(t("bill.resumed"))}</div>`; }
+      catch (e2) { $("#formError").innerHTML = `<div class="error">${esc(t(`errors.${e2.code}`) !== `errors.${e2.code}` ? t(`errors.${e2.code}`) : e2.message)}</div>`; rb.disabled = false; }
+    });
     const pf = $("#pwForm"); if (pf) pf.addEventListener("submit", async (ev) => {
       ev.preventDefault(); const P = t("pw"); const msg = $("#pwMsg");
       if (pf.newPassword.value !== pf.confirm.value) { msg.textContent = P.mismatch; return; }
@@ -565,23 +588,47 @@
 
   function renderPaywall() {
     stopSummaryPolling(state.stock); stopSummaryPolling(state.demo);
-    app.innerHTML = `<div class="panel form"><h2>${t("paywallTitle")}</h2><p>${t("paywallBody", { price: state.config.priceLabel })}</p>
+    const lapsed = state.ent && state.ent.state === "lapsed";
+    app.innerHTML = `<div class="panel form"><h2>${t("paywallTitle")}</h2><p>${t(lapsed ? "paywallBodyLapsed" : "paywallBody", { price: state.config.priceLabel })}</p>
       <div id="formError"></div>
       ${state.config.billingEnabled ? subscribeButtons() : `<p class="error">${t("errors.billing_not_configured")}</p>`}
-      ${state.user && state.user.subscription && state.user.subscription.id ? `<button class="btn" id="portalBtn">${t("manageBilling")}</button>` : ""}</div>`;
+      ${state.user && ((state.user.subscription && state.user.subscription.id) || state.user.stripeCustomerId) ? `<button class="btn" id="portalBtn">${t("manageBilling")}</button>` : ""}</div>`;
     bindBilling();
   }
 
   // After Stripe Checkout returns, the webhook can land a few seconds later: refresh the account until it does.
   function pollAfterCheckout() {
     if (!location.hash.includes("checkout=success")) return;
-    let tries = 0;
+    if (state.ent && state.ent.state === "subscribed") { location.hash = "#/account"; return; }
+    const started = Date.now();
     const tick = async () => {
+      if (!location.hash.includes("checkout=success")) return;
       try { const r = await api("/api/auth/me"); if (r.user) { state.user = r.user; state.ent = r.entitlement; } } catch {}
-      if (state.user && state.user.subscription && state.user.subscription.id) { location.hash = "#/account"; renderUserMenu(); renderAccount(); return; }
-      if (++tries < 15) setTimeout(tick, 2000);
+      // Done when the account is a subscriber; a returning member's old (cancelled) record does not count.
+      if (state.ent && state.ent.state === "subscribed") { location.hash = "#/account"; renderUserMenu(); renderAccount(); return; }
+      const waited = Date.now() - started;
+      if (waited > 3 * 60 * 1000) { const m = $("#confirmMsg"); if (m) m.textContent = t("bill.confirmSlow"); return; }
+      setTimeout(tick, waited < 30000 ? 2000 : 5000);
     };
     setTimeout(tick, 1500);
+  }
+  // Plan, next charge and card, then every invoice with its PDF and receipt links (Stripe).
+  async function loadBillingHistory() {
+    const Bl = t("bill"); const box = $("#billHistory"), sum = $("#billSummary");
+    let r; try { r = await api("/api/billing/history"); } catch { if (box) box.textContent = ""; return; }
+    if (!box || !document.body.contains(box)) return;
+    const loc = state.locale === "ja" ? "ja-JP" : state.locale === "zh-TW" ? "zh-TW" : "en-US";
+    const money = (amt, cur) => { const c = String(cur || "jpy").toUpperCase(); const zero = ["JPY", "TWD", "KRW"].includes(c); try { return new Intl.NumberFormat(loc, { style: "currency", currency: c, maximumFractionDigits: zero ? 0 : 2 }).format(zero ? amt : amt / 100); } catch { return `${amt} ${c}`; } };
+    const p = r.plan;
+    if (sum && p && p.running) {
+      const rows = [[Bl.plan, esc(p.plan === "annual" || p.interval === "year" ? Bl.planAnnual : Bl.planMonthly)], p.renewsAt ? [Bl.nextCharge, esc(fmtDate(p.renewsAt))] : null, p.cardBrand ? [Bl.card, `${esc(String(p.cardBrand).toUpperCase())} •••• ${esc(p.cardLastFour || "")}`] : null].filter(Boolean);
+      sum.innerHTML = `<div class="kv">${rows.map(([k, v]) => `<div>${esc(k)}</div><div>${v}</div>`).join("")}</div>`;
+    }
+    const inv = r.invoices || [];
+    box.classList.remove("muted", "small");
+    if (!inv.length) { box.innerHTML = `<h4 class="sub">${esc(Bl.historyTitle)}</h4><p class="muted small">${esc(Bl.historyEmpty)}</p>`; return; }
+    const status = (st) => Bl[st] || st;
+    box.innerHTML = `<h4 class="sub">${esc(Bl.historyTitle)}</h4>${wrap(`<table class="tbl bill-hist"><thead><tr><th>${esc(Bl.colDate)}</th><th>${esc(Bl.colDesc)}</th><th class="num">${esc(Bl.colAmount)}</th><th>${esc(Bl.colStatus)}</th><th>${esc(Bl.colDoc)}</th></tr></thead><tbody>${inv.map((i) => `<tr><td>${esc(fmtDate(i.date))}</td><td>${esc(i.periodStart && i.periodEnd ? t("bill.period", { start: fmtDate(i.periodStart), end: fmtDate(i.periodEnd) }) : (i.description || ""))}${i.number ? `<div class="muted small">${esc(i.number)}</div>` : ""}</td><td class="num">${esc(money(i.total, i.currency))}${i.tax ? `<div class="muted small">${esc(t("bill.taxIncl", { tax: money(i.tax, i.currency) }))}</div>` : ""}</td><td>${esc(status(i.status))}</td><td>${i.pdf ? `<a href="${esc(i.pdf)}" target="_blank" rel="noopener">${esc(Bl.invoicePdf)}</a>` : ""}${i.url ? `${i.pdf ? "<br>" : ""}<a href="${esc(i.url)}" target="_blank" rel="noopener">${esc(Bl.receipt)}</a>` : ""}</td></tr>`).join("")}</tbody></table>`)}<p class="muted small">${esc(Bl.issuerNote)}</p>`;
   }
   // One button for the monthly plan, a second for the annual plan when the site offers one.
   // ---------- coupon codes (Stripe promotion codes) ----------
@@ -601,8 +648,8 @@
       api(`/api/billing/coupon?code=${encodeURIComponent(c.code)}`).then((r) => { coupon.set(r.coupon); render(); }).catch(() => { coupon.set(null); render(); });
       return `<div class="coupon applied"><span>${esc(t("coupon.applied", { desc: c.code }))}</span></div>`;
     }
-    if (c && c.kind === "access") return `<div class="coupon applied"><span>${esc(t("coupon.applied", { desc: `${c.code}: ${t("coupon.freeMonths", { months: c.months })}` }))}</span> <button class="btn small primary" id="couponRedeem">${esc(t("coupon.redeem"))}</button> <button class="btn small" id="couponRemove">${esc(t("coupon.remove"))}</button><div id="couponError"></div></div>`;
-    if (c) return `<div class="coupon applied"><span>${esc(t("coupon.applied", { desc: `${c.code}: ${couponDesc(c)}` }))}</span> <button class="btn small" id="couponRemove">${esc(t("coupon.remove"))}</button></div>`;
+    if (c && c.kind === "access") return `<div class="coupon applied"><span>${esc(t("coupon.accessPending", { code: c.code, desc: t("coupon.freeMonths", { months: c.months }) }))}</span> <button class="btn small primary" id="couponRedeem">${esc(t("coupon.redeem"))}</button> <button class="btn small" id="couponRemove">${esc(t("coupon.remove"))}</button><div id="couponError"></div></div>`;
+    if (c) return `<div class="coupon applied"><span>${esc(t("coupon.applied", { desc: `${c.code}: ${couponDesc(c)}${c.monthlyOnly ? ` (${t("coupon.monthlyOnly")})` : ""}` }))}</span> <button class="btn small" id="couponRemove">${esc(t("coupon.remove"))}</button></div>`;
     return `<div class="coupon"><label for="couponInput">${esc(t("coupon.label"))}</label> <input id="couponInput" placeholder="${esc(t("coupon.placeholder"))}" maxlength="40" autocapitalize="characters"> <button class="btn small" id="couponApply">${esc(t("coupon.apply"))}</button><div id="couponError"></div></div>`;
   }
   function subscribeButtons() {
@@ -613,13 +660,18 @@
   }
   function bindBilling() {
     const err = (e) => `<div class="error">${esc(t(`errors.${e.code}`) !== `errors.${e.code}` ? t(`errors.${e.code}`) : e.message)}</div>`;
-    const go = async (action) => {
-      const c = coupon.get(); const stripeCode = c && c.kind === "stripe" ? c.code : null;
-      try { const r = await api(`/api/billing/${action}${stripeCode ? `&coupon=${encodeURIComponent(stripeCode)}` : ""}`); window.location.href = r.url; }
-      catch (e) { if (e.code === "invalid_coupon") coupon.set(null); $("#formError").innerHTML = err(e); if (e.code === "invalid_coupon") render(); }
+    const go = async (action, plan) => {
+      const c = coupon.get(); const stripeCode = action === "checkout" && plan === "monthly" && c && c.kind === "stripe" ? c.code : null;
+      const qs = action === "checkout" ? `?plan=${plan}${stripeCode ? `&coupon=${encodeURIComponent(stripeCode)}` : ""}` : "";
+      try { const r = await api(`/api/billing/${action}${qs}`); window.location.href = r.url; }
+      catch (e) {
+        const drop = ["invalid_coupon", "coupon_new_only"].includes(e.code);
+        if (drop) { coupon.set(null); render(); } // redraw first, then show why (the redraw would wipe it)
+        const fe = $("#formError"); if (fe) fe.innerHTML = err(e);
+      }
     };
-    const s = $("#subscribeBtn"); if (s) s.addEventListener("click", () => go("checkout?plan=monthly"));
-    const sa = $("#subscribeAnnualBtn"); if (sa) sa.addEventListener("click", () => go("checkout?plan=annual"));
+    const s = $("#subscribeBtn"); if (s) s.addEventListener("click", () => go("checkout", "monthly"));
+    const sa = $("#subscribeAnnualBtn"); if (sa) sa.addEventListener("click", () => go("checkout", "annual"));
     const ca = $("#couponApply");
     if (ca) {
       const apply = async () => {
@@ -635,9 +687,10 @@
     if (rd) rd.addEventListener("click", async () => {
       const c = coupon.get(); rd.disabled = true;
       try { const r = await api(`/api/billing/redeem?code=${encodeURIComponent(c.code)}`, { method: "POST" }); coupon.set(null); state.user = r.user; state.ent = r.entitlement; renderUserMenu(); render(); $("#formError").innerHTML = `<div class="pill">${esc(t("coupon.redeemed", { date: fmtDate(new Date(r.until).toISOString()) }))}</div>`; }
-      catch (e) { if (e.code === "invalid_coupon" || e.code === "coupon_used") coupon.set(null); $("#couponError").innerHTML = err(e); rd.disabled = false; }
+      catch (e) { if (["invalid_coupon", "coupon_used", "coupon_subscribed"].includes(e.code)) coupon.set(null); $("#couponError").innerHTML = err(e); rd.disabled = false; }
     });
     const p = $("#portalBtn"); if (p) p.addEventListener("click", () => go("portal"));
+    const p2 = $("#portalBtn2"); if (p2) p2.addEventListener("click", () => go("portal"));
   }
 
   // ---------- stock ----------
@@ -655,7 +708,9 @@
       app.innerHTML = `<div class="panel spinner">${esc(symbol)} …</div>`;
       try {
         c.b = await api(`/api/stock/${encodeURIComponent(symbol)}`);
+        if (state.route.view !== "stock" || state.symbol !== symbol) return; // the reader moved on
       } catch (e) {
+        if (state.route.view !== "stock" || state.symbol !== symbol) return;
         if (e.status === 402) { state.ent = e.data && e.data.entitlement || state.ent; renderUserMenu(); return renderPaywall(); }
         if (e.status === 401) { sessionStorage.setItem("after_login", location.hash); return renderAuth("login"); }
         app.innerHTML = `<div class="panel"><div class="error">${t(e.status === 404 || e.code === "not_a_company" || e.code === "invalid_symbol" ? "notFound" : "loadError")}</div></div>`;

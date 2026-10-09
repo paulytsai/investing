@@ -50,6 +50,8 @@ export function accessCodeProblem(rec, user, now = Date.now()) {
   if (rec.expiresAt && rec.expiresAt < now) return "invalid_coupon";
   if (rec.maxUses && rec.uses >= rec.maxUses) return "invalid_coupon";
   if (user && (user.coupons || []).some((x) => x.code === rec.code)) return "coupon_used";
+  // Free months mean nothing to someone already paying (or in a paid grace period).
+  if (user && user.subscription && (["active", "on_trial", "past_due"].includes(user.subscription.status) || (user.subscription.status === "cancelled" && user.subscription.endsAt && Date.parse(user.subscription.endsAt) > now))) return "coupon_subscribed";
   return null;
 }
 
@@ -61,7 +63,7 @@ export function accessCodeProblem(rec, user, now = Date.now()) {
 export async function redeemAccessCode(user, code) {
   const rec = await getAccessCode(code);
   const problem = accessCodeProblem(rec, user);
-  if (problem) throw new HttpError(problem === "coupon_used" ? 409 : 404, problem);
+  if (problem) throw new HttpError(problem === "coupon_used" || problem === "coupon_subscribed" ? 409 : 404, problem);
   const now = Date.now();
   const until = new Date(now); until.setUTCMonth(until.getUTCMonth() + rec.months);
   user.trialEndsAt = Math.max(until.getTime(), user.trialEndsAt || 0);

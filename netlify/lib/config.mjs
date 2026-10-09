@@ -95,6 +95,13 @@ export const cfg = {
       priceIdAnnual: env("STRIPE_PRICE_ID_ANNUAL"), // optional yearly price on the same product
       webhookSecret: env("STRIPE_WEBHOOK_SECRET"),
       managedPayments: env("STRIPE_MANAGED_PAYMENTS", "1") !== "0",
+      // Sandbox keys on a public site: only test accounts may start a checkout (a test card
+      // would otherwise unlock paid access). STRIPE_TEST_USERS adds usernames, comma-separated.
+      testMode: /^(sk|rk)_test_/.test(env("STRIPE_SECRET_KEY") || ""),
+      testUsers: (env("STRIPE_TEST_USERS") || "").split(",").map((x) => x.trim().toLowerCase()).filter(Boolean),
+      // Prices this site sells; webhook events for any other price (another edition in the same
+      // Stripe account) are ignored. STRIPE_EXTRA_PRICE_IDS lists retired prices still billing.
+      priceIds: [env("STRIPE_PRICE_ID"), env("STRIPE_PRICE_ID_ANNUAL"), ...(env("STRIPE_EXTRA_PRICE_IDS") || "").split(",")].map((x) => (x || "").trim()).filter(Boolean),
     };
   },
   internalSecret() {

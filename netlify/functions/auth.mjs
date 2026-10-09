@@ -2,7 +2,7 @@ import { json, error, readJson, handler, param, HttpError } from "../lib/http.mj
 import { createUser, findUserByLogin, findUserByEmail, verifyPassword, hashPassword, validatePassword, publicUser, saveUser, loginBuiltin, deleteUser, createResetToken, consumeResetToken } from "../lib/users.mjs";
 import { sendMail, mailConfigured } from "../lib/mail.mjs";
 import { logEvent, DEV_COOKIE } from "../lib/events.mjs";
-import { cancelSubscription } from "../lib/billing.mjs";
+import { cancelSubscription, cancelSubscriptionNow, resumeSubscription, isRunning } from "../lib/billing.mjs";
 import { createToken, sessionCookie, clearCookie } from "../lib/session.mjs";
 import { currentUser, entitlement } from "../lib/entitlement.mjs";
 import { cfg, SUPPORTED_LOCALES } from "../lib/config.mjs";
@@ -69,6 +69,18 @@ export default handler(async (req, context) => {
     return json(userResponse(user));
   }
 
+  // Undo a scheduled cancellation: the subscription renews again (no second purchase needed).
+  if (action === "resume-subscription" && req.method === "POST") {
+    const user = await currentUser(req);
+    if (!user) throw new HttpError(401, "unauthenticated");
+    if (!user.subscription?.id || user.subscription.status !== "cancelled" || !isRunning(user.subscription)) throw new HttpError(409, "nothing_to_resume");
+    const updated = await resumeSubscription(user);
+    if (!updated) throw new HttpError(503, "billing_not_configured");
+    user.subscription = updated;
+    await saveUser(user);
+    await logEvent("resume", { user, req });
+    return json(userResponse(user));
+  }
   if (action === "cancel-subscription" && req.method === "POST") {
     const user = await currentUser(req);
     if (!user) throw new HttpError(401, "unauthenticated");
@@ -87,8 +99,11 @@ export default handler(async (req, context) => {
     const body = await readJson(req);
     if (!verifyPassword(String(body.password || ""), user.passwordHash)) throw new HttpError(401, "invalid_credentials");
     if (user.builtin) throw new HttpError(400, "builtin_account");
-    if (user.subscription?.id && ["active", "on_trial", "past_due"].includes(user.subscription.status)) {
-      try { await cancelSubscription(user.subscription.id); } catch (e) { console.warn("cancel on delete failed", e.message); }
+    // A deleted account must never keep paying: end the subscription now, not at period end.
+    // If Stripe cannot be reached the deletion stops, so the customer can retry or use the portal.
+    if (isRunning(user.subscription)) {
+      try { await cancelSubscriptionNow(user); }
+      catch (e) { console.warn("cancel on delete failed", e.message); throw new HttpError(502, "cancel_failed", "Could not cancel the subscription; nothing was deleted"); }
     }
     await logEvent("delete_account", { user, req });
     await deleteUser(user);
