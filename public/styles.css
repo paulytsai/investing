@@ -642,3 +642,11 @@ details.dd-sec > .body { margin: 8px 0 0 18px; line-height: 1.8; white-space: pr
 
 .insider-line { margin: 6px 8px 4px; font-size: 14px; }
 .gist .chip, .take-strip .chip { vertical-align: middle; }
+
+/* printable usage statement */
+.statement table.stmt th { width: 32%; text-align: left; }
+@media print {
+  .topbar, .footer, .no-print, #helpPop { display: none !important; }
+  body { background: #fff; }
+  .panel.statement { border: 0; box-shadow: none; padding: 0; }
+}

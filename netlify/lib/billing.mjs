@@ -136,6 +136,8 @@ export async function billingHistory(user) {
       tax: Array.isArray(i.total_taxes) ? i.total_taxes.reduce((a, t) => a + (t.amount || 0), 0) : (i.tax || 0),
       discount: Array.isArray(i.total_discount_amounts) ? i.total_discount_amounts.reduce((a, d) => a + (d.amount || 0), 0) : 0,
       reason: i.billing_reason || null, // subscription_create | subscription_cycle | subscription_update
+      // Who issued it: "stripe" = sold through Link (Managed Payments merchant of record); "self" = this business.
+      issuer: (i.issuer && i.issuer.type) || null, accountName: i.account_name || null,
       pdf: i.invoice_pdf || null, url: i.hosted_invoice_url || null,
     };
   });

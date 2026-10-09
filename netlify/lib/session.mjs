@@ -14,7 +14,8 @@ function sign(data) {
 }
 
 export function createToken(payload) {
-  const body = b64url(JSON.stringify({ ...payload, exp: Date.now() + MAX_AGE * 1000 }));
+  const now = Date.now();
+  const body = b64url(JSON.stringify({ ...payload, iat: now, exp: now + MAX_AGE * 1000 }));
   return `${body}.${sign(body)}`;
 }
 

@@ -4,6 +4,7 @@ import { sessionFromRequest } from "./session.mjs";
 import { HttpError } from "./http.mjs";
 
 const ACTIVE_STATUSES = new Set(["active", "on_trial", "past_due"]);
+const SESSION_RULE_SINCE = Date.parse("2026-10-10T06:00:00Z");
 
 export function entitlement(user, now = Date.now()) {
   if (user?.role === "admin") return { access: true, state: "admin" };
@@ -28,7 +29,15 @@ export function entitlement(user, now = Date.now()) {
 export async function currentUser(req) {
   const session = sessionFromRequest(req);
   if (!session?.uid) return null;
-  return getUser(session.uid);
+  const user = await getUser(session.uid);
+  // A password change or reset signs out every session issued before it. Tokens from before this
+  // rule carry no iat: they stay valid unless the password changed after the rule went live.
+  if (user && user.passwordChangedAt) {
+    const changed = Date.parse(user.passwordChangedAt);
+    const issued = session.iat || (changed > SESSION_RULE_SINCE ? 0 : Infinity);
+    if (issued < changed - 1000) return null;
+  }
+  return user;
 }
 
 /** Throw 401/402 unless the request belongs to an entitled user. */

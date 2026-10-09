@@ -139,6 +139,13 @@ export async function resumeSubscription(id) {
 export async function cancelNow(id) {
   return call("DELETE", `subscriptions/${encodeURIComponent(id)}`);
 }
+/** What the next invoice will be (amount after discounts and tax), or null. */
+export async function previewNextInvoice(subscriptionId) {
+  try {
+    const i = await call("POST", "invoices/create_preview", { subscription: subscriptionId });
+    return { total: i.total, amountDue: i.amount_due, currency: i.currency, date: i.next_payment_attempt ? new Date(i.next_payment_attempt * 1000).toISOString() : (i.period_end ? new Date(i.period_end * 1000).toISOString() : null) };
+  } catch { return null; }
+}
 /** The customer's invoices, newest first, for the site's billing history. */
 export async function listInvoices(customerId, limit = 24) {
   const r = await call("GET", "invoices", { customer: customerId, limit });

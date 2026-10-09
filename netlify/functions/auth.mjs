@@ -121,7 +121,8 @@ export default handler(async (req, context) => {
     user.passwordChangedAt = new Date().toISOString();
     await saveUser(user);
     await logEvent("change_password", { user, req });
-    return json({ ok: true });
+    // Every other session is now signed out; this browser gets a fresh session.
+    return json({ ok: true, signedOutOthers: true }, 200, { "set-cookie": sessionCookie(createToken({ uid: user.id }), req) });
   }
 
   if (action === "forgot" && req.method === "POST") {

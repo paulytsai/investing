@@ -1,6 +1,8 @@
 import { json, handler, param, query, HttpError } from "../lib/http.mjs";
 import { currentUser } from "../lib/entitlement.mjs";
-import { checkoutUrl, portalUrl, lookupCoupon, checkoutBlock, promotionBlock, billingHistory, stripeCustomerOf, isRunning } from "../lib/billing.mjs";
+import { checkoutUrl, portalUrl, lookupCoupon, checkoutBlock, promotionBlock, billingHistory, stripeCustomerOf, isRunning, billingProvider } from "../lib/billing.mjs";
+import { previewNextInvoice } from "../lib/stripe.mjs";
+import { cfg } from "../lib/config.mjs";
 import { getAccessCode, accessCodeProblem, redeemAccessCode } from "../lib/coupons.mjs";
 import { entitlement } from "../lib/entitlement.mjs";
 import { publicUser } from "../lib/users.mjs";
@@ -59,7 +61,10 @@ export default handler(async (req, context) => {
   // GET /api/billing/history: what was billed (Stripe invoices for this customer) with PDF links.
   if (action === "history") {
     const sub = user.subscription || null;
+    // The next charge (amount after discounts, the first charge for a subscription still in its free period).
+    const next = sub && sub.provider === "stripe" && billingProvider() === "stripe" && ["active", "on_trial", "past_due"].includes(sub.status) ? await previewNextInvoice(sub.id) : null;
     return json({
+      buyer: { username: user.username, email: user.email }, operator: cfg.operatorName(), next,
       plan: sub ? { status: sub.status, plan: sub.plan || null, interval: sub.interval || null, renewsAt: sub.renewsAt || null, endsAt: sub.endsAt || null, trialEndsAt: sub.trialEndsAt || null, cardBrand: sub.cardBrand || null, cardLastFour: sub.cardLastFour || null, running: isRunning(sub) } : null,
       invoices: await billingHistory(user),
     }, 200, { "cache-control": "no-store" });

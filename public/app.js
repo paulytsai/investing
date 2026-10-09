@@ -159,6 +159,7 @@
     if (pm) return { view: "stock", symbol: decodeURIComponent(pm[1]).toUpperCase(), ssr: true };
     const h = location.hash.replace(/^#\/?/, "").split("?")[0];
     const [a, b, c] = h.split("/");
+    if (a === "statement" && b) return { view: "statement", id: decodeURIComponent(b) };
     if (a === "s" && b) return { view: "stock", symbol: decodeURIComponent(b).toUpperCase() };
     if (a === "admin" && b === "user" && c) return { view: "adminUser", username: decodeURIComponent(c) };
     if (a === "reset" && b) return { view: "reset", token: b };
@@ -188,6 +189,7 @@
     if (r.view === "sector") return renderSector(r.id);
     if (r.view === "reset") return renderReset(r.token);
     if (r.view === "account") return state.user ? renderAccount() : renderAuth("login");
+    if (r.view === "statement") return state.user ? renderStatement(r.id) : renderAuth("login");
     if (r.view === "subscribe") return renderPaywall();
     if (r.view === "admin") return state.user && state.user.role === "admin" ? renderAdmin() : renderAuth("login");
     if (r.view === "stock") return state.user ? loadStock(r.symbol) : renderTeaser(r.symbol);
@@ -586,6 +588,25 @@
     </div>`;
   }
 
+  // A printable usage statement (ご利用明細) built from one invoice. It is not a receipt or a
+  // qualified invoice: those are the PDFs issued by the seller of record (Link under Managed Payments).
+  async function renderStatement(id) {
+    stopSummaryPolling(state.stock); stopSummaryPolling(state.demo);
+    const Bl = t("bill");
+    app.innerHTML = `<div class="panel spinner">…</div>`;
+    let r; try { r = await api("/api/billing/history"); } catch (e) { app.innerHTML = `<div class="panel"><div class="error">${esc(e.message)}</div></div>`; return; }
+    const i = (r.invoices || []).find((x) => x.id === id);
+    if (!i) { app.innerHTML = `<div class="panel"><p>${esc(Bl.stmtNotFound)}</p><a class="btn" href="#/account">${esc(Bl.stmtBack)}</a></div>`; return; }
+    const sellerName = i.issuer === "stripe" ? Bl.stmtLink : (i.accountName || r.operator);
+    const plan = r.plan && (r.plan.plan === "annual" || r.plan.interval === "year") ? Bl.planAnnual : Bl.planMonthly;
+    const row = (k, v) => v ? `<tr><th>${esc(k)}</th><td>${v}</td></tr>` : "";
+    document.title = `${Bl.stmtTitle} ${i.number || ""} | ${t("siteName")}`;
+    app.innerHTML = `<div class="panel statement"><div class="no-print" style="margin-bottom:12px"><a class="btn small" href="#/account">← ${esc(Bl.stmtBack)}</a> <button class="btn small primary" id="printBtn">${esc(Bl.stmtPrint)}</button></div>
+      <h2>${esc(Bl.stmtTitle)}</h2>
+      <table class="tbl stmt">${row(Bl.stmtNo, esc(i.number || i.id))}${row(Bl.stmtDate, esc(fmtDate(i.date)))}${row(Bl.stmtBuyer, `${esc(r.buyer.username)}<br><span class="muted">${esc(r.buyer.email)}</span>`)}${row(Bl.stmtService, esc(t("bill.stmtPlan", { brand: brandName(), plan })))}${row(Bl.stmtPeriod, i.periodStart && i.periodEnd ? esc(t("bill.period", { start: fmtDate(i.periodStart), end: fmtDate(i.periodEnd) })) : "")}${row(Bl.stmtAmount, `<b>${esc(fmtMoney(i.total, i.currency))}</b>`)}${row(Bl.stmtTax, i.tax ? esc(fmtMoney(i.tax, i.currency)) : "")}${row(Bl.stmtStatus, esc(Bl[i.status] || i.status))}${row(Bl.stmtSeller, esc(sellerName))}${row(Bl.stmtProvider, esc(r.operator))}</table>
+      <p class="muted small">${esc(t("bill.stmtNote", { seller: sellerName, pdf: Bl.invoicePdf }))}${i.pdf ? ` <a href="${esc(i.pdf)}" target="_blank" rel="noopener" class="no-print">${esc(Bl.invoicePdf)}</a>` : ""}</p></div>`;
+    const pb = $("#printBtn"); if (pb) pb.addEventListener("click", () => window.print());
+  }
   function renderPaywall() {
     stopSummaryPolling(state.stock); stopSummaryPolling(state.demo);
     const lapsed = state.ent && state.ent.state === "lapsed";
@@ -612,23 +633,25 @@
     };
     setTimeout(tick, 1500);
   }
-  // Plan, next charge and card, then every invoice with its PDF and receipt links (Stripe).
+  // Stripe amounts: zero-decimal currencies (JPY, TWD) are whole units, others are cents.
+  const fmtMoney = (amt, cur) => { const loc = state.locale === "ja" ? "ja-JP" : state.locale === "zh-TW" ? "zh-TW" : "en-US"; const c = String(cur || "jpy").toUpperCase(); const zero = ["JPY", "TWD", "KRW"].includes(c); try { return new Intl.NumberFormat(loc, { style: "currency", currency: c, maximumFractionDigits: zero ? 0 : 2 }).format(zero ? amt : amt / 100); } catch { return `${amt} ${c}`; } };
+  // Plan, next charge and card, then every invoice with its PDF, receipt and statement links (Stripe).
   async function loadBillingHistory() {
     const Bl = t("bill"); const box = $("#billHistory"), sum = $("#billSummary");
     let r; try { r = await api("/api/billing/history"); } catch { if (box) box.textContent = ""; return; }
     if (!box || !document.body.contains(box)) return;
-    const loc = state.locale === "ja" ? "ja-JP" : state.locale === "zh-TW" ? "zh-TW" : "en-US";
-    const money = (amt, cur) => { const c = String(cur || "jpy").toUpperCase(); const zero = ["JPY", "TWD", "KRW"].includes(c); try { return new Intl.NumberFormat(loc, { style: "currency", currency: c, maximumFractionDigits: zero ? 0 : 2 }).format(zero ? amt : amt / 100); } catch { return `${amt} ${c}`; } };
+    const money = fmtMoney;
     const p = r.plan;
     if (sum && p && p.running) {
-      const rows = [[Bl.plan, esc(p.plan === "annual" || p.interval === "year" ? Bl.planAnnual : Bl.planMonthly)], p.renewsAt ? [Bl.nextCharge, esc(fmtDate(p.renewsAt))] : null, p.cardBrand ? [Bl.card, `${esc(String(p.cardBrand).toUpperCase())} •••• ${esc(p.cardLastFour || "")}`] : null].filter(Boolean);
+      const nextLine = r.next && r.next.date ? t(p.status === "on_trial" ? "bill.firstCharge" : "bill.next", { date: fmtDate(r.next.date), amount: money(r.next.amountDue != null ? r.next.amountDue : r.next.total, r.next.currency) }) : (p.renewsAt ? fmtDate(p.renewsAt) : null);
+      const rows = [[Bl.plan, esc(p.plan === "annual" || p.interval === "year" ? Bl.planAnnual : Bl.planMonthly)], nextLine ? [Bl.nextCharge, esc(nextLine)] : null, p.cardBrand ? [Bl.card, `${esc(String(p.cardBrand).toUpperCase())} •••• ${esc(p.cardLastFour || "")}`] : null].filter(Boolean);
       sum.innerHTML = `<div class="kv">${rows.map(([k, v]) => `<div>${esc(k)}</div><div>${v}</div>`).join("")}</div>`;
     }
     const inv = r.invoices || [];
     box.classList.remove("muted", "small");
     if (!inv.length) { box.innerHTML = `<h4 class="sub">${esc(Bl.historyTitle)}</h4><p class="muted small">${esc(Bl.historyEmpty)}</p>`; return; }
     const status = (st) => Bl[st] || st;
-    box.innerHTML = `<h4 class="sub">${esc(Bl.historyTitle)}</h4>${wrap(`<table class="tbl bill-hist"><thead><tr><th>${esc(Bl.colDate)}</th><th>${esc(Bl.colDesc)}</th><th class="num">${esc(Bl.colAmount)}</th><th>${esc(Bl.colStatus)}</th><th>${esc(Bl.colDoc)}</th></tr></thead><tbody>${inv.map((i) => `<tr><td>${esc(fmtDate(i.date))}</td><td>${esc(i.periodStart && i.periodEnd ? t("bill.period", { start: fmtDate(i.periodStart), end: fmtDate(i.periodEnd) }) : (i.description || ""))}${i.number ? `<div class="muted small">${esc(i.number)}</div>` : ""}</td><td class="num">${esc(money(i.total, i.currency))}${i.tax ? `<div class="muted small">${esc(t("bill.taxIncl", { tax: money(i.tax, i.currency) }))}</div>` : ""}</td><td>${esc(status(i.status))}</td><td>${i.pdf ? `<a href="${esc(i.pdf)}" target="_blank" rel="noopener">${esc(Bl.invoicePdf)}</a>` : ""}${i.url ? `${i.pdf ? "<br>" : ""}<a href="${esc(i.url)}" target="_blank" rel="noopener">${esc(Bl.receipt)}</a>` : ""}</td></tr>`).join("")}</tbody></table>`)}<p class="muted small">${esc(Bl.issuerNote)}</p>`;
+    box.innerHTML = `<h4 class="sub">${esc(Bl.historyTitle)}</h4>${wrap(`<table class="tbl bill-hist"><thead><tr><th>${esc(Bl.colDate)}</th><th>${esc(Bl.colDesc)}</th><th class="num">${esc(Bl.colAmount)}</th><th>${esc(Bl.colStatus)}</th><th>${esc(Bl.colDoc)}</th></tr></thead><tbody>${inv.map((i) => `<tr><td>${esc(fmtDate(i.date))}</td><td>${esc(i.periodStart && i.periodEnd ? t("bill.period", { start: fmtDate(i.periodStart), end: fmtDate(i.periodEnd) }) : (i.description || ""))}${i.number ? `<div class="muted small">${esc(i.number)}</div>` : ""}</td><td class="num">${esc(money(i.total, i.currency))}${i.tax ? `<div class="muted small">${esc(t("bill.taxIncl", { tax: money(i.tax, i.currency) }))}</div>` : ""}</td><td>${esc(status(i.status))}</td><td>${i.pdf ? `<a href="${esc(i.pdf)}" target="_blank" rel="noopener">${esc(Bl.invoicePdf)}</a>` : ""}${i.url ? `${i.pdf ? "<br>" : ""}<a href="${esc(i.url)}" target="_blank" rel="noopener">${esc(Bl.receipt)}</a>` : ""}${i.status === "paid" ? `<br><a href="#/statement/${encodeURIComponent(i.id)}">${esc(Bl.statement)}</a>` : ""}</td></tr>`).join("")}</tbody></table>`)}<p class="muted small">${esc(inv.some((i) => i.issuer === "stripe") ? Bl.issuerNote : Bl.issuerSelf)}</p>`;
   }
   // One button for the monthly plan, a second for the annual plan when the site offers one.
   // ---------- coupon codes (Stripe promotion codes) ----------

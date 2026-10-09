@@ -115,6 +115,10 @@ export const cfg = {
     return list;
   },
   // One brand per deployment: Kabukaizu (ja), Guhaitu (zh-TW) and US Stock Almanac (en only).
+  /** The business that runs the site, shown on usage statements (SITE_OPERATOR, else the brand). */
+  operatorName() {
+    return env("SITE_OPERATOR") || cfg.brand().name;
+  },
   brand() {
     const d = cfg.defaultLocale();
     const id = env("SITE_BRAND") || (d === "zh-TW" ? "guhaitu" : d === "en" ? "usstockalmanac" : "kabukaizu");
