@@ -33,7 +33,8 @@ export default handler(async (req, context) => {
     const adminNames = new Set(allUsers.filter((u) => u.role === "admin").map((u) => u.username));
     const users = allUsers.filter((u) => u.role !== "admin");
     // Crawlers, scripted clients (b_<name>) and throwaway test accounts are counted separately, never as usage.
-    const events = allEvents.filter((e) => !adminNames.has(e.user) && isHuman(e));
+    const usage = allEvents.filter((e) => !adminNames.has(e.user)); // AI jobs are server-side ("anon") events: costed from here
+    const events = usage.filter(isHuman);
     const botEvents = allEvents.filter((e) => e.bot), testEvents = allEvents.filter((e) => e.test);
     const now = Date.now();
     const dayKey = (ts) => new Date(ts).toISOString().slice(0, 10);
@@ -42,6 +43,11 @@ export default handler(async (req, context) => {
     const bySymbol = {}, lastSeen = {}, lastLoc = {}, visitors = new Set();
     const geo = { countries: {}, places: {} };
     let cost = 0, generations = 0, translations = 0;
+    for (const e of usage) {
+      const d = byDay[e.day]; if (!d) continue;
+      if (e.action === "ai_generate" || e.action === "ai_deep") { d.ai++; generations++; const [, inp, out] = e.detail.split("_"); cost += Number(inp || 0) * PRICE_IN + Number(out || 0) * PRICE_OUT; }
+      else if (e.action === "ai_translate") { translations++; cost += 0.03; }
+    }
     for (const e of events) {
       const d = byDay[e.day]; if (!d) continue;
       if (e.action === "view") { d.views++; bySymbol[e.detail] = (bySymbol[e.detail] || 0) + 1; }
@@ -49,9 +55,6 @@ export default handler(async (req, context) => {
       else if (e.action === "login") d.logins++;
       else if (e.action === "signup") d.signups++;
       else if (e.action === "search") d.searches++;
-      else if (e.action === "ai_generate") { d.ai++; generations++; const [, inp, out] = e.detail.split("_"); cost += Number(inp || 0) * PRICE_IN + Number(out || 0) * PRICE_OUT; }
-      else if (e.action === "ai_deep") { d.ai++; generations++; const [, inp, out] = e.detail.split("_"); cost += Number(inp || 0) * PRICE_IN + Number(out || 0) * PRICE_OUT; }
-      else if (e.action === "ai_translate") { translations++; cost += 0.03; }
       if (e.user && !e.anon && e.user !== "system") { d.users.add(e.user); if (!lastSeen[e.user]) { lastSeen[e.user] = e.ts; lastLoc[e.user] = { country: e.country, region: e.region, city: e.city }; } }
       if (e.user && e.user.startsWith("v_")) visitors.add(e.user);
       if (!["ai_generate", "ai_deep", "ai_translate", "ai_sector"].includes(e.action) && e.user !== "system") {
@@ -108,7 +111,7 @@ export default handler(async (req, context) => {
       contact: await recentMessages(),
       mail: { configured: mailConfigured(), pendingResets: (await pendingResets()).map((r) => ({ username: r.username, email: r.email, link: `${cfg.siteUrl().replace(/\/$/, "")}/#/reset/${r.token}`, expiresAt: r.expiresAt })) },
       coupons: await listAccessCodes(),
-      users: allUsers.slice(0, 200).map((u) => ({ username: u.username, email: u.email, createdAt: u.createdAt, state: entitlement(u).state, status: u.subscription?.status || null, role: u.role || null, locale: u.locale || null, lastSeen: lastSeen[u.username] || null, location: lastLoc[u.username] || null, events30d: events.filter((e) => e.user === u.username).length })),
+      users: allUsers.slice(0, 200).map((u) => ({ username: u.username, email: u.email, createdAt: u.createdAt, state: entitlement(u).state, status: u.subscription?.status || null, role: u.role || null, locale: u.locale || null, lastSeen: lastSeen[u.username] || null, location: lastLoc[u.username] || null, events30d: usage.filter((e) => e.user === u.username).length })),
     });
   }
 
@@ -119,18 +122,18 @@ export default handler(async (req, context) => {
     const days = Math.min(366, Math.max(1, Number(query(req).get("days") || 30)));
     const jobs = await openStore("jobs");
     const adminNames = new Set((await listUsers()).filter((u) => u.role === "admin").map((u) => u.username));
-    const fold = (evs) => { const d = { views: 0, demo: 0, logins: 0, signups: 0, searches: 0, ai: 0, users: new Set(), visitors: new Set() }; for (const e of evs) { if (adminNames.has(e.user) || e.bot || e.test) continue; if (e.action === "view") d.views++; else if (e.action === "demo_view" || e.action === "teaser_page") d.demo++; else if (e.action === "login") d.logins++; else if (e.action === "signup") d.signups++; else if (e.action === "search") d.searches++; else if (["ai_generate", "ai_deep", "ai_sector"].includes(e.action)) d.ai++; if (e.user && !e.anon && e.user !== "system") d.users.add(e.user); else if (e.user && e.user.startsWith("v_")) d.visitors.add(e.user); } return { views: d.views, demo: d.demo, logins: d.logins, signups: d.signups, searches: d.searches, ai: d.ai, activeUsers: d.users.size, visitors: d.visitors.size }; };
+    const fold = (evs) => { const d = { views: 0, demo: 0, logins: 0, signups: 0, searches: 0, ai: 0, users: new Set(), visitors: new Set() }; for (const e of evs) { if (adminNames.has(e.user)) continue; if (["ai_generate", "ai_deep", "ai_sector"].includes(e.action)) { d.ai++; continue; } if (!isHuman(e)) continue; if (e.action === "view") d.views++; else if (e.action === "demo_view" || e.action === "teaser_page") d.demo++; else if (e.action === "login") d.logins++; else if (e.action === "signup") d.signups++; else if (e.action === "search") d.searches++; if (e.user && !e.anon && e.user !== "system") d.users.add(e.user); else if (e.user && e.user.startsWith("v_")) d.visitors.add(e.user); } return { views: d.views, demo: d.demo, logins: d.logins, signups: d.signups, searches: d.searches, ai: d.ai, activeUsers: d.users.size, visitors: d.visitors.size }; };
     const now = Date.now(); const out = []; let computed = 0, incomplete = false;
     const todayKey = new Date(now).toISOString().slice(0, 10);
     for (let i = days - 1; i >= 0; i--) {
       const day = new Date(now - i * 86400000).toISOString().slice(0, 10);
-      const k = `rollup:${day.replace(/-/g, "")}`;
+      const k = `rollup2:${day.replace(/-/g, "")}`; // v2: crawlers, scripts, test accounts and server-side calls are not people
       let rec = day === todayKey ? null : await jobs.get(k);
       if (!rec) {
         if (day !== todayKey && computed >= 45) { incomplete = true; out.push({ day, pending: true }); continue; }
         const store = await openStore("events");
         const keys = await store.list(`ev:${day.replace(/-/g, "")}:`);
-        rec = fold(keys.map((key) => { const [, , ms, , user, action, detail] = key.split(":"); return { ts: Number(ms), user, action, detail, anon: !user || user === "anon" || user.startsWith("v_") || user.startsWith("b_"), bot: !!user && user.startsWith("b_"), test: isTestUser(user) }; }));
+        rec = fold(keys.map((key) => { const [, , ms, , user, action, detail] = key.split(":"); return { ts: Number(ms), user, action, detail, anon: !user || user === "anon" || user.startsWith("v_") || user.startsWith("b_"), bot: !!user && user.startsWith("b_"), test: isTestUser(user), system: !user || user === "anon" || user === "system" }; }));
         if (day !== todayKey) { await jobs.set(k, rec); computed++; }
       }
       out.push({ day, ...rec });

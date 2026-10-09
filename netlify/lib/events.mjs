@@ -39,7 +39,7 @@ export function botName(ua) {
 /** Throwaway accounts created while testing the site; their traffic is not usage. */
 export const isTestUser = (name) => /^(qtv|t30chk|cptest|stripetest)/i.test(String(name || ""));
 /** A person (not a crawler, a script or a test account). */
-export const isHuman = (e) => !e.bot && !e.test;
+export const isHuman = (e) => !e.bot && !e.test && !e.system;
 
 /** Stable anonymous visitor id: a salted hash of the client IP, never the IP itself. */
 export function visitorId(req) {
@@ -74,7 +74,9 @@ function parseKey(k) {
   const [region = "", city = ""] = place.split("~");
   const tidy = (x) => x.replace(/_/g, " ").trim() || null;
   const bot = !!user && user.startsWith("b_");
-  return { key: k, day: `${day.slice(0, 4)}-${day.slice(4, 6)}-${day.slice(6, 8)}`, ts: Number(ms), user, action, detail, country: country || "ZZ", region: tidy(region), city: tidy(city), anon: !user || user === "anon" || user.startsWith("v_") || bot, bot, test: isTestUser(user) };
+  // "anon" = no client IP at all: a server-side call (AI jobs, background work) or local development, never a browser.
+  const system = !user || user === "anon" || user === "system";
+  return { key: k, day: `${day.slice(0, 4)}-${day.slice(4, 6)}-${day.slice(6, 8)}`, ts: Number(ms), user, action, detail, country: country || "ZZ", region: tidy(region), city: tidy(city), anon: system || user.startsWith("v_") || bot, bot, test: isTestUser(user), system };
 }
 
 /** Events for the last `days` days (newest first); location comes from the key, so no values are read. */
@@ -116,6 +118,6 @@ export async function reclassifyEvents(days = 30) {
     await store.delete(e.key);
     moved++; touchedDays.add(e.day.replace(/-/g, ""));
   }
-  for (const d of touchedDays) await jobs.delete(`rollup:${d}`).catch(() => {});
+  for (const d of touchedDays) await jobs.delete(`rollup2:${d}`).catch(() => {});
   return { read, moved, days: touchedDays.size };
 }
