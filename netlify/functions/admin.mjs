@@ -2,7 +2,7 @@
 import { json, handler, param, query, HttpError } from "../lib/http.mjs";
 import { requireAdmin, entitlement } from "../lib/entitlement.mjs";
 import { listUsers } from "../lib/users.mjs";
-import { listEvents, eventDetails } from "../lib/events.mjs";
+import { listEvents, eventDetails, isHuman, isTestUser } from "../lib/events.mjs";
 import { getUser, findUserByLogin, createUser, saveUser } from "../lib/users.mjs";
 import { openStore } from "../lib/store.mjs";
 import { stockBundle, normalizeSymbol } from "../lib/stockdata.mjs";
@@ -32,7 +32,9 @@ export default handler(async (req, context) => {
     // Developer/admin accounts are excluded from every usage figure.
     const adminNames = new Set(allUsers.filter((u) => u.role === "admin").map((u) => u.username));
     const users = allUsers.filter((u) => u.role !== "admin");
-    const events = allEvents.filter((e) => !adminNames.has(e.user));
+    // Crawlers, scripted clients (b_<name>) and throwaway test accounts are counted separately, never as usage.
+    const events = allEvents.filter((e) => !adminNames.has(e.user) && isHuman(e));
+    const botEvents = allEvents.filter((e) => e.bot), testEvents = allEvents.filter((e) => e.test);
     const now = Date.now();
     const dayKey = (ts) => new Date(ts).toISOString().slice(0, 10);
     const byDay = {};
@@ -70,6 +72,23 @@ export default handler(async (req, context) => {
     const covCounts = Object.fromEntries(langs.map((l) => [l, universe.filter((sym) => coverage[sym]?.ready?.[l]).length]));
     const pending = universe.filter((sym) => !langs.every((l) => coverage[sym]?.ready?.[l]));
     const untouched = universe.filter((sym) => !coverage[sym]).length; // never visited by the warmer yet
+    const PAGE_ACTIONS = new Set(["view", "page", "demo_view", "teaser_page", "sector_view"]);
+    const humanPages = events.filter((e) => PAGE_ACTIONS.has(e.action));
+    const topCountries = Object.entries(humanPages.reduce((m, e) => { if (e.country !== "ZZ") m[e.country] = (m[e.country] || 0) + 1; return m; }, {})).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([code, views]) => ({ code, views }));
+    const botsByName = Object.entries(botEvents.reduce((m, e) => { const n = e.user.slice(2) || "other"; m[n] = (m[n] || 0) + 1; return m; }, {})).sort((a, b) => b[1] - a[1]).map(([name, hits]) => ({ name, hits }));
+    const in7 = (e) => now - e.ts < 7 * 86400000;
+    const summary = {
+      visitors30d: visitors.size, visitors7d: new Set(events.filter((e) => in7(e) && e.user.startsWith("v_")).map((e) => e.user)).size,
+      pageViews30d: humanPages.length, pageViews7d: humanPages.filter(in7).length,
+      memberPageViews30d: humanPages.filter((e) => !e.anon).length,
+      members30d: activeIn(30 * 86400000), members7d: activeIn(7 * 86400000),
+      signups30d: events.filter((e) => e.action === "signup").length,
+      sectorReports30d: events.filter((e) => e.action === "sector_report").length,
+      deepOpens30d: events.filter((e) => e.action === "deep_open").length,
+      topCountries,
+      bots: { hits30d: botEvents.length, hits7d: botEvents.filter(in7).length, byName: botsByName },
+      testEvents30d: testEvents.length, testAccounts: [...new Set(testEvents.map((e) => e.user))].length,
+    };
     const todayKey = dayKey(now);
     const todayAi = allEvents.filter((e) => e.day === todayKey && ["ai_generate", "ai_deep", "ai_sector"].includes(e.action));
     const costToday = todayAi.reduce((a, e) => { const [, inp, out] = e.detail.split("_"); return a + Number(inp || 0) * PRICE_IN + Number(out || 0) * PRICE_OUT; }, 0) + allEvents.filter((e) => e.day === todayKey && e.action === "ai_translate").length * 0.03;
@@ -77,6 +96,7 @@ export default handler(async (req, context) => {
       generatedAt: new Date().toISOString(),
       totals: { users: users.length, states, signups7d: users.filter((u) => now - u.createdAt < 7 * 86400000).length, signups30d: users.filter((u) => now - u.createdAt < 30 * 86400000).length, activeToday: activeIn(86400000), active7d: activeIn(7 * 86400000), active30d: activeIn(30 * 86400000), views30d: series.reduce((a, d) => a + d.views, 0), demo30d: series.reduce((a, d) => a + d.demo, 0), aiGenerations30d: generations, aiTranslations30d: translations, aiCostUsd30d: Math.round(cost * 100) / 100 },
       series,
+      summary,
       topSymbols: Object.entries(bySymbol).sort((a, b) => b[1] - a[1]).slice(0, 25).map(([symbol, views]) => ({ symbol, views })),
       recent: events.slice(0, 150).map(({ key, ...e }) => e),
       visitors30d: visitors.size,
@@ -99,7 +119,7 @@ export default handler(async (req, context) => {
     const days = Math.min(366, Math.max(1, Number(query(req).get("days") || 30)));
     const jobs = await openStore("jobs");
     const adminNames = new Set((await listUsers()).filter((u) => u.role === "admin").map((u) => u.username));
-    const fold = (evs) => { const d = { views: 0, demo: 0, logins: 0, signups: 0, searches: 0, ai: 0, users: new Set(), visitors: new Set() }; for (const e of evs) { if (adminNames.has(e.user)) continue; if (e.action === "view") d.views++; else if (e.action === "demo_view" || e.action === "teaser_page") d.demo++; else if (e.action === "login") d.logins++; else if (e.action === "signup") d.signups++; else if (e.action === "search") d.searches++; else if (["ai_generate", "ai_deep", "ai_sector"].includes(e.action)) d.ai++; if (e.user && !e.anon && e.user !== "system") d.users.add(e.user); else if (e.user && e.user.startsWith("v_")) d.visitors.add(e.user); } return { views: d.views, demo: d.demo, logins: d.logins, signups: d.signups, searches: d.searches, ai: d.ai, activeUsers: d.users.size, visitors: d.visitors.size }; };
+    const fold = (evs) => { const d = { views: 0, demo: 0, logins: 0, signups: 0, searches: 0, ai: 0, users: new Set(), visitors: new Set() }; for (const e of evs) { if (adminNames.has(e.user) || e.bot || e.test) continue; if (e.action === "view") d.views++; else if (e.action === "demo_view" || e.action === "teaser_page") d.demo++; else if (e.action === "login") d.logins++; else if (e.action === "signup") d.signups++; else if (e.action === "search") d.searches++; else if (["ai_generate", "ai_deep", "ai_sector"].includes(e.action)) d.ai++; if (e.user && !e.anon && e.user !== "system") d.users.add(e.user); else if (e.user && e.user.startsWith("v_")) d.visitors.add(e.user); } return { views: d.views, demo: d.demo, logins: d.logins, signups: d.signups, searches: d.searches, ai: d.ai, activeUsers: d.users.size, visitors: d.visitors.size }; };
     const now = Date.now(); const out = []; let computed = 0, incomplete = false;
     const todayKey = new Date(now).toISOString().slice(0, 10);
     for (let i = days - 1; i >= 0; i--) {
@@ -110,7 +130,7 @@ export default handler(async (req, context) => {
         if (day !== todayKey && computed >= 45) { incomplete = true; out.push({ day, pending: true }); continue; }
         const store = await openStore("events");
         const keys = await store.list(`ev:${day.replace(/-/g, "")}:`);
-        rec = fold(keys.map((key) => { const [, , ms, , user, action, detail] = key.split(":"); return { ts: Number(ms), user, action, detail, anon: !user || user === "anon" || user.startsWith("v_") }; }));
+        rec = fold(keys.map((key) => { const [, , ms, , user, action, detail] = key.split(":"); return { ts: Number(ms), user, action, detail, anon: !user || user === "anon" || user.startsWith("v_") || user.startsWith("b_"), bot: !!user && user.startsWith("b_"), test: isTestUser(user) }; }));
         if (day !== todayKey) { await jobs.set(k, rec); computed++; }
       }
       out.push({ day, ...rec });
@@ -122,8 +142,8 @@ export default handler(async (req, context) => {
   if (action === "events") {
     const q = query(req);
     const days = Math.min(30, Math.max(1, Number(q.get("days") || 7)));
-    const f = { user: (q.get("user") || "").toLowerCase(), action: q.get("action") || "", country: (q.get("country") || "").toUpperCase() };
-    const all = (await listEvents(days)).filter((e) => (!f.user || String(e.user).toLowerCase().includes(f.user)) && (!f.action || e.action === f.action) && (!f.country || e.country === f.country));
+    const f = { user: (q.get("user") || "").toLowerCase(), action: q.get("action") || "", country: (q.get("country") || "").toUpperCase(), bots: q.get("bots") === "1" };
+    const all = (await listEvents(days)).filter((e) => (f.bots || f.user || isHuman(e)) && (!f.user || String(e.user).toLowerCase().includes(f.user)) && (!f.action || e.action === f.action) && (!f.country || e.country === f.country));
     const offset = Math.max(0, Number(q.get("offset") || 0)), limit = Math.min(500, Math.max(1, Number(q.get("limit") || 200)));
     const page = all.slice(offset, offset + limit);
     const withDetails = q.get("details") === "1" ? await eventDetails(page, limit) : page;
@@ -237,6 +257,13 @@ export default handler(async (req, context) => {
     const url = `${cfg.siteUrl().replace(/\/$/, "")}/.netlify/functions/polish-background`;
     const payload = kind === "deep" ? { kind, all: true } : { kind, id: String(query(req).get("id") || "all"), lang: String(query(req).get("lang") || "all") };
     const res = await fetch(url, { method: "POST", headers: { "content-type": "application/json", "x-internal-secret": cfg.internalSecret() }, body: JSON.stringify(payload) });
+    if (!res.ok && res.status !== 202) throw new HttpError(502, `trigger failed: HTTP ${res.status}`);
+    return json({ ok: true, started: true });
+  }
+  // Move past crawler and script traffic (recognised by the stored user agent) out of the usage figures.
+  if (action === "events-reclassify" && req.method === "POST") {
+    const url = `${cfg.siteUrl().replace(/\/$/, "")}/.netlify/functions/events-reclassify-background`;
+    const res = await fetch(url, { method: "POST", headers: { "content-type": "application/json", "x-internal-secret": cfg.internalSecret() }, body: JSON.stringify({ days: 30 }) });
     if (!res.ok && res.status !== 202) throw new HttpError(502, `trigger failed: HTTP ${res.status}`);
     return json({ ok: true, started: true });
   }
